@@ -27,6 +27,8 @@ import {
   toPxFontSize,
 } from './utils';
 
+/* eslint-disable no-void */
+
 type RenderState = {
   fillStyle: string;
   strokeStyle: string;
@@ -47,6 +49,42 @@ function notImplemented(methodName: string): void {
   if (!isWarnDisabled) {
     console.warn(`SkiaVexflowContext: ${methodName} is not implemented yet.`);
   }
+}
+
+// MDN copied types
+type CanvasLineCap = 'butt' | 'round' | 'square';
+
+interface DOMMatrix2DInit {
+  a?: number;
+  b?: number;
+  c?: number;
+  d?: number;
+  e?: number;
+  f?: number;
+  m11?: number;
+  m12?: number;
+  m21?: number;
+  m22?: number;
+  m41?: number;
+  m42?: number;
+}
+
+interface CanvasGradient {
+  /**
+   * The **`CanvasGradient.addColorStop()`** method adds a new color stop, defined by an `offset` and a `color`, to a given canvas gradient.
+   *
+   * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient/addColorStop)
+   */
+  addColorStop(offset: number, color: string): void;
+}
+
+interface CanvasPattern {
+  /**
+   * The **`CanvasPattern.setTransform()`** method uses a DOMMatrix object as the pattern's transformation matrix and invokes it on the pattern.
+   *
+   * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasPattern/setTransform)
+   */
+  setTransform(transform?: DOMMatrix2DInit): void;
 }
 
 export default class SkiaVexflowContext implements VexflowRenderContext {
