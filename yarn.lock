@@ -13072,12 +13072,21 @@ __metadata:
     release-it: "npm:^19.0.4"
     turbo: "npm:^2.5.6"
     typescript: "npm:^5.9.2"
+    vexflow: "npm:^5.0.0"
   peerDependencies:
     "@shopify/react-native-skia": "*"
     react: "*"
     react-native: "*"
+    vexflow: "*"
   languageName: unknown
   linkType: soft
+
+"vexflow@npm:^5.0.0":
+  version: 5.0.0
+  resolution: "vexflow@npm:5.0.0"
+  checksum: 10c0/8737a4414bf90f960d4ef91d24ec43c9fabbac6cc95df67c593af9c51da8311bc907c562c7c4836ed0b1c8060b19838649b4540886b60a9de8b36d1d15aad8c1
+  languageName: node
+  linkType: hard
 
 "vlq@npm:^1.0.0":
   version: 1.0.1
