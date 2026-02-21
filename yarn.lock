@@ -13041,10 +13041,11 @@ __metadata:
     react-native-builder-bob: "npm:^0.40.18"
     react-native-monorepo-config: "npm:^0.3.3"
     react-native-web: "npm:~0.21.0"
+    vexflow-native: "workspace:*"
   languageName: unknown
   linkType: soft
 
-"vexflow-native@workspace:.":
+"vexflow-native@workspace:*, vexflow-native@workspace:.":
   version: 0.0.0-use.local
   resolution: "vexflow-native@workspace:."
   dependencies:
