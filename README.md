@@ -24,6 +24,8 @@ import { Formatter, Stave, StaveNote, Voice } from 'vexflow';
 import { VexflowCanvas, type VexflowCanvasDrawArgs } from 'vexflow-native';
 
 export default function ScoreExample() {
+  const font = require('./assets/fonts/Bravura.otf');
+
   const onDraw = useCallback(({ ctx, width }: VexflowCanvasDrawArgs) => {
     const stave = new Stave(10, 40, width - 20);
     stave.addClef('treble').addTimeSignature('4/4');
@@ -45,7 +47,12 @@ export default function ScoreExample() {
 
   return (
     <View style={{ padding: 16 }}>
-      <VexflowCanvas onDraw={onDraw} height={180} colorScheme="light" />
+      <VexflowCanvas
+        onDraw={onDraw}
+        font={font}
+        height={180}
+        colorScheme="light"
+      />
     </View>
   );
 }
@@ -56,6 +63,7 @@ export default function ScoreExample() {
 `VexflowCanvas` props:
 
 - `onDraw: ({ ctx, width, height }) => void` (required)
+- `font: require('.../Bravura.otf')` (required)
 - `width?: number` (defaults to window width with internal margin)
 - `height?: number` (default: `180`)
 - `colorScheme?: 'light' | 'dark'` (default: `'light'`)

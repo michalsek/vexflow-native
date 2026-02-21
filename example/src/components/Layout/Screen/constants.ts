@@ -1,0 +1,1 @@
+export const SCREEN_DEFAULT_PADDING = 16;

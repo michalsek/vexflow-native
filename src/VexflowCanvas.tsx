@@ -24,13 +24,16 @@ export type VexflowCanvasDrawArgs = {
 
 type VexflowCanvasProps = {
   onDraw: (args: VexflowCanvasDrawArgs) => void;
+  font: Parameters<typeof useFont>[0];
   width?: number;
   height?: number;
   colorScheme?: 'light' | 'dark';
 };
 
-function createTextMeasurementCanvas(bravuraFont: SkFont | null) {
-  let currentFont = createFont(12, 'Bravura', bravuraFont);
+const fontName = 'vexflowFont';
+
+function createTextMeasurementCanvas(skiaFont: SkFont | null) {
+  let currentFont = createFont(12, fontName, skiaFont);
 
   const measureContext = {
     measureText: (text: string) => {
@@ -58,9 +61,9 @@ function createTextMeasurementCanvas(bravuraFont: SkFont | null) {
     set(value: string) {
       try {
         const parsed = parseCssFontShorthand(value);
-        currentFont = createFont(parsed.sizePx, parsed.family, bravuraFont);
+        currentFont = createFont(parsed.sizePx, parsed.family, skiaFont);
       } catch {
-        currentFont = createFont(12, 'Bravura', bravuraFont);
+        currentFont = createFont(12, fontName, skiaFont);
       }
     },
   });
@@ -75,7 +78,7 @@ function createVexflowPicture(
   width: number,
   height: number,
   onDraw: (args: VexflowCanvasDrawArgs) => void,
-  bravuraFont: SkFont | null,
+  skiaFont: SkFont | null,
   scoreColors: {
     fill: string;
     stroke: string;
@@ -84,10 +87,11 @@ function createVexflowPicture(
   const recorder = Skia.PictureRecorder();
   const canvas = recorder.beginRecording(Skia.XYWHRect(0, 0, width, height));
 
-  const ctx = new SkiaVexflowContext(canvas, bravuraFont, {
+  const ctx = new SkiaVexflowContext(canvas, skiaFont, {
     defaultFillStyle: scoreColors.fill,
     defaultStrokeStyle: scoreColors.stroke,
   });
+
   onDraw({ ctx, width, height });
 
   return recorder.finishRecordingAsPicture();
@@ -95,6 +99,7 @@ function createVexflowPicture(
 
 export default function VexflowCanvas({
   onDraw,
+  font,
   width,
   height = CANVAS_HEIGHT,
   colorScheme = 'light',
@@ -106,30 +111,30 @@ export default function VexflowCanvas({
       : VEXFLOW_SCORE_COLORS.light;
 
   const canvasWidth = width ?? Math.max(300, Math.floor(windowWidth) - 32);
-  const bravuraFont = useFont(require('@assets/fonts/Bravura.otf'), 30);
+  const skiaFont = useFont(font, 30);
 
   const pictureInfo = useMemo(() => {
-    if (!bravuraFont) {
+    if (!skiaFont) {
       return null;
     }
 
     Element.setTextMeasurementCanvas(
-      createTextMeasurementCanvas(bravuraFont) as unknown as HTMLCanvasElement
+      createTextMeasurementCanvas(skiaFont) as unknown as HTMLCanvasElement
     );
 
     const picture = createVexflowPicture(
       canvasWidth,
       height,
       onDraw,
-      bravuraFont,
+      skiaFont,
       scoreColors
     );
 
     return { picture, width: canvasWidth, height };
-  }, [bravuraFont, canvasWidth, height, onDraw, scoreColors]);
+  }, [skiaFont, canvasWidth, height, onDraw, scoreColors]);
 
   if (!pictureInfo) {
-    return <Text>Loading Bravura font...</Text>;
+    return <Text>Loading font...</Text>;
   }
 
   return (
