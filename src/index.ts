@@ -1,8 +1,10 @@
-export * from './constants';
-export * from './types';
-export * from './utils';
-
 export { default as SkiaVexflowContext } from './SkiaVexflowContext';
 export { default as VexflowCanvas } from './VexflowCanvas';
 
-export type { VexflowCanvasDrawArgs } from './VexflowCanvas';
+export { VEXFLOW_SCORE_COLORS } from './constants';
+export type { LineCap, LineJoin, ParsedCssFont } from './types';
+export { parseCssFontShorthand, toPxFontSize } from './utils';
+export type {
+  VexflowCanvasDrawArgs,
+  VexflowCanvasProps,
+} from './VexflowCanvas';

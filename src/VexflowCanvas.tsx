@@ -22,7 +22,7 @@ export type VexflowCanvasDrawArgs = {
   height: number;
 };
 
-type VexflowCanvasProps = {
+export type VexflowCanvasProps = {
   onDraw: (args: VexflowCanvasDrawArgs) => void;
   font: Parameters<typeof useFont>[0];
   width?: number;

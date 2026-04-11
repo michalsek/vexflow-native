@@ -2,7 +2,10 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "vexflow-native": ["./src/index"]
+      "vexflow-native": ["./src/index"],
+      "vexflow-native/state": ["./src/state/index"],
+      "vexflow-native/renderer": ["./src/renderer/index"],
+      "vexflow-native/musicxml": ["./src/musicxml/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
@@ -26,5 +29,6 @@
     "strict": true,
     "target": "ESNext",
     "verbatimModuleSyntax": true
-  }
+  },
+  "exclude": ["lib", "prev-implementation"]
 }

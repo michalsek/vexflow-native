@@ -1,11 +1,35 @@
 # vexflow-native
 
-Render VexFlow music notation in React Native using Skia.
+Low-level React Native Skia bridge for rendering VexFlow music notation.
 
-## What This Library Provides
+## What This Package Is
 
-- `VexflowCanvas`: React component that creates a Skia canvas and gives you a VexFlow-compatible render context.
-- `SkiaVexflowContext`: low-level context implementation (you usually do not need to use it directly).
+`vexflow-native` currently stabilizes the low-level platform bridge only:
+
+- `VexflowCanvas` creates a Skia canvas and calls your drawing callback with a VexFlow-compatible render context.
+- `SkiaVexflowContext` adapts React Native Skia to the VexFlow render context contract.
+- The package root exports a small set of bridge-level types, helpers, and score color presets that are safe to consume directly.
+
+## Non-Goals For This Step
+
+- No higher-level renderer abstraction yet.
+- No MusicXML parser or loader yet.
+
+## Public Entry Points
+
+The package currently exposes these top-level imports:
+
+```ts
+import { VexflowCanvas } from 'vexflow-native';
+import type { Meter, Score } from 'vexflow-native/state';
+import {} from 'vexflow-native/renderer';
+import {} from 'vexflow-native/musicxml';
+```
+
+`vexflow-native/state` now exposes the canonical notation data contract used by
+later renderer and MusicXML layers. `vexflow-native/renderer` and
+`vexflow-native/musicxml` remain reserved first-class entrypoints until those
+contracts land in later roadmap steps.
 
 ## Installation
 
@@ -67,6 +91,52 @@ export default function ScoreExample() {
 - `width?: number` (defaults to window width with internal margin)
 - `height?: number` (default: `180`)
 - `colorScheme?: 'light' | 'dark'` (default: `'light'`)
+
+## Supported Public API
+
+Runtime exports from `vexflow-native`:
+
+- `VexflowCanvas`
+- `SkiaVexflowContext`
+- `VEXFLOW_SCORE_COLORS`
+- `parseCssFontShorthand`
+- `toPxFontSize`
+
+Type exports from `vexflow-native`:
+
+- `VexflowCanvasProps`
+- `VexflowCanvasDrawArgs`
+- `LineCap`
+- `LineJoin`
+- `ParsedCssFont`
+
+Type exports from `vexflow-native/state`:
+
+- `Id`
+- `Clef`
+- `Step`
+- `Accidental`
+- `NoteLength`
+- `StemDirection`
+- `Barline`
+- `Articulation`
+- `Dynamic`
+- `KeyMode`
+- `Fraction`
+- `Pitch`
+- `Duration`
+- `KeySignature`
+- `Meter`
+- `Tempo`
+- `Note`
+- `Rest`
+- `Chord`
+- `VoiceItem`
+- `Voice`
+- `Measure`
+- `Staff`
+- `ScoreMetadata`
+- `Score`
 
 ## Notes
 

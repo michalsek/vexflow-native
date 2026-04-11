@@ -6,9 +6,24 @@
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
     ".": {
-      "source": "./src/index.tsx",
+      "source": "./src/index.ts",
       "types": "./lib/typescript/src/index.d.ts",
       "default": "./lib/module/index.js"
+    },
+    "./state": {
+      "source": "./src/state/index.ts",
+      "types": "./lib/typescript/src/state/index.d.ts",
+      "default": "./lib/module/state/index.js"
+    },
+    "./renderer": {
+      "source": "./src/renderer/index.ts",
+      "types": "./lib/typescript/src/renderer/index.d.ts",
+      "default": "./lib/module/renderer/index.js"
+    },
+    "./musicxml": {
+      "source": "./src/musicxml/index.ts",
+      "types": "./lib/typescript/src/musicxml/index.d.ts",
+      "default": "./lib/module/musicxml/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -36,7 +51,9 @@
     "clean": "del-cli lib",
     "prepare": "bob build",
     "typecheck": "tsc",
-    "lint": "eslint \"**/*.{js,ts,tsx}\"",
+    "lint": "eslint src example --ext .js,.ts,.tsx",
+    "lint:fix": "yarn lint --fix",
+    "format": "prettier --write README.md package.json \"src/**/*.{ts,tsx}\"",
     "test": "jest",
     "release": "release-it --only-version"
   },
@@ -124,7 +141,12 @@
     "preset": "react-native",
     "modulePathIgnorePatterns": [
       "<rootDir>/example/node_modules",
-      "<rootDir>/lib/"
+      "<rootDir>/lib/",
+      "<rootDir>/prev-implementation/"
+    ],
+    "testPathIgnorePatterns": [
+      "<rootDir>/example/",
+      "<rootDir>/prev-implementation/"
     ]
   },
   "commitlint": {
