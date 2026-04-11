@@ -365,16 +365,30 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
   }
 
   measureText(text: string) {
-    const rect = this.textFont.measureText(text);
     const width = getAdvanceWidth(this.textFont, text);
-    const height = rect.height;
+    let x = 0,
+      y = 0,
+      height = 12;
 
-    return {
-      x: rect.x,
-      y: rect.y,
-      width,
-      height,
-    };
+    try {
+      const rect = this.textFont.measureText(text);
+      x = rect.x;
+      y = rect.y;
+      height = rect.height;
+    } catch {
+      // SkFont.measureText() is not implemented on React Native Web.
+      // Fall back to font metrics for approximate bounds.
+      try {
+        const metrics = this.textFont.getMetrics();
+        y = metrics.ascent ?? -12;
+        height =
+          Math.abs(metrics.ascent ?? 12) + Math.abs(metrics.descent ?? 4);
+      } catch {
+        // Use defaults
+      }
+    }
+
+    return { x, y, width, height };
   }
 
   set fillStyle(style: string | CanvasGradient | CanvasPattern) {

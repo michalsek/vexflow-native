@@ -64,43 +64,68 @@ export function createFont(
 
     const typeface = bravuraFont.getTypeface();
     if (typeface) {
-      const font = Skia.Font(typeface, fontSize);
-      fontCache.set(cacheKey, font);
-      return font;
+      try {
+        const font = Skia.Font(typeface, fontSize);
+        fontCache.set(cacheKey, font);
+        return font;
+      } catch {
+        // On web (CanvasKit WASM), Font.getTypeface() returns a raw pointer
+        // that can't be reused in new Font(). Return original font as fallback.
+        return bravuraFont;
+      }
     }
   }
 
-  const fontMgr = Skia.FontMgr.System();
-  const requestedFamilies = family
-    ? family
-        .replace(/["']/g, '')
-        .split(',')
-        .map((part) => part.trim())
-        .filter(Boolean)
-    : [];
+  // System font lookup — not available on React Native Web (CanvasKit WASM)
+  // where Skia.FontMgr.System().matchFamilyStyle() throws "Not implemented".
+  try {
+    const fontMgr = Skia.FontMgr.System();
+    const requestedFamilies = family
+      ? family
+          .replace(/["']/g, '')
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean)
+      : [];
 
-  for (const requestedFamily of requestedFamilies) {
-    const typeface = fontMgr.matchFamilyStyle(requestedFamily, {
-      weight: 400,
-      width: 5,
-      slant: 0,
-    });
+    for (const requestedFamily of requestedFamilies) {
+      const typeface = fontMgr.matchFamilyStyle(requestedFamily, {
+        weight: 400,
+        width: 5,
+        slant: 0,
+      });
 
-    if (typeface) {
-      return Skia.Font(typeface, fontSize);
+      if (typeface) {
+        return Skia.Font(typeface, fontSize);
+      }
     }
-  }
 
-  for (let i = 0; i < fontMgr.countFamilies(); i++) {
-    const systemFamily = fontMgr.getFamilyName(i);
-    const typeface = fontMgr.matchFamilyStyle(systemFamily, {
-      weight: 400,
-      width: 5,
-      slant: 0,
-    });
+    for (let i = 0; i < fontMgr.countFamilies(); i++) {
+      const systemFamily = fontMgr.getFamilyName(i);
+      const typeface = fontMgr.matchFamilyStyle(systemFamily, {
+        weight: 400,
+        width: 5,
+        slant: 0,
+      });
 
-    if (typeface) {
-      return Skia.Font(typeface, fontSize);
+      if (typeface) {
+        return Skia.Font(typeface, fontSize);
+      }
+    }
+  } catch {
+    // On web (CanvasKit WASM), system font APIs are not available.
+    // Fall back to the Bravura font if provided.
+    if (bravuraFont) {
+      const typeface = bravuraFont.getTypeface();
+      if (typeface) {
+        const cacheKey = `fallback-${fontSize}`;
+        const cached = fontCache.get(cacheKey);
+        if (cached) return cached;
+
+        const font = Skia.Font(typeface, fontSize);
+        fontCache.set(cacheKey, font);
+        return font;
+      }
     }
   }
 
