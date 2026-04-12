@@ -7,7 +7,21 @@ import type {
   VexflowCanvasDrawArgs,
   VexflowCanvasProps,
 } from 'vexflow-native';
-import type { Measure, Meter, Score, VoiceItem } from 'vexflow-native/state';
+import type {
+  RendererMeasure,
+  RendererScore,
+  RendererStaff,
+  RendererVoice,
+  RendererVoiceItem,
+} from 'vexflow-native/renderer';
+import type {
+  Measure,
+  Meter,
+  Score,
+  Staff,
+  Voice,
+  VoiceItem,
+} from 'vexflow-native/state';
 
 jest.mock('@shopify/react-native-skia', () => ({
   BlendMode: { Clear: 'clear' },
@@ -127,7 +141,7 @@ describe('root public API', () => {
     });
   });
 
-  it('resolves the reserved subpath modules in the type system', () => {
+  it('resolves the public subpath modules in the type system', () => {
     type StateModule = typeof import('vexflow-native/state');
     type RendererModule = typeof import('vexflow-native/renderer');
     type MusicXmlModule = typeof import('vexflow-native/musicxml');
@@ -203,6 +217,65 @@ describe('root public API', () => {
     expect(acceptScore).toBeInstanceOf(Function);
     expect(score.defaultMeter.beatUnit).toBe(4);
     expect(score.staves[0]?.measures[0]?.meter).toEqual(meter);
+  });
+
+  it('exposes renderer-owned aliases for the initial renderer type surface', () => {
+    const voiceItem = {
+      id: 'note-1',
+      type: 'note',
+      pitch: {
+        step: 'C',
+        octave: 4,
+      },
+      duration: {
+        length: 'q',
+      },
+      voiceId: 'voice-1',
+    } satisfies VoiceItem;
+    const voice = {
+      id: 'voice-1',
+      index: 0,
+      items: [voiceItem],
+    } satisfies Voice;
+    const measure = {
+      id: 'measure-1',
+      number: 1,
+      voices: [voice],
+    } satisfies Measure;
+    const staff = {
+      id: 'staff-1',
+      order: 0,
+      clef: 'treble',
+      measures: [measure],
+    } satisfies Staff;
+    const score = {
+      id: 'score-1',
+      defaultMeter: {
+        beats: 4,
+        beatUnit: 4,
+      },
+      staves: [staff],
+    } satisfies Score;
+    const acceptRendererVoiceItem = (_voiceItem: RendererVoiceItem) =>
+      undefined;
+    const acceptRendererVoice = (_voice: RendererVoice) => undefined;
+    const acceptRendererMeasure = (_measure: RendererMeasure) => undefined;
+    const acceptRendererStaff = (_staff: RendererStaff) => undefined;
+    const acceptRendererScore = (_score: RendererScore) => undefined;
+
+    expect(acceptRendererVoiceItem).toBeInstanceOf(Function);
+    expect(acceptRendererVoice).toBeInstanceOf(Function);
+    expect(acceptRendererMeasure).toBeInstanceOf(Function);
+    expect(acceptRendererStaff).toBeInstanceOf(Function);
+    expect(acceptRendererScore).toBeInstanceOf(Function);
+    expect(acceptRendererVoiceItem(voiceItem)).toBeUndefined();
+    expect(acceptRendererVoice(voice)).toBeUndefined();
+    expect(acceptRendererMeasure(measure)).toBeUndefined();
+    expect(acceptRendererStaff(staff)).toBeUndefined();
+    expect(acceptRendererScore(score)).toBeUndefined();
+    expect(score.staves[0]?.measures[0]?.voices[0]?.items[0]).toEqual(
+      voiceItem
+    );
   });
 
   it('keeps the public helper semantics stable', () => {

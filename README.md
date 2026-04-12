@@ -22,14 +22,15 @@ The package currently exposes these top-level imports:
 ```ts
 import { VexflowCanvas } from 'vexflow-native';
 import type { Meter, Score } from 'vexflow-native/state';
-import {} from 'vexflow-native/renderer';
+import type { RendererScore } from 'vexflow-native/renderer';
 import {} from 'vexflow-native/musicxml';
 ```
 
-`vexflow-native/state` now exposes the canonical notation data contract used by
-later renderer and MusicXML layers. `vexflow-native/renderer` and
-`vexflow-native/musicxml` remain reserved first-class entrypoints until those
-contracts land in later roadmap steps.
+`vexflow-native/state` exposes the canonical notation data contract used by
+later renderer and MusicXML layers. `vexflow-native/renderer` now exposes the
+initial typed renderer boundary on top of that state model. `vexflow-native/musicxml`
+remains a reserved first-class entrypoint until that contract lands in a later
+roadmap step.
 
 ## Installation
 
@@ -137,6 +138,14 @@ Type exports from `vexflow-native/state`:
 - `Staff`
 - `ScoreMetadata`
 - `Score`
+
+Type exports from `vexflow-native/renderer`:
+
+- `RendererScore`
+- `RendererStaff`
+- `RendererMeasure`
+- `RendererVoice`
+- `RendererVoiceItem`
 
 ## Notes
 
