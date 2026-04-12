@@ -4,15 +4,16 @@ Low-level React Native Skia bridge for rendering VexFlow music notation.
 
 ## What This Package Is
 
-`vexflow-native` currently stabilizes the low-level platform bridge only:
+`vexflow-native` now exposes two renderer-facing layers:
 
 - `VexflowCanvas` creates a Skia canvas and calls your drawing callback with a VexFlow-compatible render context.
 - `SkiaVexflowContext` adapts React Native Skia to the VexFlow render context contract.
-- The package root exports a small set of bridge-level types, helpers, and score color presets that are safe to consume directly.
+- `vexflow-native/renderer` provides a renderer core with explicit `measure()` and `render()` phases for deterministic planning and playback-ready geometry.
+- The package root still exports the low-level bridge types, helpers, and score color presets that are safe to consume directly.
 
 ## Non-Goals For This Step
 
-- No higher-level renderer abstraction yet.
+- No document-style renderer modes yet. The current core ships `infiniteScore` only.
 - No MusicXML parser or loader yet.
 
 ## Public Entry Points
@@ -22,15 +23,23 @@ The package currently exposes these top-level imports:
 ```ts
 import { VexflowCanvas } from 'vexflow-native';
 import type { Meter, Score } from 'vexflow-native/state';
-import type { RendererScore } from 'vexflow-native/renderer';
+import {
+  RendererCore,
+  createRendererEngine,
+  type MeasureRequest,
+  type RendererConfig,
+  type RendererPlan,
+} from 'vexflow-native/renderer';
 import {} from 'vexflow-native/musicxml';
 ```
 
 `vexflow-native/state` exposes the canonical notation data contract used by
 later renderer and MusicXML layers. `vexflow-native/renderer` now exposes the
-initial typed renderer boundary on top of that state model. `vexflow-native/musicxml`
-remains a reserved first-class entrypoint until that contract lands in a later
-roadmap step.
+runtime renderer core on top of that state model, including explicit
+measure/render phase contracts, deterministic layout-planning output, and exact
+geometry output for playback/highlighting. `vexflow-native/musicxml` remains a
+reserved first-class entrypoint until that contract lands in a later roadmap
+step.
 
 ## Installation
 
@@ -103,6 +112,11 @@ Runtime exports from `vexflow-native`:
 - `parseCssFontShorthand`
 - `toPxFontSize`
 
+Runtime exports from `vexflow-native/renderer`:
+
+- `RendererCore`
+- `createRendererEngine`
+
 Type exports from `vexflow-native`:
 
 - `VexflowCanvasProps`
@@ -146,6 +160,33 @@ Type exports from `vexflow-native/renderer`:
 - `RendererMeasure`
 - `RendererVoice`
 - `RendererVoiceItem`
+- `RendererPoint`
+- `RendererSize`
+- `RendererRect`
+- `RendererInsets`
+- `RendererLayoutMode`
+- `RendererViewport`
+- `RendererSpacingOptions`
+- `RendererRenderOptions`
+- `RendererConfig`
+- `InfiniteScoreRendererConfig`
+- `NormalizedRendererSpacingOptions`
+- `NormalizedRendererRenderOptions`
+- `NormalizedRendererConfig`
+- `MeasureRange`
+- `PagePlan`
+- `SystemPlan`
+- `StaffPlan`
+- `ResolvedMeasureState`
+- `MeasureDisplayPlan`
+- `MeasurePlan`
+- `RendererPlan`
+- `MeasureLayout`
+- `NoteBounds`
+- `MeasureRequest`
+- `RenderRequest`
+- `RenderResult`
+- `RendererEngine`
 
 ## Notes
 
