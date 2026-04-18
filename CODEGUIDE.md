@@ -9,6 +9,7 @@ This file describes the current end goal of the library.
 - Infinite score layout renders adjacent measures with no inter-measure gap.
 - Skia render-context paths are built with `PathBuilder` and materialized as immutable paths only when drawn.
 - Skia web font loading must finish CanvasKit bootstrap before any typeface APIs are used.
+- Native Bravura font resources must not assume `SkFont.getTypeface()` is available and should reuse captured typefaces when present.
 - Web text bounds must tolerate Skia web `measureText()` being unavailable by deriving bounds from glyph widths/bounds or font metrics.
 - The package offers three rendering modes:
 

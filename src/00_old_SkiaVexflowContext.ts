@@ -129,6 +129,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     this.strokePaint.setStyle(PaintStyle.Stroke);
     this.strokePaint.setAntiAlias(true);
 
+    console.log('Bravura font source:', bravuraFont);
     this.textFont = createFont(12, 'Bravura', this.bravuraFont);
 
     if (options.defaultFillStyle !== undefined) {

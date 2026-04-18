@@ -15,9 +15,14 @@ export function createNativeFontResource(
     return null;
   }
 
+  const bravuraTypeface =
+    typeof bravuraFont.getTypeface === 'function'
+      ? bravuraFont.getTypeface()
+      : null;
+
   return {
     bravuraFont,
-    bravuraTypeface: bravuraFont.getTypeface(),
+    bravuraTypeface,
     cacheKeyPrefix: `${BRAVURA_FONT_FAMILY}-native`,
   };
 }

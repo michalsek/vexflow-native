@@ -16,27 +16,27 @@ type ScreenLink = {
 };
 
 const SCREEN_LINKS: ScreenLink[] = [
-  {
-    route: 'VexflowTestSuite',
-    title: 'VexFlow Test Suite',
-    description: 'Browse the current plain VexFlow rendering test suite.',
-  },
-  {
-    route: 'DocumentRenderer',
-    title: 'Document Renderer',
-    description: 'Placeholder for the document layout renderer workflow.',
-  },
-  {
-    route: 'EvenDocumentRenderer',
-    title: 'Even Document Renderer',
-    description:
-      'Placeholder for evenly distributed document layout rendering.',
-  },
-  {
-    route: 'InfiniteScore',
-    title: 'Infinite Score',
-    description: 'Inspect the renderer-driven infinite-score example.',
-  },
+  // {
+  //   route: 'VexflowTestSuite',
+  //   title: 'VexFlow Test Suite',
+  //   description: 'Browse the current plain VexFlow rendering test suite.',
+  // },
+  // {
+  //   route: 'DocumentRenderer',
+  //   title: 'Document Renderer',
+  //   description: 'Placeholder for the document layout renderer workflow.',
+  // },
+  // {
+  //   route: 'EvenDocumentRenderer',
+  //   title: 'Even Document Renderer',
+  //   description:
+  //     'Placeholder for evenly distributed document layout rendering.',
+  // },
+  // {
+  //   route: 'InfiniteScore',
+  //   title: 'Infinite Score',
+  //   description: 'Inspect the renderer-driven infinite-score example.',
+  // },
 ];
 
 const Main: React.FC<MainScreenProps> = ({ navigation }) => {

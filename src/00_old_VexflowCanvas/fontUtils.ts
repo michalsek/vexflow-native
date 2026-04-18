@@ -44,9 +44,17 @@ function normalizeLoadedFontResource(
 
   return {
     bravuraFont: value,
-    bravuraTypeface: value.getTypeface(),
+    bravuraTypeface: getFontTypeface(value),
     cacheKeyPrefix: BRAVURA_FONT_FAMILY,
   };
+}
+
+function getFontTypeface(font: SkFont): SkTypeface | null {
+  if (typeof font.getTypeface !== 'function') {
+    return null;
+  }
+
+  return font.getTypeface();
 }
 
 function createCachedFont(
@@ -69,7 +77,7 @@ function createBravuraFont(
   fontResource: LoadedFontResource
 ): SkFont {
   const typeface =
-    fontResource.bravuraTypeface ?? fontResource.bravuraFont.getTypeface();
+    fontResource.bravuraTypeface ?? getFontTypeface(fontResource.bravuraFont);
 
   if (typeface) {
     const cachePrefix = fontResource.cacheKeyPrefix ?? BRAVURA_FONT_FAMILY;
