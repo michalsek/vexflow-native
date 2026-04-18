@@ -23,9 +23,9 @@ import { type LineCap, type LineJoin } from './types';
 import {
   createFont,
   getAdvanceWidth,
-  parseCssFontShorthand,
-  toPxFontSize,
-} from './utils';
+  type BravuraFontSource,
+} from './VexflowCanvas/fontUtils';
+import { parseCssFontShorthand, toPxFontSize } from './utils';
 
 /* eslint-disable no-void */
 
@@ -93,11 +93,11 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
   }
 
   private canvas: SkCanvas;
-  private currentPath: SkPath;
+  private currentPath: ReturnType<typeof Skia.PathBuilder.Make>;
   private fillPaint: SkPaint;
   private strokePaint: SkPaint;
   private textFont: SkFont;
-  private bravuraFont: SkFont | null;
+  private bravuraFont: BravuraFontSource;
   private defaultFillStyle: string;
   private defaultStrokeStyle: string;
   private stateStack: RenderState[] = [];
@@ -113,13 +113,13 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
 
   constructor(
     canvas: SkCanvas,
-    bravuraFont: SkFont | null = null,
+    bravuraFont: BravuraFontSource = null,
     options: SkiaVexflowContextOptions = {}
   ) {
     this.canvas = canvas;
     this.bravuraFont = bravuraFont;
 
-    this.currentPath = Skia.Path.Make();
+    this.currentPath = Skia.PathBuilder.Make();
 
     this.fillPaint = Skia.Paint();
     this.fillPaint.setStyle(PaintStyle.Fill);
@@ -143,6 +143,10 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     this.defaultStrokeStyle = this.state.strokeStyle;
 
     this.applyState();
+  }
+
+  private buildCurrentPath(): SkPath {
+    return this.currentPath.build();
   }
 
   private applyState(): void {
@@ -248,7 +252,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
   }
 
   beginPath() {
-    this.currentPath = Skia.Path.Make();
+    this.currentPath = Skia.PathBuilder.Make();
     return this;
   }
 
@@ -301,12 +305,12 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
 
   fill(attributes?: any) {
     void attributes;
-    this.canvas.drawPath(this.currentPath, this.fillPaint);
+    this.canvas.drawPath(this.buildCurrentPath(), this.fillPaint);
     return this;
   }
 
   stroke() {
-    this.canvas.drawPath(this.currentPath, this.strokePaint);
+    this.canvas.drawPath(this.buildCurrentPath(), this.strokePaint);
     return this;
   }
 

@@ -15,7 +15,6 @@ export const DEFAULT_RENDERER_SPACING: NormalizedRendererSpacingOptions = {
   systemGap: 64,
   staffGap: 96,
   groupGap: 56,
-  measureGap: 12,
   minimumMeasureWidth: 160,
   measureHorizontalPadding: 24,
   staffHeight: 96,

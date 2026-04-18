@@ -466,7 +466,6 @@ export function createInfiniteScoreExampleConfig(
     spacing: {
       staffGap: 84,
       groupGap: 40,
-      measureGap: 18,
       minimumMeasureWidth: 176,
     },
     render: {

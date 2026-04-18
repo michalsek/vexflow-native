@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { afterEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('@shopify/react-native-skia', () => {
   const createMockFont = (size = 12) => ({
@@ -39,6 +39,17 @@ jest.mock('@shopify/react-native-skia', () => {
     quadTo: jest.fn(),
   });
 
+  const createPathBuilder = () => ({
+    addArc: jest.fn(),
+    addRect: jest.fn(),
+    build: jest.fn(() => createPath()),
+    close: jest.fn(),
+    cubicTo: jest.fn(),
+    lineTo: jest.fn(),
+    moveTo: jest.fn(),
+    quadTo: jest.fn(),
+  });
+
   return {
     BlendMode: { Clear: 'clear' },
     Canvas: 'Canvas',
@@ -59,6 +70,9 @@ jest.mock('@shopify/react-native-skia', () => {
       Paint: jest.fn(() => createPaint()),
       Path: {
         Make: jest.fn(() => createPath()),
+      },
+      PathBuilder: {
+        Make: jest.fn(() => createPathBuilder()),
       },
       XYWHRect: jest.fn(
         (x: number, y: number, width: number, height: number) => ({
@@ -88,6 +102,10 @@ import {
   INFINITE_SCORE_EXAMPLE_SCORE,
 } from '../internalExamples/InfiniteScoreExample';
 import SkiaVexflowContext from '../SkiaVexflowContext';
+import type { Score } from '../state';
+import { InfiniteScoreLayoutPlanner } from './planner/InfiniteScoreLayoutPlanner';
+import { StaffAnalysisPlanner } from './planner/StaffAnalysisPlanner';
+import { TimingResolver } from './planner/TimingResolver';
 import { RendererCore } from './RendererCore';
 
 const TEST_VIEWPORT = {
@@ -110,6 +128,16 @@ function createMockCanvas() {
 function createConfig() {
   return createInfiniteScoreExampleConfig(TEST_VIEWPORT);
 }
+
+function cloneScore(): Score {
+  return JSON.parse(
+    JSON.stringify(INFINITE_SCORE_EXAMPLE_SCORE)
+  ) as typeof INFINITE_SCORE_EXAMPLE_SCORE;
+}
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe('RendererCore', () => {
   it('measures the shared infinite-score example deterministically', () => {
@@ -138,6 +166,18 @@ describe('RendererCore', () => {
       new Set(firstPlan.measures.map((measure) => measure.globalMeasureIndex))
     ).toEqual(new Set([0, 1, 2, 3, 4, 5]));
     expect(firstPlan.measures).toHaveLength(12);
+    const topStaffMeasures = firstPlan.measures.filter(
+      (measure) => measure.staffId === 'staff-right-hand'
+    );
+    expect(topStaffMeasures).toHaveLength(6);
+    expect(
+      topStaffMeasures.every(
+        (measure, index, measures) =>
+          index === 0 ||
+          measure.bounds.x ===
+            measures[index - 1]!.bounds.x + measures[index - 1]!.bounds.width
+      )
+    ).toBe(true);
 
     const changedMeterMeasures = firstPlan.measures.filter(
       (measure) => measure.globalMeasureIndex === 2
@@ -151,6 +191,188 @@ describe('RendererCore', () => {
     expect(
       changedMeterMeasures.every((measure) => measure.display.showTimeSignature)
     ).toBe(true);
+  });
+
+  it('reuses cached planner work for repeated identical measure calls', () => {
+    const timingSpy = jest.spyOn(
+      TimingResolver.prototype,
+      'recomputeTimingsFromIndex'
+    );
+    const semanticsSpy = jest.spyOn(
+      StaffAnalysisPlanner.prototype,
+      'recomputeStaffSemanticsFromIndex'
+    );
+    const widthSpy = jest.spyOn(
+      InfiniteScoreLayoutPlanner.prototype,
+      'recomputeAllocatedWidthsFromIndex'
+    );
+    const engine = new RendererCore<SkiaVexflowContext>();
+    const request = {
+      score: cloneScore(),
+      config: createConfig(),
+    };
+
+    engine.measure(request);
+    timingSpy.mockClear();
+    semanticsSpy.mockClear();
+    widthSpy.mockClear();
+
+    const firstRepeat = engine.measure(request);
+    const secondRepeat = engine.measure(request);
+
+    expect(firstRepeat).toEqual(secondRepeat);
+    expect(timingSpy).not.toHaveBeenCalled();
+    expect(semanticsSpy).not.toHaveBeenCalled();
+    expect(widthSpy).not.toHaveBeenCalled();
+  });
+
+  it('recomputes only the affected staff semantics after a local score edit', () => {
+    const timingSpy = jest.spyOn(
+      TimingResolver.prototype,
+      'recomputeTimingsFromIndex'
+    );
+    const semanticsSpy = jest.spyOn(
+      StaffAnalysisPlanner.prototype,
+      'recomputeStaffSemanticsFromIndex'
+    );
+    const widthSpy = jest.spyOn(
+      InfiniteScoreLayoutPlanner.prototype,
+      'recomputeAllocatedWidthsFromIndex'
+    );
+    const engine = new RendererCore<SkiaVexflowContext>();
+    const score = cloneScore();
+
+    engine.measure({
+      score,
+      config: createConfig(),
+    });
+    timingSpy.mockClear();
+    semanticsSpy.mockClear();
+    widthSpy.mockClear();
+
+    score.staves[0]!.measures[2]!.directions = ['espressivo'];
+
+    const plan = engine.measure({
+      score,
+      config: createConfig(),
+    });
+
+    expect(timingSpy).not.toHaveBeenCalled();
+    expect(semanticsSpy).toHaveBeenCalledTimes(1);
+    expect(semanticsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startIndex: 2,
+        staffEntry: expect.objectContaining({
+          staffId: score.staves[0]!.id,
+        }),
+      })
+    );
+    expect(widthSpy).toHaveBeenCalledTimes(1);
+    expect(widthSpy).toHaveBeenCalledWith(
+      2,
+      expect.any(Object),
+      expect.any(Array),
+      expect.any(Number)
+    );
+    expect(
+      plan.measures.find(
+        (measure) =>
+          measure.staffId === score.staves[0]!.id &&
+          measure.globalMeasureIndex === 2
+      )?.display.showDirections
+    ).toBe(true);
+  });
+
+  it('reuses score analysis for horizontal layout-only config changes and refreshes layout', () => {
+    const timingSpy = jest.spyOn(
+      TimingResolver.prototype,
+      'recomputeTimingsFromIndex'
+    );
+    const semanticsSpy = jest.spyOn(
+      StaffAnalysisPlanner.prototype,
+      'recomputeStaffSemanticsFromIndex'
+    );
+    const xSpy = jest.spyOn(
+      InfiniteScoreLayoutPlanner.prototype,
+      'recomputeXPositionsFromIndex'
+    );
+    const engine = new RendererCore<SkiaVexflowContext>();
+    const score = cloneScore();
+    const firstConfig = createConfig();
+    const basePadding = firstConfig.padding ?? {
+      top: 24,
+      right: 24,
+      bottom: 24,
+      left: 24,
+    };
+    const secondConfig = {
+      ...createConfig(),
+      padding: {
+        ...basePadding,
+        left: basePadding.left + 16,
+      },
+    };
+    const firstPlan = engine.measure({
+      score,
+      config: firstConfig,
+    });
+
+    timingSpy.mockClear();
+    semanticsSpy.mockClear();
+    xSpy.mockClear();
+
+    const secondPlan = engine.measure({
+      score,
+      config: secondConfig,
+    });
+
+    expect(timingSpy).not.toHaveBeenCalled();
+    expect(semanticsSpy).not.toHaveBeenCalled();
+    expect(xSpy).toHaveBeenCalledTimes(1);
+    expect(secondPlan.contentSize.width).toBeGreaterThan(
+      firstPlan.contentSize.width
+    );
+  });
+
+  it('reuses staff analysis when only staff ordering changes', () => {
+    const timingSpy = jest.spyOn(
+      TimingResolver.prototype,
+      'recomputeTimingsFromIndex'
+    );
+    const semanticsSpy = jest.spyOn(
+      StaffAnalysisPlanner.prototype,
+      'recomputeStaffSemanticsFromIndex'
+    );
+    const ySpy = jest.spyOn(
+      InfiniteScoreLayoutPlanner.prototype,
+      'recomputeStaffYPositions'
+    );
+    const engine = new RendererCore<SkiaVexflowContext>();
+    const score = cloneScore();
+
+    engine.measure({
+      score,
+      config: createConfig(),
+    });
+    timingSpy.mockClear();
+    semanticsSpy.mockClear();
+    ySpy.mockClear();
+
+    score.staves[0]!.order = 1;
+    score.staves[1]!.order = 0;
+
+    const plan = engine.measure({
+      score,
+      config: createConfig(),
+    });
+
+    expect(timingSpy).not.toHaveBeenCalled();
+    expect(semanticsSpy).not.toHaveBeenCalled();
+    expect(ySpy).toHaveBeenCalledTimes(1);
+    expect(plan.staves.map((staff) => staff.staffId)).toEqual([
+      score.staves[1]!.id,
+      score.staves[0]!.id,
+    ]);
   });
 
   it('renders exact geometry for the shared infinite-score example', () => {

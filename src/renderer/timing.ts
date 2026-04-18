@@ -14,7 +14,9 @@ const QUARTER_BEAT_LENGTHS: Record<Duration['length'], number> = {
 export function getDurationInQuarterBeats(duration: Duration): number {
   const base = QUARTER_BEAT_LENGTHS[duration.length];
   const dots = duration.dots ?? 0;
+
   const dotted = dots > 0 ? base * (2 - 1 / Math.pow(2, dots)) : base;
+
   const tupletRatio = duration.tuplet
     ? duration.tuplet.den / duration.tuplet.num
     : 1;

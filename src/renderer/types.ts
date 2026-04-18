@@ -45,7 +45,6 @@ export interface RendererSpacingOptions {
   systemGap?: number;
   staffGap?: number;
   groupGap?: number;
-  measureGap?: number;
   minimumMeasureWidth?: number;
   measureHorizontalPadding?: number;
   staffHeight?: number;
@@ -72,7 +71,6 @@ export interface NormalizedRendererSpacingOptions {
   systemGap: number;
   staffGap: number;
   groupGap: number;
-  measureGap: number;
   minimumMeasureWidth: number;
   measureHorizontalPadding: number;
   staffHeight: number;

@@ -1,6 +1,6 @@
 import type { RenderContext as VexflowRenderContext } from 'vexflow';
 
-import { measureScore } from './planning';
+import { RendererPlanner } from './planner';
 import { renderScore } from './vexflow';
 import type {
   MeasureRequest,
@@ -14,8 +14,10 @@ export class RendererCore<
   TContext extends VexflowRenderContext = VexflowRenderContext
 > implements RendererEngine<TContext>
 {
+  private readonly planner = new RendererPlanner();
+
   measure(request: MeasureRequest): RendererPlan {
-    return measureScore(request);
+    return this.planner.measure(request);
   }
 
   render(request: RenderRequest<TContext>): RenderResult {
