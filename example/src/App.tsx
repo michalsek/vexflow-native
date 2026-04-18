@@ -14,6 +14,7 @@ import EvenDocumentRenderer from './screens/EvenDocumentRenderer';
 // import InfiniteScore from './screens/InfiniteScore';
 import Main from './screens/Main';
 import SimpleExample from './screens/SimpleExample';
+import SimpleRenderer from './screens/SimpleRenderer';
 // import VexflowTestSuite from './screens/VexflowTestSuite';
 
 enableScreens();
@@ -69,6 +70,11 @@ const App: React.FC = () => {
           name="EvenDocumentRenderer"
           component={EvenDocumentRenderer}
           options={{ title: 'Even Document Renderer' }}
+        />
+        <Stack.Screen
+          name="SimpleRenderer"
+          component={SimpleRenderer}
+          options={{ title: 'Simple Renderer' }}
         />
         {/* <Stack.Screen
           name="VexflowTestSuite"

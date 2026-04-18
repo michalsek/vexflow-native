@@ -21,6 +21,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     title: 'Simple Example',
     description: 'Inspect a simple rendering example with basic primitives.',
   },
+  {
+    route: 'SimpleRenderer',
+    title: 'Simple Renderer',
+    description: 'Render a simple score using ScoreRenderer and the score type',
+  },
   // {
   //   route: 'VexflowTestSuite',
   //   title: 'VexFlow Test Suite',

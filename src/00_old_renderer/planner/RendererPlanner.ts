@@ -9,18 +9,13 @@ import { TimingResolver } from './TimingResolver';
 
 export class RendererPlanner {
   private readonly configNormalizer = new ConfigNormalizer();
-
   private readonly scoreFingerprintBuilder = new ScoreFingerprintBuilder();
-
   private readonly timingResolver = new TimingResolver();
-
   private readonly staffAnalysisPlanner = new StaffAnalysisPlanner();
-
   private readonly infiniteScoreLayoutPlanner =
     new InfiniteScoreLayoutPlanner();
 
   private sortedStaffIds: RendererStaff['id'][] = [];
-
   private sortFingerprint?: string;
 
   measure(request: MeasureRequest): RendererPlan {

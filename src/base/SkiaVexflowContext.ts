@@ -43,6 +43,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
 
   private textFont: SkFont;
   private fontManager: FontManager;
+  private textMeasurementContext: TextMeasureContext;
 
   constructor(
     canvas: SkCanvas,
@@ -64,13 +65,13 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     this.strokePaint.setAntiAlias(true);
     this.strokePaint.setColor(Skia.Color('black'));
 
-    const textMeasurementContext = new TextMeasureContext(this);
+    this.textMeasurementContext = new TextMeasureContext(this);
 
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
       Element.setTextMeasurementCanvas({
         getContext: (type: string) => {
           if (type === '2d') {
-            return textMeasurementContext;
+            return this.textMeasurementContext;
           }
 
           return null;
@@ -82,6 +83,10 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
   /* local (private) or custom skia-vexflow implementations */
   getCurrentSkFont() {
     return this.textFont;
+  }
+
+  getMeasurementContext() {
+    return this.textMeasurementContext;
   }
 
   private buildCurrentPath(): SkPath {
@@ -106,7 +111,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     return this;
   }
 
-  setBackgroundFillStyle(style: string) {
+  setBackgroundFillStyle(_style: string) {
     logUnimplemented('setBackgroundFillStyle');
     return this;
   }
