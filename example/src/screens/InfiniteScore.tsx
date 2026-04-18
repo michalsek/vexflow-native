@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 // import { Skia, useFont } from '@shopify/react-native-skia';
 // import React, { useCallback, useMemo } from 'react';
 // import {
@@ -12,15 +13,27 @@
 //   VexflowCanvas,
 //   type VexflowCanvasDrawArgs,
 // } from 'vexflow-native';
-// import { RendererCore } from 'vexflow-native/renderer';
 
-// import {
-//   createInfiniteScoreExampleConfig,
-//   INFINITE_SCORE_EXAMPLE_SCORE,
-// } from '../../../src/internalExamples/InfiniteScoreExample';
+// import { useWindowDimensions } from 'react-native';
 // import bravuraFont from '../../assets/fonts/Bravura.otf';
-// import { Column, Heading, Screen, Text } from '../components';
+import { Heading, Screen } from '../components';
 // import { useColorScheme } from '../hooks/useColorScheme';
+
+const InfiniteScore: React.FC = () => {
+  // const { width } = useWindowDimensions();
+  // const colorScheme = useColorScheme();
+  // const isDark = colorScheme === 'dark';
+
+  return (
+    <Screen safeAreaEdges={['left', 'right', 'bottom']}>
+      <Heading level={2}>Infinite Score</Heading>
+    </Screen>
+  );
+};
+
+export default InfiniteScore;
+
+const styles = StyleSheet.create({});
 
 // const VIEWPORT_HEIGHT = 320;
 
@@ -129,46 +142,6 @@
 //     ]
 //   );
 
-//   return (
-//     <Screen
-//       scrollable
-//       contentContainerStyle={styles.container}
-//       safeAreaEdges={['left', 'right', 'bottom']}
-//     >
-//       <Column gap={8}>
-//         <Heading level={2}>Infinite Score</Heading>
-//         <Text variant="muted">
-//           RendererCore measured and rendered this shared example score with the
-//           current infinite-score layout mode.
-//         </Text>
-//       </Column>
-
-//       <View style={[styles.card, themedCardStyle]}>
-//         <Text style={styles.cardTitle}>Plan Summary</Text>
-//         <View style={styles.statGrid}>
-//           {stats.map((item) => (
-//             <View key={item.label} style={styles.statItem}>
-//               <Text variant="muted" style={styles.statLabel}>
-//                 {item.label}
-//               </Text>
-//               <Text style={styles.statValue}>{item.value}</Text>
-//             </View>
-//           ))}
-//         </View>
-//       </View>
-
-//       <View style={[styles.card, themedCardStyle]}>
-//         <Text style={styles.cardTitle}>Renderer Output</Text>
-//         <Text variant="muted" style={styles.cardDescription}>
-//           Scroll horizontally to inspect the full measured score width.
-//         </Text>
-//         <ScrollView
-//           horizontal
-//           showsHorizontalScrollIndicator
-//           contentContainerStyle={styles.canvasScrollContent}
-//           style={styles.canvasScrollView}
-//         >
-//           <View style={styles.canvasContainer}>
 //             <VexflowCanvas
 //               colorScheme={isDark ? 'dark' : 'light'}
 //               font={bravuraFont}
@@ -176,57 +149,3 @@
 //               onDraw={handleDraw}
 //               width={plan.contentSize.width}
 //             />
-//           </View>
-//         </ScrollView>
-//       </View>
-//     </Screen>
-//   );
-// };
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flexGrow: 1,
-//     gap: 16,
-//   },
-//   card: {
-//     borderRadius: 12,
-//     borderWidth: 1,
-//     padding: 16,
-//     gap: 10,
-//   },
-//   cardTitle: {
-//     fontSize: 16,
-//     fontWeight: '700',
-//   },
-//   cardDescription: {
-//     fontSize: 12,
-//   },
-//   statGrid: {
-//     flexDirection: 'row',
-//     flexWrap: 'wrap',
-//     gap: 12,
-//   },
-//   statItem: {
-//     minWidth: 120,
-//     gap: 2,
-//   },
-//   statLabel: {
-//     fontSize: 12,
-//   },
-//   statValue: {
-//     fontSize: 15,
-//     fontWeight: '700',
-//   },
-//   canvasScrollContent: {
-//     alignItems: 'flex-start',
-//   },
-//   canvasScrollView: {
-//     width: '100%',
-//   },
-//   canvasContainer: {
-//     overflow: 'hidden',
-//     borderRadius: 8,
-//   },
-// });
-
-// export default InfiniteScore;

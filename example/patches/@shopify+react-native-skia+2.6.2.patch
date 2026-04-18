@@ -1,152 +1,46 @@
-diff --git a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFont.js b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFont.js
-index a018cb8..f5dd57e 100644
---- a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFont.js
-+++ b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFont.js
-@@ -1,4 +1,4 @@
--import { HostObject, getEnum, throwNotImplementedOnRNWeb } from "./Host";
-+import { HostObject, getEnum } from "./Host";
- import { JsiSkPaint } from "./JsiSkPaint";
- import { JsiSkPoint } from "./JsiSkPoint";
- import { JsiSkRect } from "./JsiSkRect";
-@@ -7,8 +7,45 @@ export class JsiSkFont extends HostObject {
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js b/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js
+index 1121801..9cdfb4b 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js
+@@ -140,6 +140,9 @@ export const Platform = {
+       }
+       throw new Error("Asset source is a number - this is not supported on the web");
+     }
++    if (typeof source === "string") {
++      return source;
++    }
+     if ("uri" in source) {
+       return source.uri;
+     }
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js
+index 0c35f7b..95cf400 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js
+@@ -13,6 +13,7 @@ export class JsiSkFontMgr extends HostObject {
+     return this.ref.getFamilyName(index);
+   }
+   matchFamilyStyle(_familyName, _fontStyle) {
++    console.log('XX', Object.keys(this.ref));
+     return throwNotImplementedOnRNWeb();
+   }
+ }
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
+index 42f1355..66ccedf 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
+@@ -1,10 +1,13 @@
+ import { HostObject, throwNotImplementedOnRNWeb } from "./Host";
++import { JsiSkTypeface } from "./JsiSkTypeface";
++
+ export class JsiSkTypefaceFontProvider extends HostObject {
    constructor(CanvasKit, ref) {
-     super(CanvasKit, ref, "Font");
+     super(CanvasKit, ref, "FontMgr");
    }
--  measureText(_text, _paint) {
+-  matchFamilyStyle(_name, _style) {
 -    return throwNotImplementedOnRNWeb();
-+  measureText(text, paint) {
-+    const makeRect = (x, y, width, height) => new JsiSkRect(this.CanvasKit, this.CanvasKit.XYWHRect(x, y, Math.max(0, width), Math.max(0, height)));
-+    if (!text.length) {
-+      return makeRect(0, 0, 0, 0);
-+    }
-+    const glyphs = this.getGlyphIDs(text);
-+    const widths = this.getGlyphWidths(glyphs, paint);
-+    const advanceWidth = widths.reduce((sum, width) => sum + width, 0);
-+    try {
-+      const bounds = Array.from(this.ref.getGlyphBounds(glyphs, paint ? JsiSkPaint.fromValue(paint) : null));
-+      let penX = 0;
-+      let minX = Number.POSITIVE_INFINITY;
-+      let minY = Number.POSITIVE_INFINITY;
-+      let maxX = Number.NEGATIVE_INFINITY;
-+      let maxY = Number.NEGATIVE_INFINITY;
-+      for (let i = 0; i < glyphs.length; i++) {
-+        const left = bounds[i * 4];
-+        const top = bounds[i * 4 + 1];
-+        const right = bounds[i * 4 + 2];
-+        const bottom = bounds[i * 4 + 3];
-+        const hasBounds = Number.isFinite(left) && Number.isFinite(top) && Number.isFinite(right) && Number.isFinite(bottom) && (right > left || bottom > top);
-+        if (hasBounds) {
-+          minX = Math.min(minX, penX + left);
-+          minY = Math.min(minY, top);
-+          maxX = Math.max(maxX, penX + right);
-+          maxY = Math.max(maxY, bottom);
-+        }
-+        penX += widths[i] ?? 0;
-+      }
-+      if (Number.isFinite(minX) && Number.isFinite(minY) && Number.isFinite(maxX) && Number.isFinite(maxY)) {
-+        return makeRect(minX, minY, maxX - minX, maxY - minY);
-+      }
-+    } catch {
-+      // Fall through to font metrics when glyph bounds are unavailable.
-+    }
-+    const metrics = this.getMetrics();
-+    const ascent = Number.isFinite(metrics.ascent) ? metrics.ascent : 0;
-+    const descent = Number.isFinite(metrics.descent) ? metrics.descent : 0;
-+    return makeRect(0, ascent, Number.isFinite(advanceWidth) ? advanceWidth : 0, Math.abs(ascent) + Math.abs(descent));
++  matchFamilyStyle(name, style) {
++    const typeface = this.ref.matchFamilyStyle(name, style);
++    return new JsiSkTypeface(this.CanvasKit, typeface);
    }
-   getTextWidth(text, paint) {
-     const ids = this.getGlyphIDs(text);
-diff --git a/node_modules/@shopify/react-native-skia/src/skia/web/JsiSkFont.ts b/node_modules/@shopify/react-native-skia/src/skia/web/JsiSkFont.ts
-index a350114..3427a31 100644
---- a/node_modules/@shopify/react-native-skia/src/skia/web/JsiSkFont.ts
-+++ b/node_modules/@shopify/react-native-skia/src/skia/web/JsiSkFont.ts
-@@ -10,7 +10,7 @@ import type {
-   SkTypeface,
- } from "../types";
- 
--import { HostObject, getEnum, throwNotImplementedOnRNWeb } from "./Host";
-+import { HostObject, getEnum } from "./Host";
- import { JsiSkPaint } from "./JsiSkPaint";
- import { JsiSkPoint } from "./JsiSkPoint";
- import { JsiSkRect } from "./JsiSkRect";
-@@ -21,8 +21,78 @@ export class JsiSkFont extends HostObject<Font, "Font"> implements SkFont {
-     super(CanvasKit, ref, "Font");
-   }
- 
--  measureText(_text: string, _paint?: SkPaint | undefined) {
--    return throwNotImplementedOnRNWeb<SkRect>();
-+  measureText(text: string, paint?: SkPaint | undefined) {
-+    const makeRect = (x: number, y: number, width: number, height: number) =>
-+      new JsiSkRect(
-+        this.CanvasKit,
-+        this.CanvasKit.XYWHRect(x, y, Math.max(0, width), Math.max(0, height))
-+      );
-+
-+    if (!text.length) {
-+      return makeRect(0, 0, 0, 0);
-+    }
-+
-+    const glyphs = this.getGlyphIDs(text);
-+    const widths = this.getGlyphWidths(glyphs, paint);
-+    const advanceWidth = widths.reduce((sum, width) => sum + width, 0);
-+
-+    try {
-+      const bounds = Array.from(
-+        this.ref.getGlyphBounds(
-+          glyphs,
-+          paint ? JsiSkPaint.fromValue(paint) : null
-+        )
-+      );
-+      let penX = 0;
-+      let minX = Number.POSITIVE_INFINITY;
-+      let minY = Number.POSITIVE_INFINITY;
-+      let maxX = Number.NEGATIVE_INFINITY;
-+      let maxY = Number.NEGATIVE_INFINITY;
-+
-+      for (let i = 0; i < glyphs.length; i++) {
-+        const left = bounds[i * 4];
-+        const top = bounds[i * 4 + 1];
-+        const right = bounds[i * 4 + 2];
-+        const bottom = bounds[i * 4 + 3];
-+        const hasBounds =
-+          Number.isFinite(left) &&
-+          Number.isFinite(top) &&
-+          Number.isFinite(right) &&
-+          Number.isFinite(bottom) &&
-+          (right > left || bottom > top);
-+
-+        if (hasBounds) {
-+          minX = Math.min(minX, penX + left);
-+          minY = Math.min(minY, top);
-+          maxX = Math.max(maxX, penX + right);
-+          maxY = Math.max(maxY, bottom);
-+        }
-+
-+        penX += widths[i] ?? 0;
-+      }
-+
-+      if (
-+        Number.isFinite(minX) &&
-+        Number.isFinite(minY) &&
-+        Number.isFinite(maxX) &&
-+        Number.isFinite(maxY)
-+      ) {
-+        return makeRect(minX, minY, maxX - minX, maxY - minY);
-+      }
-+    } catch {
-+      // Fall through to font metrics when glyph bounds are unavailable.
-+    }
-+
-+    const metrics = this.getMetrics();
-+    const ascent = Number.isFinite(metrics.ascent) ? metrics.ascent : 0;
-+    const descent = Number.isFinite(metrics.descent) ? metrics.descent : 0;
-+
-+    return makeRect(
-+      0,
-+      ascent,
-+      Number.isFinite(advanceWidth) ? advanceWidth : 0,
-+      Math.abs(ascent) + Math.abs(descent)
-+    );
-   }
- 
-   getTextWidth(text: string, paint?: SkPaint | undefined) {
+   countFamilies() {
+     return this.ref.countFamilies();

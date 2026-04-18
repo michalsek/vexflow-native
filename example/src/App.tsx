@@ -9,10 +9,11 @@ import { enableScreens } from 'react-native-screens';
 
 import { useColorScheme } from './hooks/useColorScheme';
 import type { ExampleStackParamList } from './navigation/ExampleStackParamList';
-// import DocumentRenderer from './screens/DocumentRenderer';
-// import EvenDocumentRenderer from './screens/EvenDocumentRenderer';
+import DocumentRenderer from './screens/DocumentRenderer';
+import EvenDocumentRenderer from './screens/EvenDocumentRenderer';
 // import InfiniteScore from './screens/InfiniteScore';
 import Main from './screens/Main';
+import SimpleExample from './screens/SimpleExample';
 // import VexflowTestSuite from './screens/VexflowTestSuite';
 
 enableScreens();
@@ -54,10 +55,10 @@ const App: React.FC = () => {
           component={Main}
           options={{ title: 'Examples' }}
         />
-        {/* <Stack.Screen
-          name="VexflowTestSuite"
-          component={VexflowTestSuite}
-          options={{ title: 'VexFlow Test Suite' }}
+        <Stack.Screen
+          name="SimpleExample"
+          component={SimpleExample}
+          options={{ title: 'Simple Example' }}
         />
         <Stack.Screen
           name="DocumentRenderer"
@@ -68,6 +69,11 @@ const App: React.FC = () => {
           name="EvenDocumentRenderer"
           component={EvenDocumentRenderer}
           options={{ title: 'Even Document Renderer' }}
+        />
+        {/* <Stack.Screen
+          name="VexflowTestSuite"
+          component={VexflowTestSuite}
+          options={{ title: 'VexFlow Test Suite' }}
         />
         <Stack.Screen
           name="InfiniteScore"

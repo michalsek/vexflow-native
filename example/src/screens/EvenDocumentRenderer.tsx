@@ -1,25 +1,26 @@
-// import React from 'react';
+import React from 'react';
+import { StyleSheet } from 'react-native';
 
-// import { Column, Heading, Screen, Text } from '../components';
+import { Screen, Text } from '../components';
 
-// const EvenDocumentRenderer: React.FC = () => {
-//   return (
-//     <Screen contentContainerStyle={styles.container}>
-//       <Column gap={8}>
-//         <Heading level={2}>Even Document Renderer</Heading>
-//         <Text variant="muted">
-//           Placeholder for evenly spaced document layout rendering.
-//         </Text>
-//       </Column>
-//     </Screen>
-//   );
-// };
+const EvenDocumentRenderer: React.FC = () => {
+  return (
+    <Screen
+      contentContainerStyle={styles.container}
+      safeAreaEdges={['left', 'right', 'bottom']}
+    >
+      <Text variant="muted">
+        Placeholder for evenly spaced document layout rendering.
+      </Text>
+    </Screen>
+  );
+};
 
-// const styles = {
-//   container: {
-//     flexGrow: 1,
-//     justifyContent: 'center' as const,
-//   },
-// };
+export default EvenDocumentRenderer;
 
-// export default EvenDocumentRenderer;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+});

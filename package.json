@@ -2,13 +2,13 @@
   "name": "vexflow-native",
   "version": "0.2.0",
   "description": "React native backend for rendering music notation using @shopify/react-native-skiaact-native-skia",
-  "main": "./lib/module/index.js",
-  "types": "./lib/typescript/src/index.d.ts",
+  "main": "./lib/module/base/index.js",
+  "types": "./lib/typescript/src/base/index.d.ts",
   "exports": {
     ".": {
-      "source": "./src/index.ts",
-      "types": "./lib/typescript/src/index.d.ts",
-      "default": "./lib/module/index.js"
+      "source": "./src/base/index.ts",
+      "types": "./lib/typescript/src/base/index.d.ts",
+      "default": "./lib/module/base/index.js"
     },
     "./state": {
       "source": "./src/state/index.ts",
@@ -30,10 +30,6 @@
   "files": [
     "src",
     "lib",
-    "android",
-    "ios",
-    "cpp",
-    "*.podspec",
     "react-native.config.js",
     "!ios/build",
     "!android/build",

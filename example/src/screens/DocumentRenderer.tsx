@@ -1,25 +1,26 @@
-// import React from 'react';
+import React from 'react';
+import { StyleSheet } from 'react-native';
 
-// import { Column, Heading, Screen, Text } from '../components';
+import { Screen, Text } from '../components';
 
-// const DocumentRenderer: React.FC = () => {
-//   return (
-//     <Screen contentContainerStyle={styles.container}>
-//       <Column gap={8}>
-//         <Heading level={2}>Document Renderer</Heading>
-//         <Text variant="muted">
-//           Placeholder for rendering scores in a document layout flow.
-//         </Text>
-//       </Column>
-//     </Screen>
-//   );
-// };
+const DocumentRenderer: React.FC = () => {
+  return (
+    <Screen
+      contentContainerStyle={styles.container}
+      safeAreaEdges={['left', 'right', 'bottom']}
+    >
+      <Text variant="muted">
+        Placeholder for rendering scores in a document layout flow.
+      </Text>
+    </Screen>
+  );
+};
 
-// const styles = {
-//   container: {
-//     flexGrow: 1,
-//     justifyContent: 'center' as const,
-//   },
-// };
+export default DocumentRenderer;
 
-// export default DocumentRenderer;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+});
