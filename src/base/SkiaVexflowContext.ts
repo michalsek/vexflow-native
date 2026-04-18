@@ -65,9 +65,9 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     this.strokePaint.setAntiAlias(true);
     this.strokePaint.setColor(Skia.Color('black'));
 
-    this.textMeasurementContext = new TextMeasureContext(this);
-
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      this.textMeasurementContext = new TextMeasureContext(this);
+
       Element.setTextMeasurementCanvas({
         getContext: (type: string) => {
           if (type === '2d') {
@@ -77,6 +77,11 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
           return null;
         },
       } as unknown as HTMLCanvasElement);
+    } else {
+      const measurementCanvas = Element.getTextMeasurementCanvas();
+      this.textMeasurementContext = measurementCanvas?.getContext(
+        '2d'
+      ) as unknown as TextMeasureContext;
     }
   }
 
