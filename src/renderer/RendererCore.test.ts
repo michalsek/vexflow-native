@@ -1,8 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals';
 
-import type { Score } from 'vexflow-native/state';
-import type { RendererConfig } from 'vexflow-native/renderer';
-
 jest.mock('@shopify/react-native-skia', () => {
   const createMockFont = (size = 12) => ({
     getGlyphIDs: (text: string) =>
@@ -86,8 +83,17 @@ jest.mock('@shopify/react-native-skia', () => {
   };
 });
 
-import { RendererCore } from './RendererCore';
+import {
+  createInfiniteScoreExampleConfig,
+  INFINITE_SCORE_EXAMPLE_SCORE,
+} from '../internalExamples/InfiniteScoreExample';
 import SkiaVexflowContext from '../SkiaVexflowContext';
+import { RendererCore } from './RendererCore';
+
+const TEST_VIEWPORT = {
+  width: 360,
+  height: 480,
+};
 
 function createMockCanvas() {
   return {
@@ -101,207 +107,15 @@ function createMockCanvas() {
   };
 }
 
-function createScore(): Score {
-  return {
-    id: 'score-1',
-    defaultMeter: {
-      beats: 4,
-      beatUnit: 4,
-      beaming: [2, 2],
-    },
-    staves: [
-      {
-        id: 'staff-top',
-        order: 0,
-        clef: 'treble',
-        systemGroupId: 'grand',
-        systemGroupRole: 'top',
-        measures: [
-          {
-            id: 'top-measure-1',
-            number: 1,
-            keySignature: {
-              tonic: 'G',
-              mode: 'major',
-            },
-            voices: [
-              {
-                id: 'top-voice-1',
-                index: 0,
-                items: [
-                  {
-                    id: 'top-note-1',
-                    type: 'note',
-                    pitch: { step: 'C', octave: 4 },
-                    duration: { length: 'q' },
-                    voiceId: 'top-voice-1',
-                  },
-                  {
-                    id: 'top-note-2',
-                    type: 'note',
-                    pitch: { step: 'D', octave: 4, accidental: '#' },
-                    duration: { length: 'q' },
-                    voiceId: 'top-voice-1',
-                  },
-                  {
-                    id: 'top-note-3',
-                    type: 'chord',
-                    pitches: [
-                      { step: 'E', octave: 4 },
-                      { step: 'G', octave: 4 },
-                    ],
-                    duration: { length: 'q' },
-                    voiceId: 'top-voice-1',
-                  },
-                  {
-                    id: 'top-rest-1',
-                    type: 'rest',
-                    duration: { length: 'q' },
-                    voiceId: 'top-voice-1',
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            id: 'top-measure-2',
-            number: 2,
-            meter: {
-              beats: 3,
-              beatUnit: 4,
-              beaming: [3],
-            },
-            voices: [
-              {
-                id: 'top-voice-2',
-                index: 0,
-                items: [
-                  {
-                    id: 'top-note-4',
-                    type: 'note',
-                    pitch: { step: 'E', octave: 4 },
-                    duration: { length: 'q' },
-                    voiceId: 'top-voice-2',
-                  },
-                  {
-                    id: 'top-note-5',
-                    type: 'note',
-                    pitch: { step: 'F', octave: 4 },
-                    duration: { length: 'q' },
-                    voiceId: 'top-voice-2',
-                  },
-                  {
-                    id: 'top-note-6',
-                    type: 'note',
-                    pitch: { step: 'G', octave: 4 },
-                    duration: { length: 'q' },
-                    voiceId: 'top-voice-2',
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      {
-        id: 'staff-bottom',
-        order: 1,
-        clef: 'bass',
-        systemGroupId: 'grand',
-        systemGroupRole: 'bottom',
-        measures: [
-          {
-            id: 'bottom-measure-1',
-            number: 1,
-            voices: [
-              {
-                id: 'bottom-voice-1',
-                index: 0,
-                items: [
-                  {
-                    id: 'bottom-note-1',
-                    type: 'note',
-                    pitch: { step: 'C', octave: 3 },
-                    duration: { length: 'h' },
-                    voiceId: 'bottom-voice-1',
-                  },
-                  {
-                    id: 'bottom-note-2',
-                    type: 'note',
-                    pitch: { step: 'G', octave: 2 },
-                    duration: { length: 'h' },
-                    voiceId: 'bottom-voice-1',
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            id: 'bottom-measure-2',
-            number: 2,
-            voices: [
-              {
-                id: 'bottom-voice-2',
-                index: 0,
-                items: [
-                  {
-                    id: 'bottom-note-3',
-                    type: 'note',
-                    pitch: { step: 'C', octave: 3 },
-                    duration: { length: 'q' },
-                    voiceId: 'bottom-voice-2',
-                  },
-                  {
-                    id: 'bottom-note-4',
-                    type: 'note',
-                    pitch: { step: 'B', octave: 2 },
-                    duration: { length: 'q' },
-                    voiceId: 'bottom-voice-2',
-                  },
-                  {
-                    id: 'bottom-note-5',
-                    type: 'note',
-                    pitch: { step: 'A', octave: 2 },
-                    duration: { length: 'q' },
-                    voiceId: 'bottom-voice-2',
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
-function createConfig(): RendererConfig {
-  return {
-    layoutMode: 'infiniteScore',
-    viewport: {
-      width: 720,
-      height: 480,
-    },
-    padding: {
-      top: 24,
-      right: 24,
-      bottom: 24,
-      left: 24,
-    },
-    spacing: {
-      staffGap: 84,
-      groupGap: 40,
-      measureGap: 18,
-      minimumMeasureWidth: 180,
-    },
-  };
+function createConfig() {
+  return createInfiniteScoreExampleConfig(TEST_VIEWPORT);
 }
 
 describe('RendererCore', () => {
-  it('measures deterministically and preserves grouped-staff planning', () => {
+  it('measures the shared infinite-score example deterministically', () => {
     const engine = new RendererCore<SkiaVexflowContext>();
     const request = {
-      score: createScore(),
+      score: INFINITE_SCORE_EXAMPLE_SCORE,
       config: createConfig(),
     };
 
@@ -309,36 +123,40 @@ describe('RendererCore', () => {
     const secondPlan = engine.measure(request);
 
     expect(secondPlan).toEqual(firstPlan);
+    expect(firstPlan.contentSize.width).toBeGreaterThan(
+      request.config.viewport.width
+    );
     expect(firstPlan.systems[0]?.range).toEqual({
       startMeasureIndex: 0,
-      endMeasureIndex: 2,
+      endMeasureIndex: 6,
     });
     expect(firstPlan.staves.map((staff) => staff.staffId)).toEqual([
-      'staff-top',
-      'staff-bottom',
+      'staff-right-hand',
+      'staff-left-hand',
     ]);
     expect(
-      firstPlan.measures.map((measure) => measure.globalMeasureIndex)
-    ).toEqual([0, 1, 0, 1]);
+      new Set(firstPlan.measures.map((measure) => measure.globalMeasureIndex))
+    ).toEqual(new Set([0, 1, 2, 3, 4, 5]));
+    expect(firstPlan.measures).toHaveLength(12);
 
-    const secondMeasurePlans = firstPlan.measures.filter(
-      (measure) => measure.globalMeasureIndex === 1
+    const changedMeterMeasures = firstPlan.measures.filter(
+      (measure) => measure.globalMeasureIndex === 2
     );
-    expect(secondMeasurePlans).toHaveLength(2);
+    expect(changedMeterMeasures).toHaveLength(2);
     expect(
-      secondMeasurePlans.every(
+      changedMeterMeasures.every(
         (measure) => measure.resolvedState.meter.beats === 3
       )
     ).toBe(true);
     expect(
-      secondMeasurePlans.every((measure) => measure.display.showTimeSignature)
+      changedMeterMeasures.every((measure) => measure.display.showTimeSignature)
     ).toBe(true);
   });
 
-  it('renders exact note geometry and keeps range rendering aligned with the plan', () => {
+  it('renders exact geometry for the shared infinite-score example', () => {
     const engine = new RendererCore<SkiaVexflowContext>();
     const plan = engine.measure({
-      score: createScore(),
+      score: INFINITE_SCORE_EXAMPLE_SCORE,
       config: createConfig(),
     });
 
@@ -351,21 +169,22 @@ describe('RendererCore', () => {
       context: fullContext,
     });
 
-    const rangeContext = new SkiaVexflowContext(
+    const rangedContext = new SkiaVexflowContext(
       createMockCanvas() as never,
       null
     );
     const rangedRender = engine.render({
       plan,
-      context: rangeContext,
+      context: rangedContext,
       range: {
-        startMeasureIndex: 1,
-        endMeasureIndex: 2,
+        startMeasureIndex: 2,
+        endMeasureIndex: 5,
       },
     });
 
-    expect(fullRender.measureLayouts).toHaveLength(4);
-    expect(fullRender.noteBounds.length).toBeGreaterThanOrEqual(10);
+    expect(fullRender.contentSize).toEqual(plan.contentSize);
+    expect(fullRender.measureLayouts).toHaveLength(12);
+    expect(fullRender.noteBounds.length).toBeGreaterThan(0);
     expect(fullRender.noteBounds.every((note) => note.bounds.width > 0)).toBe(
       true
     );
@@ -373,20 +192,22 @@ describe('RendererCore', () => {
       true
     );
 
-    expect(rangedRender.measureLayouts).toHaveLength(2);
+    expect(rangedRender.measureLayouts).toHaveLength(6);
     expect(
       rangedRender.measureLayouts.every(
-        (measure) => measure.globalMeasureIndex === 1
+        (measure) =>
+          measure.globalMeasureIndex >= 2 && measure.globalMeasureIndex < 5
       )
     ).toBe(true);
 
     const fullRangeLayouts = fullRender.measureLayouts.filter(
-      (measure) => measure.globalMeasureIndex === 1
+      (measure) =>
+        measure.globalMeasureIndex >= 2 && measure.globalMeasureIndex < 5
     );
     expect(rangedRender.measureLayouts).toEqual(fullRangeLayouts);
 
     const fullRangeNotes = fullRender.noteBounds.filter(
-      (note) => note.globalMeasureIndex === 1
+      (note) => note.globalMeasureIndex >= 2 && note.globalMeasureIndex < 5
     );
     expect(rangedRender.noteBounds).toEqual(fullRangeNotes);
   });
