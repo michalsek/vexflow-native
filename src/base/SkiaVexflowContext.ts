@@ -17,6 +17,7 @@ import { Platform } from 'react-native';
 import { parseStyleToColor, mapLineCap } from './utils';
 import TextMeasureContext from './TextMeasureContext';
 import FontManager from './FontManager';
+import { installVexflowReactNativeFallbacks } from './setupVexflowReactNative';
 
 const showSilentLogs = false;
 
@@ -66,6 +67,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     this.strokePaint.setColor(Skia.Color('black'));
 
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      installVexflowReactNativeFallbacks();
       this.textMeasurementContext = new TextMeasureContext(this);
 
       Element.setTextMeasurementCanvas({
@@ -80,7 +82,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     } else {
       const measurementCanvas = Element.getTextMeasurementCanvas();
       this.textMeasurementContext = measurementCanvas?.getContext(
-        '2d'
+        '2d' as unknown as 'webgpu'
       ) as unknown as TextMeasureContext;
     }
   }

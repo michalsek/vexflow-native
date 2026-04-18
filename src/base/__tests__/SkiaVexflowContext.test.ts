@@ -37,6 +37,7 @@ type MockCanvas = {
 
 type LoadedContextModule = {
   BlendMode: { Clear: string };
+  installVexflowReactNativeFallbacks: ReturnType<typeof jest.fn>;
   PaintStyle: { Fill: string; Stroke: string };
   SkiaVexflowContext: new (
     canvas: MockCanvas,
@@ -51,6 +52,7 @@ type LoadedContextModule = {
   createSkFont: ReturnType<typeof jest.fn>;
   paints: MockPaint[];
   pathBuilders: MockPathBuilder[];
+  getTextMeasurementCanvas: ReturnType<typeof jest.fn>;
   setTextMeasurementCanvas: ReturnType<typeof jest.fn>;
   textMeasurementContext: Record<string, string>;
   TextMeasureContextMock: ReturnType<typeof jest.fn>;
@@ -119,6 +121,9 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
     })
   );
   const setTextMeasurementCanvas = jest.fn();
+  const getTextMeasurementCanvas = jest.fn(() => ({
+    getContext: jest.fn(() => textMeasurementContext),
+  }));
   const textMeasurementContext = {
     tag: 'text-measurement-context',
   };
@@ -130,6 +135,7 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
   const FontManagerMock = jest.fn().mockImplementation(() => ({
     createSkFont,
   }));
+  const installVexflowReactNativeFallbacks = jest.fn();
 
   jest.doMock('@shopify/react-native-skia', () => ({
     BlendMode,
@@ -159,6 +165,7 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
   }));
   jest.doMock('vexflow', () => ({
     Element: {
+      getTextMeasurementCanvas,
       setTextMeasurementCanvas,
     },
     RenderContext: class RenderContext {},
@@ -171,6 +178,9 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
     __esModule: true,
     default: TextMeasureContextMock,
   }));
+  jest.doMock('../setupVexflowReactNative', () => ({
+    installVexflowReactNativeFallbacks,
+  }));
 
   let SkiaVexflowContext: LoadedContextModule['SkiaVexflowContext'];
 
@@ -180,10 +190,12 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
 
   return {
     BlendMode,
+    installVexflowReactNativeFallbacks,
     PaintStyle,
     SkiaVexflowContext: SkiaVexflowContext!,
     StrokeCap,
     createSkFont,
+    getTextMeasurementCanvas,
     paints,
     pathBuilders,
     setTextMeasurementCanvas,
@@ -228,6 +240,7 @@ describe('SkiaVexflowContext', () => {
     });
 
     expect(module.TextMeasureContextMock).toHaveBeenCalledWith(context);
+    expect(module.installVexflowReactNativeFallbacks).toHaveBeenCalledTimes(1);
     expect(module.setTextMeasurementCanvas).toHaveBeenCalledTimes(1);
 
     const measurementCanvas = module.setTextMeasurementCanvas.mock
@@ -250,8 +263,10 @@ describe('SkiaVexflowContext', () => {
     );
 
     expect(context).toBeDefined();
+    expect(module.installVexflowReactNativeFallbacks).not.toHaveBeenCalled();
+    expect(module.getTextMeasurementCanvas).toHaveBeenCalledTimes(1);
     expect(module.setTextMeasurementCanvas).not.toHaveBeenCalled();
-    expect(module.TextMeasureContextMock).toHaveBeenCalledTimes(1);
+    expect(module.TextMeasureContextMock).not.toHaveBeenCalled();
   });
 
   it('delegates drawing and configuration calls to the canvas, path builder, and paints', () => {

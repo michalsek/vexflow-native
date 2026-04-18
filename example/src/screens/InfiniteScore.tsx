@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+// import { StyleSheet } from 'react-native';
 // import { Skia, useFont } from '@shopify/react-native-skia';
 // import React, { useCallback, useMemo } from 'react';
 // import {
@@ -33,7 +33,7 @@ const InfiniteScore: React.FC = () => {
 
 export default InfiniteScore;
 
-const styles = StyleSheet.create({});
+// const styles = StyleSheet.create({});
 
 // const VIEWPORT_HEIGHT = 320;
 
