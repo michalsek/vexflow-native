@@ -25,7 +25,6 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
         rendererType
       );
 
-      renderer.measure();
       renderer.render();
     },
     [score, rendererType, options]

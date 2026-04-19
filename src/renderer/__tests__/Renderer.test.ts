@@ -336,7 +336,7 @@ afterEach(() => {
 });
 
 describe('Renderer', () => {
-  it('measures deterministically, aggregates widths per global measure, and ignores rendererType', () => {
+  it('recomputes deterministic measurements, aggregates widths per global measure, and ignores rendererType', () => {
     const score = createScore();
     const infiniteRenderer = createRenderer(score, 'infiniteScore');
     const documentRenderer = createRenderer(score, 'documentEven');
@@ -345,7 +345,11 @@ describe('Renderer', () => {
     const secondPlan = infiniteRenderer.measure();
     const documentPlan = documentRenderer.measure();
 
-    expect(secondPlan).toBe(firstPlan);
+    expect(secondPlan).not.toBe(firstPlan);
+    expect(secondPlan.globalMeasureWidths).toEqual(
+      firstPlan.globalMeasureWidths
+    );
+    expect(secondPlan.contentSize).toEqual(firstPlan.contentSize);
     expect(documentPlan.globalMeasureWidths).toEqual(
       firstPlan.globalMeasureWidths
     );
@@ -359,23 +363,61 @@ describe('Renderer', () => {
       (measure) =>
         measure.staffId === 'staff-top' && measure.globalMeasureIndex === 1
     );
+    const topFirstMeasure = firstPlan.measures.find(
+      (measure) =>
+        measure.staffId === 'staff-top' && measure.globalMeasureIndex === 0
+    );
     const bottomSecondMeasure = firstPlan.measures.find(
       (measure) =>
         measure.staffId === 'staff-bottom' && measure.globalMeasureIndex === 1
     );
 
+    expect(topFirstMeasure).toBeDefined();
+    expect(topSecondMeasure).toBeDefined();
+    expect(bottomSecondMeasure).toBeDefined();
+
     expect(topSecondMeasure?.display.showTimeSignature).toBe(true);
     expect(bottomSecondMeasure?.display.showTimeSignature).toBe(true);
     expect(topSecondMeasure?.display.showDirections).toBe(true);
+    expect(topFirstMeasure?.bounds.x).toBe(insets.left);
+    expect(topSecondMeasure?.bounds.x).toBe(insets.left);
+    expect(topFirstMeasure?.bounds.x).toBe(topSecondMeasure?.bounds.x);
     expect(topSecondMeasure?.minimumWidth).toBeGreaterThan(
       bottomSecondMeasure?.minimumWidth ?? 0
     );
     expect(topSecondMeasure?.allocatedWidth).toBe(
       bottomSecondMeasure?.allocatedWidth
     );
+    expect(topSecondMeasure?.contentBounds.x).toBe(
+      insets.left +
+        Math.max(
+          (topSecondMeasure?.modifierReservations.clef ?? 0) +
+            (topSecondMeasure?.modifierReservations.keySignature ?? 0) +
+            (topSecondMeasure?.modifierReservations.timeSignature ?? 0) +
+            (topSecondMeasure?.modifierReservations.barlines ?? 0),
+          topSecondMeasure?.modifierReservations.tempo ?? 0,
+          topSecondMeasure?.modifierReservations.directions ?? 0
+        ) +
+        spacing.measureHorizontalPadding
+    );
+    expect(bottomSecondMeasure?.contentBounds.x).toBe(
+      insets.left +
+        Math.max(
+          (bottomSecondMeasure?.modifierReservations.clef ?? 0) +
+            (bottomSecondMeasure?.modifierReservations.keySignature ?? 0) +
+            (bottomSecondMeasure?.modifierReservations.timeSignature ?? 0) +
+            (bottomSecondMeasure?.modifierReservations.barlines ?? 0),
+          bottomSecondMeasure?.modifierReservations.tempo ?? 0,
+          bottomSecondMeasure?.modifierReservations.directions ?? 0
+        ) +
+        spacing.measureHorizontalPadding
+    );
+    expect(topSecondMeasure?.contentBounds.x).toBeGreaterThan(
+      bottomSecondMeasure?.contentBounds.x ?? 0
+    );
   });
 
-  it('renders with cached measurement data and compresses triplet spacing with tick multipliers', () => {
+  it('renders from recomputed measurement data and compresses triplet spacing with tick multipliers', () => {
     const renderer = createRenderer(createTripletScore());
     const measuredPlan = renderer.measure();
     const measureSpy = jest.spyOn(renderer, 'measure');
@@ -396,9 +438,13 @@ describe('Renderer', () => {
     const formatter = new Formatter();
     const stave = new Stave(0, 0, measuredPlan.measures[0]!.allocatedWidth);
 
-    expect(measureSpy).toHaveBeenCalled();
-    expect(repeatedPlan).toBe(measuredPlan);
+    expect(measureSpy).toHaveBeenCalledTimes(2);
+    expect(repeatedPlan).not.toBe(measuredPlan);
     expect(renderResult.contentSize).toEqual(measuredPlan.contentSize);
+    expect(repeatedPlan.contentSize).toEqual(measuredPlan.contentSize);
+    expect(repeatedPlan.globalMeasureWidths).toEqual(
+      measuredPlan.globalMeasureWidths
+    );
 
     formatter.formatToStave([voiceRenderData.voice], stave);
 
@@ -432,6 +478,26 @@ describe('Renderer', () => {
     expect(beamSpy).toHaveBeenCalled();
     expect(tupletSpy).toHaveBeenCalled();
     expect(connectorSpy).toHaveBeenCalled();
+  });
+
+  it('renders later measures at the same starting x until placement runs', () => {
+    const renderer = createRenderer(createScore());
+
+    const renderResult = renderer.render();
+    const firstTopLayout = renderResult.measureLayouts.find(
+      (layout) =>
+        layout.staffId === 'staff-top' && layout.globalMeasureIndex === 0
+    );
+    const secondTopLayout = renderResult.measureLayouts.find(
+      (layout) =>
+        layout.staffId === 'staff-top' && layout.globalMeasureIndex === 1
+    );
+
+    expect(firstTopLayout).toBeDefined();
+    expect(secondTopLayout).toBeDefined();
+    expect(firstTopLayout?.bounds.x).toBe(insets.left);
+    expect(secondTopLayout?.bounds.x).toBe(insets.left);
+    expect(secondTopLayout?.bounds.x).toBe(firstTopLayout?.bounds.x);
   });
 
   it('styles spacer rests as invisible while keeping them renderable', () => {

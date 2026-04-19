@@ -13,10 +13,6 @@ export function createRect(
   return { x, y, width, height };
 }
 
-export function stableSerialize(value: unknown): string {
-  return JSON.stringify(sortValue(value));
-}
-
 export function measureTextWidth(
   context: Pick<SkiaVexflowContext, 'getMeasurementContext'>,
   text: string
@@ -175,21 +171,4 @@ export function extractNoteRect(
   const maxY = Math.max(...ys);
 
   return createRect(startX, minY - 6, endX - startX, maxY - minY + 12);
-}
-
-function sortValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => sortValue(item));
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.keys(value as Record<string, unknown>)
-      .sort()
-      .reduce<Record<string, unknown>>((result, key) => {
-        result[key] = sortValue((value as Record<string, unknown>)[key]);
-        return result;
-      }, {});
-  }
-
-  return value;
 }

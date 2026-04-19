@@ -14,44 +14,30 @@ import type {
   SystemGroupPlan,
   Viewport,
 } from './types';
-import { createRect, stableSerialize } from './renderers/common';
+import { createRect } from './renderers/common';
 import type { MeasureRenderOutput } from './renderers/MeasureRenderer';
 import StaffRenderer from './renderers/StaffRenderer';
 
 export default class Renderer {
   private readonly ctx: SkiaVexflowContext;
   private readonly score: Score;
-  private readonly layoutType: RendererType;
   private readonly viewport: Viewport;
   private readonly options: ScoreOptions;
-
-  private measurementPlan?: ScoreMeasurementPlan;
-  private measurementFingerprint?: string;
 
   constructor(
     ctx: SkiaVexflowContext,
     viewport: Viewport,
     options: ScoreOptions,
     score: Score,
-    type: RendererType = 'documentEven'
+    _type: RendererType = 'documentEven'
   ) {
     this.ctx = ctx;
     this.viewport = viewport;
     this.options = options;
     this.score = score;
-    this.layoutType = type;
   }
 
   measure(): ScoreMeasurementPlan {
-    const nextFingerprint = this.buildMeasurementFingerprint();
-
-    if (
-      this.measurementPlan !== undefined &&
-      this.measurementFingerprint === nextFingerprint
-    ) {
-      return this.measurementPlan;
-    }
-
     const sortedStaves = this.resolveSortedStaves();
     const timings = this.resolveTimings(sortedStaves);
     const measuredStaves = this.measureStaves(sortedStaves, timings);
@@ -66,7 +52,6 @@ export default class Renderer {
       (measuredStaff, staffIndex) => {
         const y = staffYPositions[staffIndex] ?? this.options.insets.top;
         const measureIndices: number[] = [];
-        let currentX = this.options.insets.left;
 
         measuredStaff.measurePlans.forEach((measurePlan) => {
           const allocatedWidth =
@@ -77,13 +62,13 @@ export default class Renderer {
             ...measurePlan,
             allocatedWidth,
             bounds: createRect(
-              currentX,
+              this.options.insets.left,
               y,
               allocatedWidth,
               this.options.spacing.staffHeight
             ),
             contentBounds: createRect(
-              currentX +
+              this.options.insets.left +
                 leftReservation +
                 this.options.spacing.measureHorizontalPadding,
               y + this.options.spacing.staffInnerVerticalPadding,
@@ -103,7 +88,6 @@ export default class Renderer {
 
           measureIndices.push(measures.length);
           measures.push(nextPlan);
-          currentX += allocatedWidth;
         });
 
         return {
@@ -150,8 +134,7 @@ export default class Renderer {
       ),
     };
 
-    this.measurementFingerprint = nextFingerprint;
-    this.measurementPlan = {
+    return {
       score: this.score,
       viewport: this.viewport,
       options: this.options,
@@ -162,8 +145,6 @@ export default class Renderer {
       systemGroups,
       contentSize,
     };
-
-    return this.measurementPlan;
   }
 
   render(): RenderResult {
@@ -328,15 +309,6 @@ export default class Renderer {
           .setContext(this.ctx)
           .draw();
       }
-    });
-  }
-
-  private buildMeasurementFingerprint(): string {
-    return stableSerialize({
-      score: this.score,
-      viewport: this.viewport,
-      options: this.options,
-      layoutType: this.layoutType,
     });
   }
 
