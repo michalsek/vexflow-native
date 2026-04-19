@@ -30,11 +30,11 @@ export default class VoiceRenderer {
     private readonly measureStartBeat: number
   ) {}
 
-  measure(): VoiceRenderData {
-    return this.buildRenderData();
-  }
+  // ------------------
+  // --- Measuring ---
+  // ------------------
 
-  render(): VoiceRenderData {
+  measure(): VoiceRenderData {
     return this.buildRenderData();
   }
 
@@ -42,36 +42,10 @@ export default class VoiceRenderer {
     return this.renderItems();
   }
 
-  renderItems(): TickableEntry[] {
-    const tickables: TickableEntry[] = [];
-    let currentBeat = this.measureStartBeat;
-
-    this.voice.items.forEach((item) => {
-      const duration = getDurationInQuarterBeats(item.duration);
-      const tickable = this.renderItem(item);
-
-      tickables.push({
-        voiceItemId: item.id,
-        voiceId: this.voice.id,
-        type: item.type,
-        startBeat: currentBeat,
-        endBeat: currentBeat + duration,
-        tickable,
-      });
-      currentBeat += duration;
-    });
-
-    return tickables;
-  }
-
   measureBeams(tickables: StaveNote[]): Beam[] {
     return Beam.generateBeams(tickables, {
       groups: buildBeamGroups(this.meter),
     });
-  }
-
-  renderBeams(beams: Beam[], context: SkiaVexflowContext): void {
-    beams.forEach((beam) => beam.setContext(context).draw());
   }
 
   measureTuplets(tickables: StaveNote[], items: VoiceItem[]): Tuplet[] {
@@ -128,10 +102,6 @@ export default class VoiceRenderer {
     return tuplets;
   }
 
-  renderTuplets(tuplets: Tuplet[], context: SkiaVexflowContext): void {
-    tuplets.forEach((tuplet) => tuplet.setContext(context).draw());
-  }
-
   private buildRenderData(): VoiceRenderData {
     const tickables = this.measureItems();
     const vexflowTickables = tickables.map((entry) => entry.tickable);
@@ -165,6 +135,48 @@ export default class VoiceRenderer {
       beams: this.measureBeams(vexflowTickables),
       tuplets,
     };
+  }
+
+  // -----------------
+  // --- Layouting ---
+  // -----------------
+
+  // -----------------
+  // --- Rendering ---
+  // -----------------
+
+  render(): VoiceRenderData {
+    return this.buildRenderData();
+  }
+
+  renderItems(): TickableEntry[] {
+    const tickables: TickableEntry[] = [];
+    let currentBeat = this.measureStartBeat;
+
+    this.voice.items.forEach((item) => {
+      const duration = getDurationInQuarterBeats(item.duration);
+      const tickable = this.renderItem(item);
+
+      tickables.push({
+        voiceItemId: item.id,
+        voiceId: this.voice.id,
+        type: item.type,
+        startBeat: currentBeat,
+        endBeat: currentBeat + duration,
+        tickable,
+      });
+      currentBeat += duration;
+    });
+
+    return tickables;
+  }
+
+  renderBeams(beams: Beam[], context: SkiaVexflowContext): void {
+    beams.forEach((beam) => beam.setContext(context).draw());
+  }
+
+  renderTuplets(tuplets: Tuplet[], context: SkiaVexflowContext): void {
+    tuplets.forEach((tuplet) => tuplet.setContext(context).draw());
   }
 
   private renderItem(item: VoiceItem): StaveNote {

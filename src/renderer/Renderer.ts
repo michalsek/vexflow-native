@@ -2,6 +2,9 @@ import { StaveConnector } from 'vexflow';
 
 import type { SkiaVexflowContext } from '../base';
 import type { Meter, Score, Staff } from '../state';
+import { createRect } from './renderers/common';
+import type { MeasureRenderOutput } from './renderers/MeasureRenderer';
+import StaffRenderer from './renderers/StaffRenderer';
 import { getMeasureQuarterBeats } from './timing';
 import type {
   GlobalMeasureTiming,
@@ -14,9 +17,6 @@ import type {
   SystemGroupPlan,
   Viewport,
 } from './types';
-import { createRect } from './renderers/common';
-import type { MeasureRenderOutput } from './renderers/MeasureRenderer';
-import StaffRenderer from './renderers/StaffRenderer';
 
 export default class Renderer {
   private readonly ctx: SkiaVexflowContext;
@@ -36,6 +36,10 @@ export default class Renderer {
     this.options = options;
     this.score = score;
   }
+
+  // ------------------
+  // --- Measuring ---
+  // ------------------
 
   measure(): ScoreMeasurementPlan {
     const sortedStaves = this.resolveSortedStaves();
@@ -147,38 +151,6 @@ export default class Renderer {
     };
   }
 
-  render(): RenderResult {
-    const plan = this.measure();
-    const renderedStaves = new Map<
-      Staff['id'],
-      Map<number, MeasureRenderOutput>
-    >();
-    const measureLayouts: RenderResult['measureLayouts'] = [];
-    const noteBounds: RenderResult['noteBounds'] = [];
-
-    this.ctx.clear();
-
-    this.renderStaves(plan).forEach(({ staffId, outputs }) => {
-      const byMeasureIndex = new Map<number, MeasureRenderOutput>();
-
-      outputs.forEach((output) => {
-        byMeasureIndex.set(output.layout.globalMeasureIndex, output);
-        measureLayouts.push(output.layout);
-        noteBounds.push(...output.noteBounds);
-      });
-
-      renderedStaves.set(staffId, byMeasureIndex);
-    });
-
-    this.renderSystemGroups(plan.systemGroups, renderedStaves);
-
-    return {
-      contentSize: plan.contentSize,
-      measureLayouts,
-      noteBounds,
-    };
-  }
-
   measureStaves(
     sortedStaves: Staff[],
     timings: GlobalMeasureTiming[]
@@ -194,40 +166,6 @@ export default class Renderer {
         this.options
       ).measure(),
     }));
-  }
-
-  renderStaves(plan: ScoreMeasurementPlan): Array<{
-    staffId: Staff['id'];
-    outputs: MeasureRenderOutput[];
-  }> {
-    const sortedStaves = this.resolveSortedStaves();
-
-    return plan.staves.map((staffPlan) => {
-      const staff = sortedStaves.find(
-        (candidate) => candidate.id === staffPlan.staffId
-      );
-
-      if (!staff) {
-        return {
-          staffId: staffPlan.staffId,
-          outputs: [],
-        };
-      }
-
-      const outputs = new StaffRenderer(
-        this.ctx,
-        this.score,
-        staff,
-        staffPlan.staffIndex,
-        plan.timings,
-        this.options
-      ).render(staffPlan, plan.measures);
-
-      return {
-        staffId: staffPlan.staffId,
-        outputs,
-      };
-    });
   }
 
   measureSystemGroups(
@@ -264,52 +202,6 @@ export default class Renderer {
     }
 
     return groups;
-  }
-
-  renderSystemGroups(
-    systemGroups: SystemGroupPlan[],
-    renderedStaves: Map<Staff['id'], Map<number, MeasureRenderOutput>>
-  ): void {
-    systemGroups.forEach((group) => {
-      const firstMeasureIndex = group.measureIndices[0];
-      const lastMeasureIndex =
-        group.measureIndices[group.measureIndices.length - 1];
-
-      if (firstMeasureIndex === undefined || lastMeasureIndex === undefined) {
-        return;
-      }
-
-      const topFirst = renderedStaves
-        .get(group.topStaffId)
-        ?.get(firstMeasureIndex)?.stave;
-      const bottomFirst = renderedStaves
-        .get(group.bottomStaffId)
-        ?.get(firstMeasureIndex)?.stave;
-      const topLast = renderedStaves
-        .get(group.topStaffId)
-        ?.get(lastMeasureIndex)?.stave;
-      const bottomLast = renderedStaves
-        .get(group.bottomStaffId)
-        ?.get(lastMeasureIndex)?.stave;
-
-      if (topFirst && bottomFirst) {
-        new StaveConnector(topFirst, bottomFirst)
-          .setType(StaveConnector.type.BRACE as never)
-          .setContext(this.ctx)
-          .draw();
-        new StaveConnector(topFirst, bottomFirst)
-          .setType(StaveConnector.type.SINGLE_LEFT as never)
-          .setContext(this.ctx)
-          .draw();
-      }
-
-      if (topLast && bottomLast) {
-        new StaveConnector(topLast, bottomLast)
-          .setType(StaveConnector.type.SINGLE_RIGHT as never)
-          .setContext(this.ctx)
-          .draw();
-      }
-    });
   }
 
   private resolveSortedStaves(): Staff[] {
@@ -421,5 +313,125 @@ export default class Renderer {
       plan.modifierReservations.tempo,
       plan.modifierReservations.directions
     );
+  }
+
+  // -----------------
+  // --- Layouting ---
+  // -----------------
+
+  // -----------------
+  // --- Rendering ---
+  // -----------------
+
+  render(): RenderResult {
+    const plan = this.measure();
+    const renderedStaves = new Map<
+      Staff['id'],
+      Map<number, MeasureRenderOutput>
+    >();
+    const measureLayouts: RenderResult['measureLayouts'] = [];
+    const noteBounds: RenderResult['noteBounds'] = [];
+
+    this.ctx.clear();
+
+    this.renderStaves(plan).forEach(({ staffId, outputs }) => {
+      const byMeasureIndex = new Map<number, MeasureRenderOutput>();
+
+      outputs.forEach((output) => {
+        byMeasureIndex.set(output.layout.globalMeasureIndex, output);
+        measureLayouts.push(output.layout);
+        noteBounds.push(...output.noteBounds);
+      });
+
+      renderedStaves.set(staffId, byMeasureIndex);
+    });
+
+    this.renderSystemGroups(plan.systemGroups, renderedStaves);
+
+    return {
+      contentSize: plan.contentSize,
+      measureLayouts,
+      noteBounds,
+    };
+  }
+
+  renderStaves(plan: ScoreMeasurementPlan): Array<{
+    staffId: Staff['id'];
+    outputs: MeasureRenderOutput[];
+  }> {
+    const sortedStaves = this.resolveSortedStaves();
+
+    return plan.staves.map((staffPlan) => {
+      const staff = sortedStaves.find(
+        (candidate) => candidate.id === staffPlan.staffId
+      );
+
+      if (!staff) {
+        return {
+          staffId: staffPlan.staffId,
+          outputs: [],
+        };
+      }
+
+      const outputs = new StaffRenderer(
+        this.ctx,
+        this.score,
+        staff,
+        staffPlan.staffIndex,
+        plan.timings,
+        this.options
+      ).render(staffPlan, plan.measures);
+
+      return {
+        staffId: staffPlan.staffId,
+        outputs,
+      };
+    });
+  }
+
+  renderSystemGroups(
+    systemGroups: SystemGroupPlan[],
+    renderedStaves: Map<Staff['id'], Map<number, MeasureRenderOutput>>
+  ): void {
+    systemGroups.forEach((group) => {
+      const firstMeasureIndex = group.measureIndices[0];
+      const lastMeasureIndex =
+        group.measureIndices[group.measureIndices.length - 1];
+
+      if (firstMeasureIndex === undefined || lastMeasureIndex === undefined) {
+        return;
+      }
+
+      const topFirst = renderedStaves
+        .get(group.topStaffId)
+        ?.get(firstMeasureIndex)?.stave;
+      const bottomFirst = renderedStaves
+        .get(group.bottomStaffId)
+        ?.get(firstMeasureIndex)?.stave;
+      const topLast = renderedStaves
+        .get(group.topStaffId)
+        ?.get(lastMeasureIndex)?.stave;
+      const bottomLast = renderedStaves
+        .get(group.bottomStaffId)
+        ?.get(lastMeasureIndex)?.stave;
+
+      if (topFirst && bottomFirst) {
+        new StaveConnector(topFirst, bottomFirst)
+          .setType(StaveConnector.type.BRACE as never)
+          .setContext(this.ctx)
+          .draw();
+        new StaveConnector(topFirst, bottomFirst)
+          .setType(StaveConnector.type.SINGLE_LEFT as never)
+          .setContext(this.ctx)
+          .draw();
+      }
+
+      if (topLast && bottomLast) {
+        new StaveConnector(topLast, bottomLast)
+          .setType(StaveConnector.type.SINGLE_RIGHT as never)
+          .setContext(this.ctx)
+          .draw();
+      }
+    });
   }
 }

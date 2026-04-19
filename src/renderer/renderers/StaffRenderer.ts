@@ -20,6 +20,10 @@ export default class StaffRenderer {
     private readonly options: ScoreOptions
   ) {}
 
+  // ------------------
+  // --- Measuring ---
+  // ------------------
+
   measure(): MeasureMeasurementPlan[] {
     const measurePlans: MeasureMeasurementPlan[] = [];
     let previousState: MeasureMeasurementPlan['resolvedState'] | undefined;
@@ -50,28 +54,6 @@ export default class StaffRenderer {
     return measurePlans;
   }
 
-  render(
-    staffPlan: StaffMeasurementPlan,
-    measurePlans: MeasureMeasurementPlan[]
-  ): MeasureRenderOutput[] {
-    return staffPlan.measureIndices
-      .map((measurePlanIndex) => measurePlans[measurePlanIndex])
-      .filter((plan): plan is MeasureMeasurementPlan => plan !== undefined)
-      .map((plan) =>
-        new MeasureRenderer(
-          this.ctx,
-          this.score,
-          this.staff,
-          this.staff.measures[plan.measureIndex]!,
-          this.staffIndex,
-          plan.measureIndex,
-          plan.globalMeasureIndex,
-          this.timings[plan.globalMeasureIndex]!,
-          this.options
-        ).render(plan)
-      );
-  }
-
   buildPlan(
     y: number,
     width: number,
@@ -95,5 +77,35 @@ export default class StaffRenderer {
       ),
       measureIndices,
     };
+  }
+
+  // -----------------
+  // --- Layouting ---
+  // -----------------
+
+  // -----------------
+  // --- Rendering ---
+  // -----------------
+
+  render(
+    staffPlan: StaffMeasurementPlan,
+    measurePlans: MeasureMeasurementPlan[]
+  ): MeasureRenderOutput[] {
+    return staffPlan.measureIndices
+      .map((measurePlanIndex) => measurePlans[measurePlanIndex])
+      .filter((plan): plan is MeasureMeasurementPlan => plan !== undefined)
+      .map((plan) =>
+        new MeasureRenderer(
+          this.ctx,
+          this.score,
+          this.staff,
+          this.staff.measures[plan.measureIndex]!,
+          this.staffIndex,
+          plan.measureIndex,
+          plan.globalMeasureIndex,
+          this.timings[plan.globalMeasureIndex]!,
+          this.options
+        ).render(plan)
+      );
   }
 }

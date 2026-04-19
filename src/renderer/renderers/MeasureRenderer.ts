@@ -41,6 +41,10 @@ export default class MeasureRenderer {
     private readonly options: ScoreOptions
   ) {}
 
+  // ------------------
+  // --- Measuring ---
+  // ------------------
+
   measure(previousState?: ResolvedMeasureState): MeasureMeasurementPlan {
     const resolvedState = this.resolveMeasureState(previousState);
     const display = this.resolveDisplayState(previousState, resolvedState);
@@ -92,62 +96,6 @@ export default class MeasureRenderer {
     };
   }
 
-  render(plan: MeasureMeasurementPlan): MeasureRenderOutput {
-    const stave = new Stave(plan.bounds.x, plan.bounds.y, plan.bounds.width);
-
-    this.renderClef(stave, plan);
-    this.renderKeySignature(stave, plan);
-    this.renderTimeSignature(stave, plan);
-    this.renderTempo(stave, plan);
-    this.renderBarlines(stave);
-    stave.setContext(this.ctx).draw();
-
-    this.renderDirections(plan);
-
-    const voiceData = this.renderVoices(plan, stave);
-    const noteBounds = voiceData.flatMap((voiceEntry) =>
-      voiceEntry.tickables.map((tickableEntry) => ({
-        voiceItemId: tickableEntry.voiceItemId,
-        voiceId: tickableEntry.voiceId,
-        staffId: this.staff.id,
-        measureId: this.measureModel.id,
-        staffIndex: this.staffIndex,
-        measureIndex: this.measureIndex,
-        globalMeasureIndex: this.globalMeasureIndex,
-        bounds: extractNoteRect(
-          tickableEntry.tickable,
-          createRect(
-            plan.contentBounds.x,
-            plan.contentBounds.y,
-            12,
-            plan.contentBounds.height
-          )
-        ),
-        startBeat: tickableEntry.startBeat,
-        endBeat: tickableEntry.endBeat,
-      }))
-    );
-
-    return {
-      layout: {
-        scoreId: this.score.id,
-        staffId: this.staff.id,
-        measureId: this.measureModel.id,
-        staffIndex: this.staffIndex,
-        measureIndex: this.measureIndex,
-        globalMeasureIndex: this.globalMeasureIndex,
-        bounds: resolveRect(stave.getBoundingBox(), plan.bounds),
-        contentBounds: plan.contentBounds,
-        noteStartX: stave.getNoteStartX(),
-        noteEndX: stave.getNoteEndX(),
-        startBeat: plan.startBeat,
-        endBeat: plan.endBeat,
-      },
-      noteBounds,
-      stave,
-    };
-  }
-
   measureClef(display: MeasureDisplayState): number {
     if (!display.showClef) {
       return 0;
@@ -156,12 +104,6 @@ export default class MeasureRenderer {
     return this.measureSequentialModifierWidth((stave) => {
       stave.addClef(this.resolveMeasureState().clef as string);
     });
-  }
-
-  renderClef(stave: Stave, plan: MeasureMeasurementPlan): void {
-    if (plan.display.showClef) {
-      stave.addClef(plan.resolvedState.clef as string);
-    }
   }
 
   measureKeySignature(
@@ -179,12 +121,6 @@ export default class MeasureRenderer {
 
       stave.addKeySignature(this.toKeySignatureString(resolvedState));
     });
-  }
-
-  renderKeySignature(stave: Stave, plan: MeasureMeasurementPlan): void {
-    if (plan.display.showKeySignature && plan.resolvedState.keySignature) {
-      stave.addKeySignature(this.toKeySignatureString(plan.resolvedState));
-    }
   }
 
   measureTimeSignature(
@@ -210,14 +146,6 @@ export default class MeasureRenderer {
     });
   }
 
-  renderTimeSignature(stave: Stave, plan: MeasureMeasurementPlan): void {
-    if (plan.display.showTimeSignature) {
-      stave.addTimeSignature(
-        `${plan.resolvedState.meter.beats}/${plan.resolvedState.meter.beatUnit}`
-      );
-    }
-  }
-
   measureTempo(
     resolvedState: ResolvedMeasureState,
     display: MeasureDisplayState
@@ -231,19 +159,6 @@ export default class MeasureRenderer {
       : String(resolvedState.tempo.bpm);
 
     return measureTextWidth(this.ctx, label) + 8;
-  }
-
-  renderTempo(stave: Stave, plan: MeasureMeasurementPlan): void {
-    if (plan.display.showTempo && plan.resolvedState.tempo) {
-      stave.setTempo(
-        {
-          duration: plan.resolvedState.tempo.beatUnit ?? 'q',
-          bpm: plan.resolvedState.tempo.bpm,
-          name: plan.resolvedState.tempo.text,
-        },
-        -12
-      );
-    }
   }
 
   measureDirections(display: MeasureDisplayState): number {
@@ -260,30 +175,11 @@ export default class MeasureRenderer {
     );
   }
 
-  renderDirections(plan: MeasureMeasurementPlan): void {
-    if (!plan.display.showDirections || !this.measureModel.directions?.length) {
-      return;
-    }
-
-    this.measureModel.directions.forEach((direction, directionIndex) => {
-      this.ctx.fillText(
-        direction,
-        plan.bounds.x + 4,
-        plan.bounds.y - 10 - directionIndex * 12
-      );
-    });
-  }
-
   measureBarlines(): number {
     return this.measureModel.startBarline &&
       this.measureModel.startBarline !== 'single'
       ? 6
       : 0;
-  }
-
-  renderBarlines(stave: Stave): void {
-    stave.setBegBarType(mapBarlineType(this.measureModel.startBarline));
-    stave.setEndBarType(mapBarlineType(this.measureModel.endBarline));
   }
 
   measureVoices(resolvedState: ResolvedMeasureState): {
@@ -322,38 +218,6 @@ export default class MeasureRenderer {
       voicePlans: voiceData.map((entry) => entry.plan),
       noteAreaWidth,
     };
-  }
-
-  renderVoices(plan: MeasureMeasurementPlan, stave: Stave): VoiceRenderData[] {
-    const voiceData = this.measureModel.voices.map((voice) =>
-      new VoiceRenderer(
-        voice,
-        plan.resolvedState.clef,
-        plan.resolvedState.meter,
-        plan.startBeat
-      ).render()
-    );
-    const voices = voiceData.map((entry) => entry.voice);
-
-    if (voices.length > 0) {
-      const formatter = new Formatter();
-
-      if (voices.length > 1) {
-        formatter.joinVoices(voices);
-      }
-
-      formatter.formatToStave(voices, stave);
-      voices.forEach((voice) => voice.draw(this.ctx, stave));
-    }
-
-    voiceData.forEach((voiceEntry) => {
-      voiceEntry.beams.forEach((beam) => beam.setContext(this.ctx).draw());
-      voiceEntry.tuplets.forEach((tuplet) =>
-        tuplet.setContext(this.ctx).draw()
-      );
-    });
-
-    return voiceData;
   }
 
   private resolveMeasureState(
@@ -438,5 +302,153 @@ export default class MeasureRenderer {
     return `${keySignature.tonic}${keySignature.accidental ?? ''}${
       keySignature.mode === 'minor' ? 'm' : ''
     }`;
+  }
+
+  // -----------------
+  // --- Layouting ---
+  // -----------------
+
+  // -----------------
+  // --- Rendering ---
+  // -----------------
+
+  render(plan: MeasureMeasurementPlan): MeasureRenderOutput {
+    const stave = new Stave(plan.bounds.x, plan.bounds.y, plan.bounds.width);
+
+    this.renderClef(stave, plan);
+    this.renderKeySignature(stave, plan);
+    this.renderTimeSignature(stave, plan);
+    this.renderTempo(stave, plan);
+    this.renderBarlines(stave);
+    stave.setContext(this.ctx).draw();
+
+    this.renderDirections(plan);
+
+    const voiceData = this.renderVoices(plan, stave);
+    const noteBounds = voiceData.flatMap((voiceEntry) =>
+      voiceEntry.tickables.map((tickableEntry) => ({
+        voiceItemId: tickableEntry.voiceItemId,
+        voiceId: tickableEntry.voiceId,
+        staffId: this.staff.id,
+        measureId: this.measureModel.id,
+        staffIndex: this.staffIndex,
+        measureIndex: this.measureIndex,
+        globalMeasureIndex: this.globalMeasureIndex,
+        bounds: extractNoteRect(
+          tickableEntry.tickable,
+          createRect(
+            plan.contentBounds.x,
+            plan.contentBounds.y,
+            12,
+            plan.contentBounds.height
+          )
+        ),
+        startBeat: tickableEntry.startBeat,
+        endBeat: tickableEntry.endBeat,
+      }))
+    );
+
+    return {
+      layout: {
+        scoreId: this.score.id,
+        staffId: this.staff.id,
+        measureId: this.measureModel.id,
+        staffIndex: this.staffIndex,
+        measureIndex: this.measureIndex,
+        globalMeasureIndex: this.globalMeasureIndex,
+        bounds: resolveRect(stave.getBoundingBox(), plan.bounds),
+        contentBounds: plan.contentBounds,
+        noteStartX: stave.getNoteStartX(),
+        noteEndX: stave.getNoteEndX(),
+        startBeat: plan.startBeat,
+        endBeat: plan.endBeat,
+      },
+      noteBounds,
+      stave,
+    };
+  }
+
+  renderClef(stave: Stave, plan: MeasureMeasurementPlan): void {
+    if (plan.display.showClef) {
+      stave.addClef(plan.resolvedState.clef as string);
+    }
+  }
+
+  renderKeySignature(stave: Stave, plan: MeasureMeasurementPlan): void {
+    if (plan.display.showKeySignature && plan.resolvedState.keySignature) {
+      stave.addKeySignature(this.toKeySignatureString(plan.resolvedState));
+    }
+  }
+
+  renderTimeSignature(stave: Stave, plan: MeasureMeasurementPlan): void {
+    if (plan.display.showTimeSignature) {
+      stave.addTimeSignature(
+        `${plan.resolvedState.meter.beats}/${plan.resolvedState.meter.beatUnit}`
+      );
+    }
+  }
+
+  renderTempo(stave: Stave, plan: MeasureMeasurementPlan): void {
+    if (plan.display.showTempo && plan.resolvedState.tempo) {
+      stave.setTempo(
+        {
+          duration: plan.resolvedState.tempo.beatUnit ?? 'q',
+          bpm: plan.resolvedState.tempo.bpm,
+          name: plan.resolvedState.tempo.text,
+        },
+        -12
+      );
+    }
+  }
+
+  renderDirections(plan: MeasureMeasurementPlan): void {
+    if (!plan.display.showDirections || !this.measureModel.directions?.length) {
+      return;
+    }
+
+    this.measureModel.directions.forEach((direction, directionIndex) => {
+      this.ctx.fillText(
+        direction,
+        plan.bounds.x + 4,
+        plan.bounds.y - 10 - directionIndex * 12
+      );
+    });
+  }
+
+  renderBarlines(stave: Stave): void {
+    stave.setBegBarType(mapBarlineType(this.measureModel.startBarline));
+    stave.setEndBarType(mapBarlineType(this.measureModel.endBarline));
+  }
+
+  renderVoices(plan: MeasureMeasurementPlan, stave: Stave): VoiceRenderData[] {
+    const voiceData = this.measureModel.voices.map((voice) =>
+      new VoiceRenderer(
+        voice,
+        plan.resolvedState.clef,
+        plan.resolvedState.meter,
+        plan.startBeat
+      ).render()
+    );
+    const voices = voiceData.map((entry) => entry.voice);
+
+    if (voices.length > 0) {
+      const formatter = new Formatter();
+
+      if (voices.length > 1) {
+        formatter.joinVoices(voices);
+      }
+
+      formatter.formatToStave(voices, stave);
+      voices.forEach((voice) => voice.draw(this.ctx, stave));
+    }
+
+    voiceData.forEach((voiceEntry) => {
+      voiceEntry.beams.forEach((beam) => beam.setContext(this.ctx).draw());
+      voiceEntry.tuplets.forEach((tuplet) =>
+        tuplet.setContext(this.ctx).draw()
+      );
+    });
+
+    return voiceData;
   }
 }

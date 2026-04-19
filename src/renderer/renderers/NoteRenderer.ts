@@ -25,6 +25,10 @@ interface NoteMeasurement {
 export default class NoteRenderer {
   constructor(private readonly note: Note, private readonly clef: Clef) {}
 
+  // ------------------
+  // --- Measuring ---
+  // ------------------
+
   measure(): NoteMeasurement {
     return {
       accidentalCount: this.measureAccidentals(),
@@ -33,6 +37,38 @@ export default class NoteRenderer {
       hasLyric: this.measureLyric(),
     };
   }
+
+  measurePitch(): number {
+    return 1;
+  }
+
+  measureDuration(): number {
+    return 1;
+  }
+
+  measureAccidentals(): number {
+    return this.note.pitch.accidental ? 1 : 0;
+  }
+
+  measureArticulations(): number {
+    return this.note.articulations?.length ?? 0;
+  }
+
+  measureDynamic(): boolean {
+    return this.note.dynamic !== undefined;
+  }
+
+  measureLyric(): boolean {
+    return this.note.lyric !== undefined;
+  }
+
+  // -----------------
+  // --- Layouting ---
+  // -----------------
+
+  // -----------------
+  // --- Rendering ---
+  // -----------------
 
   render(): StaveNote {
     const renderedNote = new StaveNote({
@@ -51,34 +87,18 @@ export default class NoteRenderer {
     return renderedNote;
   }
 
-  measurePitch(): number {
-    return 1;
-  }
-
   renderPitch(): string {
     return toVexflowPitch(this.note.pitch);
-  }
-
-  measureDuration(): number {
-    return 1;
   }
 
   renderDuration(): string {
     return toVexflowDuration(this.note.duration, false);
   }
 
-  measureAccidentals(): number {
-    return this.note.pitch.accidental ? 1 : 0;
-  }
-
   renderAccidentals(renderedNote: StaveNote): void {
     if (this.note.pitch.accidental) {
       renderedNote.addModifier(new Accidental(this.note.pitch.accidental), 0);
     }
-  }
-
-  measureArticulations(): number {
-    return this.note.articulations?.length ?? 0;
   }
 
   renderArticulations(renderedNote: StaveNote): void {
@@ -93,10 +113,6 @@ export default class NoteRenderer {
     });
   }
 
-  measureDynamic(): boolean {
-    return this.note.dynamic !== undefined;
-  }
-
   renderDynamic(renderedNote: StaveNote): void {
     if (!this.note.dynamic) {
       return;
@@ -108,10 +124,6 @@ export default class NoteRenderer {
       ),
       0
     );
-  }
-
-  measureLyric(): boolean {
-    return this.note.lyric !== undefined;
   }
 
   renderLyric(renderedNote: StaveNote): void {

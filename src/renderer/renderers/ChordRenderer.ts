@@ -25,6 +25,10 @@ interface ChordMeasurement {
 export default class ChordRenderer {
   constructor(private readonly chord: Chord, private readonly clef: Clef) {}
 
+  // ------------------
+  // --- Measuring ---
+  // ------------------
+
   measure(): ChordMeasurement {
     return {
       accidentalCount: this.measureAccidentals(),
@@ -33,6 +37,35 @@ export default class ChordRenderer {
       pitchCount: this.measurePitches(),
     };
   }
+
+  measurePitches(): number {
+    return this.chord.pitches.length;
+  }
+
+  measureDuration(): number {
+    return 1;
+  }
+
+  measureAccidentals(): number {
+    return this.chord.pitches.filter((pitch) => pitch.accidental !== undefined)
+      .length;
+  }
+
+  measureArticulations(): number {
+    return this.chord.articulations?.length ?? 0;
+  }
+
+  measureDynamic(): boolean {
+    return this.chord.dynamic !== undefined;
+  }
+
+  // -----------------
+  // --- Layouting ---
+  // -----------------
+
+  // -----------------
+  // --- Rendering ---
+  // -----------------
 
   render(): StaveNote {
     const renderedChord = new StaveNote({
@@ -50,25 +83,12 @@ export default class ChordRenderer {
     return renderedChord;
   }
 
-  measurePitches(): number {
-    return this.chord.pitches.length;
-  }
-
   renderPitches(): string[] {
     return this.chord.pitches.map((pitch) => toVexflowPitch(pitch));
   }
 
-  measureDuration(): number {
-    return 1;
-  }
-
   renderDuration(): string {
     return toVexflowDuration(this.chord.duration, false);
-  }
-
-  measureAccidentals(): number {
-    return this.chord.pitches.filter((pitch) => pitch.accidental !== undefined)
-      .length;
   }
 
   renderAccidentals(renderedChord: StaveNote): void {
@@ -77,10 +97,6 @@ export default class ChordRenderer {
         renderedChord.addModifier(new Accidental(pitch.accidental), pitchIndex);
       }
     });
-  }
-
-  measureArticulations(): number {
-    return this.chord.articulations?.length ?? 0;
   }
 
   renderArticulations(renderedChord: StaveNote): void {
@@ -93,10 +109,6 @@ export default class ChordRenderer {
 
       renderedChord.addModifier(new VexflowArticulation(code), 0);
     });
-  }
-
-  measureDynamic(): boolean {
-    return this.chord.dynamic !== undefined;
   }
 
   renderDynamic(renderedChord: StaveNote): void {

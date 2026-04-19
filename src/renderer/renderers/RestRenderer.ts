@@ -10,11 +10,27 @@ interface RestMeasurement {
 export default class RestRenderer {
   constructor(private readonly rest: Rest, private readonly clef: Clef) {}
 
+  // ------------------
+  // --- Measuring ---
+  // ------------------
+
   measure(): RestMeasurement {
     return {
       isSpacer: this.measureDuration(),
     };
   }
+
+  measureDuration(): boolean {
+    return this.rest.isSpacer === true;
+  }
+
+  // -----------------
+  // --- Layouting ---
+  // -----------------
+
+  // -----------------
+  // --- Rendering ---
+  // -----------------
 
   render(): StaveNote {
     const renderedRest = new StaveNote({
@@ -27,10 +43,6 @@ export default class RestRenderer {
     this.renderSpacerVisibility(renderedRest);
 
     return renderedRest;
-  }
-
-  measureDuration(): boolean {
-    return this.rest.isSpacer === true;
   }
 
   renderDuration(): string {
