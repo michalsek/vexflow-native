@@ -5,7 +5,9 @@ import type {
   MeasureMeasurementPlan,
   ScoreOptions,
   StaffMeasurementPlan,
+  VisibleViewport,
 } from '../types';
+import { filterVisibleMeasureIndices } from '../viewport';
 import { createRect } from './common';
 import type { MeasureRenderOutput } from './MeasureRenderer';
 import MeasureRenderer from './MeasureRenderer';
@@ -89,9 +91,18 @@ export default class StaffRenderer {
 
   render(
     staffPlan: StaffMeasurementPlan,
-    measurePlans: MeasureMeasurementPlan[]
+    measurePlans: MeasureMeasurementPlan[],
+    visibleViewport?: VisibleViewport
   ): MeasureRenderOutput[] {
-    return staffPlan.measureIndices
+    const visibleMeasureIndices = visibleViewport
+      ? filterVisibleMeasureIndices(
+          staffPlan.measureIndices,
+          measurePlans,
+          visibleViewport
+        )
+      : staffPlan.measureIndices;
+
+    return visibleMeasureIndices
       .map((measurePlanIndex) => measurePlans[measurePlanIndex])
       .filter((plan): plan is MeasureMeasurementPlan => plan !== undefined)
       .map((plan) =>

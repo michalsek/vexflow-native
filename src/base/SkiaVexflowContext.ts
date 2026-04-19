@@ -1,5 +1,6 @@
 import {
   BlendMode,
+  ClipOp,
   PaintStyle,
   Skia,
   type SkCanvas,
@@ -163,6 +164,11 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     return this;
   }
 
+  translate(x: number, y: number) {
+    this.canvas.translate(x, y);
+    return this;
+  }
+
   resize(_width: number, _height: number) {
     logUnimplemented('resize');
     return this;
@@ -182,6 +188,15 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     const clearPaint = Skia.Paint();
     clearPaint.setBlendMode(BlendMode.Clear);
     this.canvas.drawRect(Skia.XYWHRect(x, y, width, height), clearPaint);
+    return this;
+  }
+
+  clipRect(x: number, y: number, width: number, height: number) {
+    this.canvas.clipRect(
+      Skia.XYWHRect(x, y, width, height),
+      ClipOp.Intersect,
+      true
+    );
     return this;
   }
 

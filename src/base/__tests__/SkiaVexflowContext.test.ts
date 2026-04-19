@@ -28,6 +28,7 @@ type MockPathBuilder = {
 };
 
 type MockCanvas = {
+  clipRect: ReturnType<typeof jest.fn>;
   clear: ReturnType<typeof jest.fn>;
   drawPath: ReturnType<typeof jest.fn>;
   drawRect: ReturnType<typeof jest.fn>;
@@ -35,10 +36,12 @@ type MockCanvas = {
   restore: ReturnType<typeof jest.fn>;
   save: ReturnType<typeof jest.fn>;
   scale: ReturnType<typeof jest.fn>;
+  translate: ReturnType<typeof jest.fn>;
 };
 
 type LoadedContextModule = {
   BlendMode: { Clear: string };
+  ClipOp: { Intersect: string };
   installVexflowReactNativeFallbacks: ReturnType<typeof jest.fn>;
   PaintStyle: { Fill: string; Stroke: string };
   SkiaVexflowContext: new (
@@ -92,6 +95,7 @@ function createPathBuilder(index: number): MockPathBuilder {
 
 function createCanvas(): MockCanvas {
   return {
+    clipRect: jest.fn(),
     clear: jest.fn(),
     drawPath: jest.fn(),
     drawRect: jest.fn(),
@@ -99,6 +103,7 @@ function createCanvas(): MockCanvas {
     restore: jest.fn(),
     save: jest.fn(),
     scale: jest.fn(),
+    translate: jest.fn(),
   };
 }
 
@@ -106,6 +111,7 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
   jest.resetModules();
 
   const BlendMode = { Clear: 'clear' };
+  const ClipOp = { Intersect: 'intersect' };
   const PaintStyle = { Fill: 'fill', Stroke: 'stroke' };
   const StrokeCap = {
     Butt: 'butt',
@@ -141,6 +147,7 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
 
   jest.doMock('@shopify/react-native-skia', () => ({
     BlendMode,
+    ClipOp,
     PaintStyle,
     Skia: {
       Color: (color: string) => `color:${color}`,
@@ -192,6 +199,7 @@ function loadContextModule(platformOs: 'ios' | 'android' | 'web') {
 
   return {
     BlendMode,
+    ClipOp,
     installVexflowReactNativeFallbacks,
     PaintStyle,
     SkiaVexflowContext: SkiaVexflowContext!,
@@ -282,8 +290,10 @@ describe('SkiaVexflowContext', () => {
       .setLineWidth(4)
       .setLineCap('round')
       .scale(2, 3)
+      .translate(4, 5)
       .fillRect(1, 2, 30, 40)
       .clearRect(5, 6, 7, 8)
+      .clipRect(9, 10, 11, 12)
       .fillText('abc', 9, 10)
       .save()
       .restore();
@@ -314,6 +324,7 @@ describe('SkiaVexflowContext', () => {
       module.StrokeCap.Round
     );
     expect(canvas.scale).toHaveBeenCalledWith(2, 3);
+    expect(canvas.translate).toHaveBeenCalledWith(4, 5);
     expect(module.XYWHRect).toHaveBeenNthCalledWith(1, 1, 2, 30, 40);
     expect(canvas.drawRect).toHaveBeenNthCalledWith(
       1,
@@ -328,6 +339,17 @@ describe('SkiaVexflowContext', () => {
       2,
       { x: 5, y: 6, width: 7, height: 8 },
       module.paints[2]
+    );
+    expect(module.XYWHRect).toHaveBeenNthCalledWith(3, 9, 10, 11, 12);
+    expect(canvas.clipRect).toHaveBeenCalledWith(
+      {
+        x: 9,
+        y: 10,
+        width: 11,
+        height: 12,
+      },
+      module.ClipOp.Intersect,
+      true
     );
     expect(canvas.drawText).toHaveBeenCalledWith(
       'abc',

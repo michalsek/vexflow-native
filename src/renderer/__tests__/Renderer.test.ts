@@ -53,6 +53,7 @@ jest.mock('@shopify/react-native-skia', () => {
 
   return {
     BlendMode: { Clear: 'clear' },
+    ClipOp: { Intersect: 'intersect' },
     FontSlant: {
       Upright: 'upright',
       Italic: 'italic',
@@ -220,6 +221,18 @@ function groupLayoutsByLine(layouts: MeasureLayout[]): MeasureLayout[][] {
     .map(([, lineLayouts]) =>
       [...lineLayouts].sort((left, right) => left.bounds.x - right.bounds.x)
     );
+}
+
+function intersectsRect(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number }
+) {
+  return (
+    left.x < right.x + right.width &&
+    left.x + left.width > right.x &&
+    left.y < right.y + right.height &&
+    left.y + left.height > right.y
+  );
 }
 
 function createScore(): Score {
@@ -878,6 +891,43 @@ describe('Renderer', () => {
     });
   });
 
+  it('renders only measures intersecting the visible viewport and keeps partial edge measures', () => {
+    const renderer = createRenderer(createWrappingScore(), 'infiniteScore');
+    const laidOutPlan = createLaidOutPlan(renderer);
+    const fullRender = renderer.render(laidOutPlan);
+    const topLayouts = fullRender.measureLayouts
+      .filter((layout) => layout.staffId === 'wrap-top')
+      .sort(
+        (left, right) => left.globalMeasureIndex - right.globalMeasureIndex
+      );
+    const visibleViewport = {
+      x: topLayouts[1]!.bounds.x + topLayouts[1]!.bounds.width - 20,
+      y: 0,
+      width:
+        topLayouts[3]!.bounds.x +
+        20 -
+        (topLayouts[1]!.bounds.x + topLayouts[1]!.bounds.width - 20),
+      height: laidOutPlan.contentSize.height,
+    };
+
+    const renderResult = renderer.render(laidOutPlan, { visibleViewport });
+    const visibleTopIndices = renderResult.measureLayouts
+      .filter((layout) => layout.staffId === 'wrap-top')
+      .map((layout) => layout.globalMeasureIndex)
+      .sort((left, right) => left - right);
+    const visibleBottomIndices = renderResult.measureLayouts
+      .filter((layout) => layout.staffId === 'wrap-bottom')
+      .map((layout) => layout.globalMeasureIndex)
+      .sort((left, right) => left - right);
+
+    expect(visibleTopIndices).toEqual([1, 2, 3]);
+    expect(visibleBottomIndices).toEqual([1, 2, 3]);
+    expect(renderResult.noteBounds.length).toBeGreaterThan(0);
+    renderResult.noteBounds.forEach((noteBound) => {
+      expect(intersectsRect(noteBound.bounds, visibleViewport)).toBe(true);
+    });
+  });
+
   it('renders grouped staff connectors per wrapped visual system', () => {
     const connectorSpy = jest.spyOn(StaveConnector.prototype, 'draw');
     const renderer = createRenderer(
@@ -889,6 +939,53 @@ describe('Renderer', () => {
     renderer.render(createLaidOutPlan(renderer));
 
     expect(connectorSpy).toHaveBeenCalledTimes(9);
+  });
+
+  it('excludes fully offscreen systems while preserving content size for cropped renders', () => {
+    const connectorSpy = jest.spyOn(StaveConnector.prototype, 'draw');
+    const renderer = createRenderer(
+      createWrappingScore(),
+      'documentEven',
+      EVEN_WRAP_VIEWPORT
+    );
+    const laidOutPlan = createLaidOutPlan(renderer);
+    const fullRender = renderer.render(laidOutPlan);
+    const topLayouts = fullRender.measureLayouts
+      .filter((layout) => layout.staffId === 'wrap-top')
+      .sort(
+        (left, right) => left.globalMeasureIndex - right.globalMeasureIndex
+      );
+    const bottomLayouts = fullRender.measureLayouts
+      .filter((layout) => layout.staffId === 'wrap-bottom')
+      .sort(
+        (left, right) => left.globalMeasureIndex - right.globalMeasureIndex
+      );
+    const visibleViewport = {
+      x: 0,
+      y: topLayouts[2]!.bounds.y + 8,
+      width: laidOutPlan.contentSize.width,
+      height:
+        bottomLayouts[3]!.bounds.y +
+        bottomLayouts[3]!.bounds.height -
+        (topLayouts[2]!.bounds.y + 16),
+    };
+
+    connectorSpy.mockClear();
+
+    const renderResult = renderer.render(laidOutPlan, { visibleViewport });
+    const visibleTopIndices = renderResult.measureLayouts
+      .filter((layout) => layout.staffId === 'wrap-top')
+      .map((layout) => layout.globalMeasureIndex)
+      .sort((left, right) => left - right);
+    const visibleBottomIndices = renderResult.measureLayouts
+      .filter((layout) => layout.staffId === 'wrap-bottom')
+      .map((layout) => layout.globalMeasureIndex)
+      .sort((left, right) => left - right);
+
+    expect(visibleTopIndices).toEqual([2, 3]);
+    expect(visibleBottomIndices).toEqual([2, 3]);
+    expect(connectorSpy).toHaveBeenCalledTimes(3);
+    expect(renderResult.contentSize).toEqual(laidOutPlan.contentSize);
   });
 
   it('styles spacer rests as invisible while keeping them renderable', () => {

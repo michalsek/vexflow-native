@@ -9,6 +9,7 @@ import { getMeasureQuarterBeats } from './timing';
 import type {
   GlobalMeasureTiming,
   MeasureMeasurementPlan,
+  RenderPassOptions,
   RenderResult,
   RendererType,
   ScoreMeasurementPlan,
@@ -17,6 +18,7 @@ import type {
   SystemGroupPlan,
   Viewport,
 } from './types';
+import { getVisibleStaffPlans, intersectsRect } from './viewport';
 
 export default class Renderer {
   private ctx: SkiaVexflowContext;
@@ -691,28 +693,42 @@ export default class Renderer {
   // --- Rendering ---
   // -----------------
 
-  render(plan: ScoreMeasurementPlan): RenderResult {
+  render(
+    plan: ScoreMeasurementPlan,
+    options: RenderPassOptions = {}
+  ): RenderResult {
     const renderedStaves = new Map<
       Staff['id'],
       Map<number, MeasureRenderOutput>
     >();
     const measureLayouts: RenderResult['measureLayouts'] = [];
     const noteBounds: RenderResult['noteBounds'] = [];
+    const visibleStaffPlans = options.visibleViewport
+      ? getVisibleStaffPlans(plan, options.visibleViewport)
+      : plan.staves;
 
     this.ctx.clear();
 
-    this.renderStaves(plan).forEach(({ staffId, outputs }) => {
-      const byMeasureIndex =
-        renderedStaves.get(staffId) ?? new Map<number, MeasureRenderOutput>();
+    this.renderStaves(plan, visibleStaffPlans, options).forEach(
+      ({ staffId, outputs }) => {
+        const byMeasureIndex =
+          renderedStaves.get(staffId) ?? new Map<number, MeasureRenderOutput>();
 
-      outputs.forEach((output) => {
-        byMeasureIndex.set(output.layout.globalMeasureIndex, output);
-        measureLayouts.push(output.layout);
-        noteBounds.push(...output.noteBounds);
-      });
+        outputs.forEach((output) => {
+          byMeasureIndex.set(output.layout.globalMeasureIndex, output);
+          measureLayouts.push(output.layout);
+          noteBounds.push(
+            ...output.noteBounds.filter((noteBound) =>
+              options.visibleViewport
+                ? intersectsRect(noteBound.bounds, options.visibleViewport)
+                : true
+            )
+          );
+        });
 
-      renderedStaves.set(staffId, byMeasureIndex);
-    });
+        renderedStaves.set(staffId, byMeasureIndex);
+      }
+    );
 
     this.renderSystemGroups(plan.systemGroups, renderedStaves);
 
@@ -723,13 +739,17 @@ export default class Renderer {
     };
   }
 
-  renderStaves(plan: ScoreMeasurementPlan): Array<{
+  renderStaves(
+    plan: ScoreMeasurementPlan,
+    staffPlans: StaffMeasurementPlan[],
+    options: RenderPassOptions = {}
+  ): Array<{
     staffId: Staff['id'];
     outputs: MeasureRenderOutput[];
   }> {
     const sortedStaves = this.resolveSortedStaves();
 
-    return plan.staves.map((staffPlan) => {
+    return staffPlans.map((staffPlan) => {
       const staff = sortedStaves.find(
         (candidate) => candidate.id === staffPlan.staffId
       );
@@ -748,7 +768,7 @@ export default class Renderer {
         staffPlan.staffIndex,
         plan.timings,
         this.options
-      ).render(staffPlan, plan.measures);
+      ).render(staffPlan, plan.measures, options.visibleViewport);
 
       return {
         staffId: staffPlan.staffId,

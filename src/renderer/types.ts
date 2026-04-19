@@ -24,6 +24,8 @@ export interface ScoreRendererProps {
   fontManager: SkTypefaceFontProvider;
   rendererType?: RendererType;
   options?: Partial<ScoreOptions>;
+  scrollOffset?: RendererPoint;
+  onContentSizeChange?: (size: RendererSize) => void;
 }
 
 export interface Viewport {
@@ -71,6 +73,8 @@ export interface RendererSize {
 }
 
 export interface RendererRect extends RendererPoint, RendererSize {}
+
+export interface VisibleViewport extends RendererRect {}
 
 export interface ResolvedMeasureState {
   clef: Clef;
@@ -199,6 +203,10 @@ export interface RenderResult {
   contentSize: RendererSize;
   measureLayouts: MeasureLayout[];
   noteBounds: NoteBounds[];
+}
+
+export interface RenderPassOptions {
+  visibleViewport?: VisibleViewport;
 }
 
 export type MeasureChild =
