@@ -12,6 +12,8 @@ const originalFromCSSString = Font.fromCSSString.bind(Font);
 let fallbackInstalled = false;
 
 export function installVexflowReactNativeFallbacks(): void {
+  'worklet';
+
   if (fallbackInstalled) {
     return;
   }

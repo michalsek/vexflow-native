@@ -21,6 +21,8 @@ import { installVexflowReactNativeFallbacks } from './setupVexflowReactNative';
 
 const showSilentLogs = false;
 
+const WidthScale = 3 / 4;
+
 function logUnimplemented(methodName: string, isSilent = false) {
   if (isSilent && !showSilentLogs) {
     return;
@@ -32,6 +34,8 @@ function logUnimplemented(methodName: string, isSilent = false) {
 }
 
 export default class SkiaVexflowContext implements VexflowRenderContext {
+  __workletClass = true;
+
   private canvas: SkCanvas;
 
   private currentPath?: SkPathBuilder;
@@ -65,6 +69,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
     this.strokePaint.setStyle(PaintStyle.Stroke);
     this.strokePaint.setAntiAlias(true);
     this.strokePaint.setColor(Skia.Color('black'));
+    this.strokePaint.setStrokeWidth(1.5 * WidthScale);
 
     if (Platform.OS === 'ios' || Platform.OS === 'android') {
       installVexflowReactNativeFallbacks();
@@ -139,7 +144,7 @@ export default class SkiaVexflowContext implements VexflowRenderContext {
   }
 
   setLineWidth(width: number) {
-    this.strokePaint.setStrokeWidth(width);
+    this.strokePaint.setStrokeWidth(width * WidthScale);
     return this;
   }
 

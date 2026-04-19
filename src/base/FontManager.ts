@@ -10,9 +10,9 @@ import type {
   SkTypefaceFontProvider,
 } from '@shopify/react-native-skia';
 
-import Logger, { LogCategory } from '../shared/Logger';
+// import Logger, { LogCategory } from '../shared/Logger';
 
-const Log = Logger.extend(LogCategory.FontManager);
+// const Log = Logger.extend(LogCategory.FontManager);
 
 interface ResolvedFont {
   family: string;
@@ -24,7 +24,76 @@ interface ResolvedFont {
 
 const PT_TO_PX = 4 / 3; // 1pt = 1.333px
 
+function parseSize(size?: string | number): number {
+  'worklet';
+
+  if (typeof size === 'number') {
+    return size;
+  }
+
+  if (typeof size === 'string') {
+    const match = size.trim().match(/^(\d+(?:\.\d+)?)(px|pt|em|%)?$/);
+
+    if (match) {
+      const value = parseFloat(match?.[1] || '30');
+      const unit = match[2] || 'pt';
+
+      switch (unit) {
+        case 'px':
+          return value * 0.75; // 1px = 0.75pt
+        case 'em':
+          return value * 12; // Assuming 1em = 16px = 12pt
+        case '%':
+          return value * 0.12; // Assuming 100% = 12pt
+        case 'pt':
+        default:
+          return value;
+      }
+    }
+  }
+
+  return 30; // Default font size in pixels
+}
+
+function parseWeight(weight?: string | number): FontWeight {
+  'worklet';
+
+  const weightStr = String(weight || 'normal').toLowerCase();
+
+  return (
+    {
+      'normal': FontWeight.Normal,
+      'bold': FontWeight.Bold,
+      '100': FontWeight.Thin,
+      '200': FontWeight.ExtraLight,
+      '300': FontWeight.Light,
+      '400': FontWeight.Normal,
+      '500': FontWeight.Medium,
+      '600': FontWeight.SemiBold,
+      '700': FontWeight.Bold,
+      '800': FontWeight.ExtraBold,
+      '900': FontWeight.Black,
+    }[weightStr] || FontWeight.Normal
+  );
+}
+
+function parseSlant(style?: string): FontSlant {
+  'worklet';
+
+  const styleStr = String(style || 'normal').toLowerCase();
+
+  return (
+    {
+      normal: FontSlant.Upright,
+      italic: FontSlant.Italic,
+      oblique: FontSlant.Oblique,
+    }[styleStr] || FontSlant.Upright
+  );
+}
+
 export default class FontManager {
+  __workletClass = true;
+
   private fontProvider: SkTypefaceFontProvider;
   private defaultFontName: string;
 
@@ -128,71 +197,10 @@ export default class FontManager {
       );
     }
 
-    Log.log(
-      `Created SkFont with family "${family}", size ${resolvedSize}px, weight ${resolvedWeight}, slant ${slant}.`
-    );
+    // Log.log(
+    //   `Created SkFont with family "${family}", size ${resolvedSize}px, weight ${resolvedWeight}, slant ${slant}.`
+    // );
 
     return Skia.Font(typeface, resolvedSize * PT_TO_PX); // Convert from points to pixels
   }
-}
-
-function parseSize(size?: string | number): number {
-  if (typeof size === 'number') {
-    return size;
-  }
-
-  if (typeof size === 'string') {
-    const match = size.trim().match(/^(\d+(?:\.\d+)?)(px|pt|em|%)?$/);
-
-    if (match) {
-      const value = parseFloat(match?.[1] || '30');
-      const unit = match[2] || 'pt';
-
-      switch (unit) {
-        case 'px':
-          return value * 0.75; // 1px = 0.75pt
-        case 'em':
-          return value * 12; // Assuming 1em = 16px = 12pt
-        case '%':
-          return value * 0.12; // Assuming 100% = 12pt
-        case 'pt':
-        default:
-          return value;
-      }
-    }
-  }
-
-  return 30; // Default font size in pixels
-}
-
-function parseWeight(weight?: string | number): FontWeight {
-  const weightStr = String(weight || 'normal').toLowerCase();
-
-  return (
-    {
-      'normal': FontWeight.Normal,
-      'bold': FontWeight.Bold,
-      '100': FontWeight.Thin,
-      '200': FontWeight.ExtraLight,
-      '300': FontWeight.Light,
-      '400': FontWeight.Normal,
-      '500': FontWeight.Medium,
-      '600': FontWeight.SemiBold,
-      '700': FontWeight.Bold,
-      '800': FontWeight.ExtraBold,
-      '900': FontWeight.Black,
-    }[weightStr] || FontWeight.Normal
-  );
-}
-
-function parseSlant(style?: string): FontSlant {
-  const styleStr = String(style || 'normal').toLowerCase();
-
-  return (
-    {
-      normal: FontSlant.Upright,
-      italic: FontSlant.Italic,
-      oblique: FontSlant.Oblique,
-    }[styleStr] || FontSlant.Upright
-  );
 }

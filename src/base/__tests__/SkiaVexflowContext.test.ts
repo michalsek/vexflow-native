@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 
+const WIDTH_SCALE = 3 / 4;
+
 type MockPaint = {
   setAntiAlias: ReturnType<typeof jest.fn>;
   setBlendMode: ReturnType<typeof jest.fn>;
@@ -305,7 +307,9 @@ describe('SkiaVexflowContext', () => {
       3,
       'color:#000000'
     );
-    expect(module.paints[1]!.setStrokeWidth).toHaveBeenCalledWith(4);
+    expect(module.paints[1]!.setStrokeWidth).toHaveBeenLastCalledWith(
+      4 * WIDTH_SCALE
+    );
     expect(module.paints[1]!.setStrokeCap).toHaveBeenCalledWith(
       module.StrokeCap.Round
     );

@@ -12,7 +12,7 @@ export const spacing: ScoreSpacing = {
   staffGap: 96,
   groupGap: 56,
   minimumMeasureWidth: 60,
-  measureHorizontalPadding: 24,
+  measureHorizontalPadding: 0,
   staffHeight: 96,
   staffInnerVerticalPadding: 16,
 };

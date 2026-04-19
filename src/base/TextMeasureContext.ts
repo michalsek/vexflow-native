@@ -8,6 +8,8 @@ function logUnimplemented(methodName: string) {
 }
 
 class TextMeasureContext {
+  __workletClass = true;
+
   private context: SkiaVexflowContext;
 
   constructor(context: SkiaVexflowContext) {

@@ -105,10 +105,25 @@ import { insets, renderOptions, spacing } from '../constants';
 import Renderer from '../Renderer';
 import RestRenderer from '../renderers/RestRenderer';
 import VoiceRenderer from '../renderers/VoiceRenderer';
-import type { RendererType, ScoreOptions } from '../types';
+import type { MeasureLayout, RendererType, ScoreOptions } from '../types';
 
 const VIEWPORT = {
   width: 360,
+  height: 320,
+};
+
+const WRAP_VIEWPORT = {
+  width: 650,
+  height: 320,
+};
+
+const EVEN_WRAP_VIEWPORT = {
+  width: 820,
+  height: 320,
+};
+
+const FRACTIONAL_WRAP_VIEWPORT = {
+  width: 821,
   height: 320,
 };
 
@@ -140,14 +155,71 @@ function createOptions(): ScoreOptions {
   };
 }
 
-function createRenderer(score: Score, type: RendererType = 'infiniteScore') {
+function createRenderer(
+  score: Score,
+  type: RendererType = 'infiniteScore',
+  viewport = VIEWPORT
+) {
   const context = new SkiaVexflowContext(
     createCanvas() as never,
     createFontProvider() as never,
     'MockFamily'
   );
 
-  return new Renderer(context, VIEWPORT, createOptions(), score, type);
+  return new Renderer(context, viewport, createOptions(), score, type);
+}
+
+function createLaidOutPlan(renderer: Renderer) {
+  return renderer.layout(renderer.measure());
+}
+
+function expectLineToBePixelAligned(
+  layouts: MeasureLayout[],
+  expectedLineWidth: number
+) {
+  const epsilon = 1e-9;
+
+  expect(layouts.length).toBeGreaterThan(1);
+
+  layouts.forEach((layout) => {
+    expect(
+      Math.abs(layout.bounds.x - Math.round(layout.bounds.x))
+    ).toBeLessThan(epsilon);
+    expect(
+      Math.abs(layout.bounds.width - Math.round(layout.bounds.width))
+    ).toBeLessThan(epsilon);
+  });
+
+  layouts.slice(1).forEach((layout, index) => {
+    const previousLayout = layouts[index]!;
+
+    expect(layout.bounds.x).toBe(
+      previousLayout.bounds.x + previousLayout.bounds.width
+    );
+  });
+
+  expect(
+    Math.abs(
+      layouts.reduce((sum, layout) => sum + layout.bounds.width, 0) -
+        expectedLineWidth
+    )
+  ).toBeLessThan(epsilon);
+}
+
+function groupLayoutsByLine(layouts: MeasureLayout[]): MeasureLayout[][] {
+  return Array.from(
+    layouts.reduce<Map<number, MeasureLayout[]>>((groups, layout) => {
+      const lineLayouts = groups.get(layout.bounds.y) ?? [];
+
+      lineLayouts.push(layout);
+      groups.set(layout.bounds.y, lineLayouts);
+      return groups;
+    }, new Map())
+  )
+    .sort((left, right) => left[0] - right[0])
+    .map(([, lineLayouts]) =>
+      [...lineLayouts].sort((left, right) => left.bounds.x - right.bounds.x)
+    );
 }
 
 function createScore(): Score {
@@ -331,12 +403,176 @@ function createTripletScore(): Score {
   };
 }
 
+function createWrappingScore(): Score {
+  const topMeasures = [
+    {
+      id: 'wrap-top-1',
+      number: 1,
+      voices: [
+        {
+          id: 'wrap-top-voice-1',
+          index: 0,
+          items: [
+            note('wrap-top-1-a', 'C', 4, 'q'),
+            note('wrap-top-1-b', 'D', 4, 'q'),
+          ],
+        },
+      ],
+    },
+    {
+      id: 'wrap-top-2',
+      number: 2,
+      directions: ['cantabile'],
+      voices: [
+        {
+          id: 'wrap-top-voice-2',
+          index: 0,
+          items: [
+            note('wrap-top-2-a', 'C', 5, '8'),
+            note('wrap-top-2-b', 'D', 5, '8'),
+            note('wrap-top-2-c', 'E', 5, '8'),
+            note('wrap-top-2-d', 'F', 5, '8'),
+          ],
+        },
+      ],
+    },
+    {
+      id: 'wrap-top-3',
+      number: 3,
+      voices: [
+        {
+          id: 'wrap-top-voice-3',
+          index: 0,
+          items: [
+            note('wrap-top-3-a', 'E', 4, 'q'),
+            note('wrap-top-3-b', 'F', 4, 'q'),
+          ],
+        },
+      ],
+    },
+    {
+      id: 'wrap-top-4',
+      number: 4,
+      voices: [
+        {
+          id: 'wrap-top-voice-4',
+          index: 0,
+          items: [
+            note('wrap-top-4-a', 'G', 4, 'q'),
+            note('wrap-top-4-b', 'A', 4, 'q'),
+          ],
+        },
+      ],
+    },
+    {
+      id: 'wrap-top-5',
+      number: 5,
+      voices: [
+        {
+          id: 'wrap-top-voice-5',
+          index: 0,
+          items: [
+            note('wrap-top-5-a', 'A', 4, 'q'),
+            note('wrap-top-5-b', 'B', 4, 'q'),
+          ],
+        },
+      ],
+    },
+  ];
+  const bottomMeasures = [
+    {
+      id: 'wrap-bottom-1',
+      number: 1,
+      voices: [
+        {
+          id: 'wrap-bottom-voice-1',
+          index: 0,
+          items: [chord('wrap-bottom-1-a', ['C', 'G'], 3, 'w')],
+        },
+      ],
+    },
+    {
+      id: 'wrap-bottom-2',
+      number: 2,
+      voices: [
+        {
+          id: 'wrap-bottom-voice-2',
+          index: 0,
+          items: [
+            note('wrap-bottom-2-a', 'C', 3, 'q'),
+            note('wrap-bottom-2-b', 'D', 3, 'q'),
+          ],
+        },
+      ],
+    },
+    {
+      id: 'wrap-bottom-3',
+      number: 3,
+      voices: [
+        {
+          id: 'wrap-bottom-voice-3',
+          index: 0,
+          items: [chord('wrap-bottom-3-a', ['F', 'C'], 3, 'w')],
+        },
+      ],
+    },
+    {
+      id: 'wrap-bottom-4',
+      number: 4,
+      voices: [
+        {
+          id: 'wrap-bottom-voice-4',
+          index: 0,
+          items: [chord('wrap-bottom-4-a', ['G', 'D'], 3, 'w')],
+        },
+      ],
+    },
+    {
+      id: 'wrap-bottom-5',
+      number: 5,
+      voices: [
+        {
+          id: 'wrap-bottom-voice-5',
+          index: 0,
+          items: [chord('wrap-bottom-5-a', ['A', 'E'], 3, 'w')],
+        },
+      ],
+    },
+  ];
+
+  return {
+    id: 'wrap-score',
+    defaultMeter: {
+      beats: 4,
+      beatUnit: 4,
+    },
+    staves: [
+      {
+        id: 'wrap-top',
+        order: 0,
+        clef: 'treble',
+        systemGroupId: 'wrap-group',
+        systemGroupRole: 'top',
+        measures: topMeasures,
+      },
+      {
+        id: 'wrap-bottom',
+        order: 1,
+        clef: 'bass',
+        systemGroupId: 'wrap-group',
+        systemGroupRole: 'bottom',
+        measures: bottomMeasures,
+      },
+    ],
+  };
+}
+
 afterEach(() => {
   jest.restoreAllMocks();
 });
 
 describe('Renderer', () => {
-  it('recomputes deterministic measurements, aggregates widths per global measure, and ignores rendererType', () => {
+  it('keeps measurement deterministic and renderer-type agnostic', () => {
     const score = createScore();
     const infiniteRenderer = createRenderer(score, 'infiniteScore');
     const documentRenderer = createRenderer(score, 'documentEven');
@@ -422,7 +658,7 @@ describe('Renderer', () => {
     const measuredPlan = renderer.measure();
     const measureSpy = jest.spyOn(renderer, 'measure');
 
-    const renderResult = renderer.render();
+    const renderResult = renderer.render(createLaidOutPlan(renderer));
     const repeatedPlan = renderer.measure();
     const voice = createTripletScore().staves[0]!.measures[0]!.voices[0]!;
     const voiceRenderData = new VoiceRenderer(
@@ -472,18 +708,17 @@ describe('Renderer', () => {
     const connectorSpy = jest.spyOn(StaveConnector.prototype, 'draw');
     const renderer = createRenderer(createScore());
 
-    renderer.measure();
-    renderer.render();
+    renderer.render(createLaidOutPlan(renderer));
 
     expect(beamSpy).toHaveBeenCalled();
     expect(tupletSpy).toHaveBeenCalled();
     expect(connectorSpy).toHaveBeenCalled();
   });
 
-  it('renders later measures at the same starting x until placement runs', () => {
+  it('lays out infinite scores horizontally during render', () => {
     const renderer = createRenderer(createScore());
 
-    const renderResult = renderer.render();
+    const renderResult = renderer.render(createLaidOutPlan(renderer));
     const firstTopLayout = renderResult.measureLayouts.find(
       (layout) =>
         layout.staffId === 'staff-top' && layout.globalMeasureIndex === 0
@@ -496,8 +731,164 @@ describe('Renderer', () => {
     expect(firstTopLayout).toBeDefined();
     expect(secondTopLayout).toBeDefined();
     expect(firstTopLayout?.bounds.x).toBe(insets.left);
-    expect(secondTopLayout?.bounds.x).toBe(insets.left);
-    expect(secondTopLayout?.bounds.x).toBe(firstTopLayout?.bounds.x);
+    expect(secondTopLayout?.bounds.x).toBeGreaterThan(insets.left);
+    expect(secondTopLayout?.bounds.x).toBe(
+      (firstTopLayout?.bounds.x ?? 0) + (firstTopLayout?.bounds.width ?? 0)
+    );
+  });
+
+  it('wraps document layout lines, stretches non-last lines, and keeps wrap display flags unchanged', () => {
+    const renderer = createRenderer(
+      createWrappingScore(),
+      'document',
+      WRAP_VIEWPORT
+    );
+    const measuredPlan = renderer.measure();
+    const laidOutPlan = createLaidOutPlan(renderer);
+    const topLayouts = renderer
+      .render(laidOutPlan)
+      .measureLayouts.filter((layout) => layout.staffId === 'wrap-top')
+      .sort(
+        (left, right) => left.globalMeasureIndex - right.globalMeasureIndex
+      );
+    const lineGroups = groupLayoutsByLine(topLayouts);
+    const nonLastLineWidths = lineGroups
+      .slice(0, -1)
+      .map((layouts) =>
+        layouts.reduce((sum, layout) => sum + layout.bounds.width, 0)
+      );
+    const lastLineWidth = lineGroups
+      .at(-1)
+      ?.reduce((sum, layout) => sum + layout.bounds.width, 0);
+    const wrappedMeasure = laidOutPlan.measures.find(
+      (measure) =>
+        measure.staffId === 'wrap-top' && measure.globalMeasureIndex === 2
+    );
+    const measuredWrappedMeasure = measuredPlan.measures.find(
+      (measure) =>
+        measure.staffId === 'wrap-top' && measure.globalMeasureIndex === 2
+    );
+
+    expect(topLayouts).toHaveLength(5);
+    expect(lineGroups.length).toBeGreaterThan(1);
+    nonLastLineWidths.forEach((lineWidth) => {
+      expect(lineWidth).toBeCloseTo(
+        WRAP_VIEWPORT.width - insets.left - insets.right,
+        5
+      );
+    });
+    expect(lastLineWidth).toBeLessThan(
+      WRAP_VIEWPORT.width - insets.left - insets.right
+    );
+    expect(wrappedMeasure?.display.showClef).toBe(false);
+    expect(wrappedMeasure?.display.showKeySignature).toBe(false);
+    expect(wrappedMeasure?.display.showTimeSignature).toBe(
+      measuredWrappedMeasure?.display.showTimeSignature
+    );
+  });
+
+  it('uses equal widths for full documentEven lines and preserves the trailing gap on the last line', () => {
+    const renderer = createRenderer(
+      createWrappingScore(),
+      'documentEven',
+      EVEN_WRAP_VIEWPORT
+    );
+    const topLayouts = renderer
+      .render(createLaidOutPlan(renderer))
+      .measureLayouts.filter((layout) => layout.staffId === 'wrap-top')
+      .sort(
+        (left, right) => left.globalMeasureIndex - right.globalMeasureIndex
+      );
+    const fullLineWidth = topLayouts
+      .slice(0, 2)
+      .reduce((sum, layout) => sum + layout.bounds.width, 0);
+    const lastLineWidth = topLayouts
+      .filter((layout) => layout.bounds.y === topLayouts[4]?.bounds.y)
+      .reduce((sum, layout) => sum + layout.bounds.width, 0);
+
+    expect(topLayouts[0]?.bounds.width).toBeCloseTo(
+      topLayouts[1]?.bounds.width ?? 0,
+      5
+    );
+    expect(topLayouts[0]?.bounds.width).toBeCloseTo(
+      topLayouts[2]?.bounds.width ?? 0,
+      5
+    );
+    expect(topLayouts[2]?.bounds.width).toBeCloseTo(
+      topLayouts[3]?.bounds.width ?? 0,
+      5
+    );
+    expect(topLayouts[3]?.bounds.width).toBeCloseTo(
+      topLayouts[4]?.bounds.width ?? 0,
+      5
+    );
+    expect(fullLineWidth).toBeCloseTo(
+      EVEN_WRAP_VIEWPORT.width - insets.left - insets.right,
+      5
+    );
+    expect(lastLineWidth).toBeLessThan(
+      EVEN_WRAP_VIEWPORT.width - insets.left - insets.right
+    );
+  });
+
+  it('snaps documentEven measure geometry to whole pixels on fractional viewports', () => {
+    const renderer = createRenderer(
+      createWrappingScore(),
+      'documentEven',
+      FRACTIONAL_WRAP_VIEWPORT
+    );
+    const topLayouts = renderer
+      .render(createLaidOutPlan(renderer))
+      .measureLayouts.filter((layout) => layout.staffId === 'wrap-top')
+      .sort(
+        (left, right) => left.globalMeasureIndex - right.globalMeasureIndex
+      );
+    const firstLineY = topLayouts[0]?.bounds.y;
+    const firstLineLayouts = topLayouts.filter(
+      (layout) => layout.bounds.y === firstLineY
+    );
+
+    expectLineToBePixelAligned(
+      firstLineLayouts,
+      FRACTIONAL_WRAP_VIEWPORT.width - insets.left - insets.right
+    );
+  });
+
+  it('snaps stretched document measure geometry to whole pixels', () => {
+    const renderer = createRenderer(
+      createWrappingScore(),
+      'document',
+      WRAP_VIEWPORT
+    );
+    const topLayouts = renderer
+      .render(createLaidOutPlan(renderer))
+      .measureLayouts.filter((layout) => layout.staffId === 'wrap-top')
+      .sort(
+        (left, right) => left.globalMeasureIndex - right.globalMeasureIndex
+      );
+    const lineGroups = groupLayoutsByLine(topLayouts);
+    const nonLastLineGroups = lineGroups.slice(0, -1);
+
+    expect(nonLastLineGroups.length).toBeGreaterThan(0);
+    nonLastLineGroups.forEach((lineLayouts) => {
+      expectLineToBePixelAligned(
+        lineLayouts,
+        WRAP_VIEWPORT.width - insets.left - insets.right
+      );
+    });
+  });
+
+  it('renders grouped staff connectors per wrapped visual system', () => {
+    const connectorSpy = jest.spyOn(StaveConnector.prototype, 'draw');
+    const renderer = createRenderer(
+      createWrappingScore(),
+      'documentEven',
+      EVEN_WRAP_VIEWPORT
+    );
+
+    renderer.render(createLaidOutPlan(renderer));
+
+    expect(connectorSpy).toHaveBeenCalledTimes(9);
   });
 
   it('styles spacer rests as invisible while keeping them renderable', () => {

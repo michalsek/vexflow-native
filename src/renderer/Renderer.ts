@@ -19,22 +19,24 @@ import type {
 } from './types';
 
 export default class Renderer {
-  private readonly ctx: SkiaVexflowContext;
+  private ctx: SkiaVexflowContext;
   private readonly score: Score;
   private readonly viewport: Viewport;
   private readonly options: ScoreOptions;
+  private readonly rendererType: RendererType;
 
   constructor(
     ctx: SkiaVexflowContext,
     viewport: Viewport,
     options: ScoreOptions,
     score: Score,
-    _type: RendererType = 'documentEven'
+    rendererType: RendererType = 'documentEven'
   ) {
     this.ctx = ctx;
     this.viewport = viewport;
     this.options = options;
     this.score = score;
+    this.rendererType = rendererType;
   }
 
   // ------------------
@@ -319,12 +321,377 @@ export default class Renderer {
   // --- Layouting ---
   // -----------------
 
+  layout(plan: ScoreMeasurementPlan): ScoreMeasurementPlan {
+    switch (this.rendererType) {
+      case 'document':
+        return this.layoutLineBasedPlan(
+          plan,
+          this.resolveDocumentLines(plan.globalMeasureWidths)
+        );
+      case 'documentEven':
+        return this.layoutLineBasedPlan(
+          plan,
+          this.resolveDocumentEvenLines(plan.globalMeasureWidths)
+        );
+      case 'infiniteScore':
+      default:
+        return this.layoutLineBasedPlan(plan, [
+          {
+            globalMeasureIndices: plan.globalMeasureWidths.map(
+              (_, index) => index
+            ),
+            widths: [...plan.globalMeasureWidths],
+          },
+        ]);
+    }
+  }
+
+  private resolveDocumentLines(globalMeasureWidths: number[]): LayoutLine[] {
+    const availableWidth = this.resolveAvailableSystemWidth();
+    const lines: LayoutLine[] = [];
+    let lineStart = 0;
+
+    while (lineStart < globalMeasureWidths.length) {
+      const lineIndices: number[] = [];
+      const lineWidths: number[] = [];
+      let lineWidth = 0;
+      let nextIndex = lineStart;
+
+      while (nextIndex < globalMeasureWidths.length) {
+        const nextWidth = globalMeasureWidths[nextIndex] ?? 0;
+        const nextLineWidth = lineWidth + nextWidth;
+
+        if (lineIndices.length > 0 && nextLineWidth > availableWidth) {
+          break;
+        }
+
+        lineIndices.push(nextIndex);
+        lineWidths.push(nextWidth);
+        lineWidth = nextLineWidth;
+        nextIndex += 1;
+
+        if (lineWidth > availableWidth) {
+          break;
+        }
+      }
+
+      lines.push({
+        globalMeasureIndices: lineIndices,
+        widths: lineWidths,
+      });
+      lineStart = nextIndex;
+    }
+
+    return lines.map((line, lineIndex) => {
+      if (lineIndex === lines.length - 1) {
+        return line;
+      }
+
+      const widthSum = line.widths.reduce((sum, width) => sum + width, 0);
+      const scale = widthSum > 0 ? availableWidth / widthSum : 1;
+
+      return {
+        globalMeasureIndices: line.globalMeasureIndices,
+        widths: line.widths.map((width) => width * scale),
+      };
+    });
+  }
+
+  private resolveDocumentEvenLines(
+    globalMeasureWidths: number[]
+  ): LayoutLine[] {
+    const availableWidth = this.resolveAvailableSystemWidth();
+    const uniformBaseWidth = Math.max(
+      this.options.spacing.minimumMeasureWidth,
+      ...globalMeasureWidths
+    );
+    const measuresPerLine = Math.max(
+      1,
+      Math.floor(availableWidth / uniformBaseWidth)
+    );
+    const fullLineWidth = availableWidth / measuresPerLine;
+    const lines: LayoutLine[] = [];
+
+    for (
+      let lineStart = 0;
+      lineStart < globalMeasureWidths.length;
+      lineStart += measuresPerLine
+    ) {
+      const globalMeasureIndices = globalMeasureWidths
+        .slice(lineStart, lineStart + measuresPerLine)
+        .map((_, index) => lineStart + index);
+
+      lines.push({
+        globalMeasureIndices,
+        widths: globalMeasureIndices.map(() => fullLineWidth),
+      });
+    }
+
+    return lines;
+  }
+
+  private layoutLineBasedPlan(
+    plan: ScoreMeasurementPlan,
+    lines: LayoutLine[]
+  ): ScoreMeasurementPlan {
+    const sortedStaves = this.resolveSortedStaves();
+    const staffOffsets = this.resolveStaffYPositions(sortedStaves).map(
+      (position) => position - this.options.insets.top
+    );
+    const systemHeight =
+      (staffOffsets[staffOffsets.length - 1] ?? 0) +
+      this.options.spacing.staffHeight;
+    const measuresByGlobalIndex = new Map<
+      number,
+      Array<{ plan: MeasureMeasurementPlan; measurePlanIndex: number }>
+    >();
+
+    plan.measures.forEach((measurePlan, measurePlanIndex) => {
+      const measurePlans =
+        measuresByGlobalIndex.get(measurePlan.globalMeasureIndex) ?? [];
+
+      measurePlans.push({
+        plan: measurePlan,
+        measurePlanIndex,
+      });
+      measuresByGlobalIndex.set(measurePlan.globalMeasureIndex, measurePlans);
+    });
+
+    const laidOutStaves: StaffMeasurementPlan[] = [];
+    const laidOutGroups: SystemGroupPlan[] = [];
+    const laidOutGlobalMeasureWidths = [...plan.globalMeasureWidths];
+    let currentSystemY = this.options.insets.top;
+    let maxLineWidth = 0;
+
+    lines.forEach((line, lineIndex) => {
+      const snappedLine = this.snapLineBoundaries(line.widths);
+      const lineWidth = snappedLine.widths.reduce(
+        (sum, width) => sum + width,
+        0
+      );
+      const measureIndicesByStaff = new Map<Staff['id'], number[]>();
+
+      maxLineWidth = Math.max(maxLineWidth, lineWidth);
+
+      line.globalMeasureIndices.forEach((globalMeasureIndex, index) => {
+        const allocatedWidth = snappedLine.widths[index] ?? 0;
+        const matchingMeasurePlans =
+          measuresByGlobalIndex.get(globalMeasureIndex) ?? [];
+
+        laidOutGlobalMeasureWidths[globalMeasureIndex] = allocatedWidth;
+
+        matchingMeasurePlans.forEach(
+          ({ plan: measurePlan, measurePlanIndex }) => {
+            this.layoutMeasure(
+              measurePlan,
+              snappedLine.positions[index] ?? this.options.insets.left,
+              currentSystemY,
+              allocatedWidth
+            );
+
+            const staffMeasureIndices =
+              measureIndicesByStaff.get(measurePlan.staffId) ?? [];
+
+            staffMeasureIndices.push(measurePlanIndex);
+            measureIndicesByStaff.set(measurePlan.staffId, staffMeasureIndices);
+          }
+        );
+      });
+
+      const lineStaffPlans: StaffMeasurementPlan[] = [];
+
+      sortedStaves.forEach((staff, staffIndex) => {
+        const measureIndices = measureIndicesByStaff.get(staff.id) ?? [];
+
+        if (measureIndices.length === 0) {
+          return;
+        }
+
+        const y = currentSystemY + (staffOffsets[staffIndex] ?? 0);
+
+        lineStaffPlans.push({
+          staffId: staff.id,
+          staffIndex,
+          systemGroupId: staff.systemGroupId,
+          systemGroupRole: staff.systemGroupRole,
+          bounds: createRect(
+            this.options.insets.left,
+            y,
+            lineWidth,
+            this.options.spacing.staffHeight
+          ),
+          contentBounds: createRect(
+            this.options.insets.left,
+            y + this.options.spacing.staffInnerVerticalPadding,
+            lineWidth,
+            Math.max(
+              1,
+              this.options.spacing.staffHeight -
+                this.options.spacing.staffInnerVerticalPadding * 2
+            )
+          ),
+          measureIndices,
+        });
+      });
+
+      laidOutStaves.push(...lineStaffPlans);
+      laidOutGroups.push(
+        ...this.resolveLineSystemGroups(sortedStaves, lineStaffPlans)
+      );
+
+      if (lineIndex < lines.length - 1) {
+        currentSystemY += systemHeight + this.options.spacing.systemGap;
+      }
+    });
+
+    plan.globalMeasureWidths = laidOutGlobalMeasureWidths;
+    plan.staves = laidOutStaves;
+    plan.systemGroups = laidOutGroups;
+    plan.contentSize = {
+      width: Math.max(
+        this.viewport.width,
+        this.options.insets.left + maxLineWidth + this.options.insets.right
+      ),
+      height: Math.max(
+        this.viewport.height,
+        currentSystemY + systemHeight + this.options.insets.bottom
+      ),
+    };
+
+    return plan;
+  }
+
+  private snapLineBoundaries(widths: number[]): SnappedLineLayout {
+    const pixelRatio = Math.max(1, this.options.render.pixelRatio || 1);
+    const startX = this.options.insets.left;
+    const endX = startX + widths.reduce((sum, width) => sum + width, 0);
+    const boundaries = widths.reduce<number[]>(
+      (positions, width) => [
+        ...positions,
+        (positions[positions.length - 1] ?? startX) + width,
+      ],
+      [startX]
+    );
+    const snappedBoundaries = boundaries.map((boundary, index) => {
+      if (index === 0) {
+        return startX;
+      }
+
+      if (index === boundaries.length - 1) {
+        return endX;
+      }
+
+      return this.snapToPixelGrid(boundary, pixelRatio);
+    });
+
+    return {
+      positions: snappedBoundaries.slice(0, -1),
+      widths: snappedBoundaries
+        .slice(1)
+        .map((boundary, index) => boundary - snappedBoundaries[index]!),
+    };
+  }
+
+  private snapToPixelGrid(value: number, pixelRatio: number): number {
+    return Math.round(value * pixelRatio) / pixelRatio;
+  }
+
+  private resolveLineSystemGroups(
+    sortedStaves: Staff[],
+    staves: StaffMeasurementPlan[]
+  ): SystemGroupPlan[] {
+    const stavesById = new Map(staves.map((staff) => [staff.staffId, staff]));
+    const groups: SystemGroupPlan[] = [];
+
+    for (
+      let staffIndex = 0;
+      staffIndex < sortedStaves.length - 1;
+      staffIndex += 1
+    ) {
+      const topStaff = sortedStaves[staffIndex];
+      const bottomStaff = sortedStaves[staffIndex + 1];
+      const topPlan = topStaff ? stavesById.get(topStaff.id) : undefined;
+      const bottomPlan = bottomStaff
+        ? stavesById.get(bottomStaff.id)
+        : undefined;
+
+      if (
+        !topStaff ||
+        !bottomStaff ||
+        !topPlan ||
+        !bottomPlan ||
+        !topStaff.systemGroupId ||
+        topStaff.systemGroupId !== bottomStaff.systemGroupId
+      ) {
+        continue;
+      }
+
+      groups.push({
+        systemGroupId: topStaff.systemGroupId,
+        topStaffId: topStaff.id,
+        bottomStaffId: bottomStaff.id,
+        measureIndices: topPlan.measureIndices,
+      });
+    }
+
+    return groups;
+  }
+
+  private layoutMeasure(
+    plan: MeasureMeasurementPlan,
+    x: number,
+    systemY: number,
+    allocatedWidth: number
+  ): void {
+    const y = systemY + this.resolveStaffOffset(plan.staffIndex);
+    const leftReservation = this.measureLeftReservation(plan);
+
+    plan.allocatedWidth = allocatedWidth;
+    plan.bounds = createRect(
+      x,
+      y,
+      allocatedWidth,
+      this.options.spacing.staffHeight
+    );
+    plan.contentBounds = createRect(
+      x + leftReservation + this.options.spacing.measureHorizontalPadding,
+      y + this.options.spacing.staffInnerVerticalPadding,
+      Math.max(
+        1,
+        allocatedWidth -
+          leftReservation -
+          this.options.spacing.measureHorizontalPadding * 2
+      ),
+      Math.max(
+        1,
+        this.options.spacing.staffHeight -
+          this.options.spacing.staffInnerVerticalPadding * 2
+      )
+    );
+  }
+
+  private resolveAvailableSystemWidth(): number {
+    return Math.max(
+      1,
+      this.viewport.width - this.options.insets.left - this.options.insets.right
+    );
+  }
+
+  private resolveStaffOffset(staffIndex: number): number {
+    const sortedStaves = this.resolveSortedStaves();
+    const yPositions = this.resolveStaffYPositions(sortedStaves);
+
+    return (
+      (yPositions[staffIndex] ?? this.options.insets.top) -
+      this.options.insets.top
+    );
+  }
+
   // -----------------
   // --- Rendering ---
   // -----------------
 
-  render(): RenderResult {
-    const plan = this.measure();
+  render(plan: ScoreMeasurementPlan): RenderResult {
     const renderedStaves = new Map<
       Staff['id'],
       Map<number, MeasureRenderOutput>
@@ -335,7 +702,8 @@ export default class Renderer {
     this.ctx.clear();
 
     this.renderStaves(plan).forEach(({ staffId, outputs }) => {
-      const byMeasureIndex = new Map<number, MeasureRenderOutput>();
+      const byMeasureIndex =
+        renderedStaves.get(staffId) ?? new Map<number, MeasureRenderOutput>();
 
       outputs.forEach((output) => {
         byMeasureIndex.set(output.layout.globalMeasureIndex, output);
@@ -434,4 +802,14 @@ export default class Renderer {
       }
     });
   }
+}
+
+interface LayoutLine {
+  globalMeasureIndices: number[];
+  widths: number[];
+}
+
+interface SnappedLineLayout {
+  positions: number[];
+  widths: number[];
 }
