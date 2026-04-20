@@ -66,6 +66,11 @@ export type KeyMode =
   | 'mixolydian'
   | 'locrian';
 
+export type VoiceTimingMode = 'strict' | 'soft' | 'free';
+
+export type StaffGroupRole = 'grandStaff' | 'choir' | 'section' | 'custom';
+export type StaffGroupSymbol = 'brace' | 'bracket' | 'line';
+
 export interface Fraction {
   num: number;
   den: number;
@@ -77,10 +82,9 @@ export interface Pitch {
   accidental?: Accidental;
 }
 
-export interface Duration {
+export interface DurationValue {
   length: NoteLength;
   dots?: 0 | 1 | 2 | 3;
-  tuplet?: Fraction;
 }
 
 export interface KeySignature {
@@ -92,12 +96,12 @@ export interface KeySignature {
 export interface Meter {
   beats: number;
   beatUnit: number;
-  beaming?: number[];
+  beamGroups?: Fraction[];
 }
 
 export interface Tempo {
   bpm: number;
-  beatUnit?: NoteLength;
+  beatUnit?: DurationValue;
   text?: string;
 }
 
@@ -105,34 +109,26 @@ export interface Note {
   id: Id;
   type: 'note';
   pitch: Pitch;
-  duration: Duration;
+  duration: DurationValue;
   voiceId: Id;
-  tieStart?: boolean;
-  tieEnd?: boolean;
-  slurStart?: boolean;
-  slurEnd?: boolean;
-  articulations?: Articulation[];
-  dynamic?: Dynamic;
-  lyric?: string;
   stemDirection?: StemDirection;
 }
 
 export interface Rest {
   id: Id;
   type: 'rest';
-  duration: Duration;
+  duration: DurationValue;
   voiceId: Id;
-  isSpacer?: boolean;
+  kind?: 'visible' | 'spacer' | 'hidden';
+  staffLine?: number;
 }
 
 export interface Chord {
   id: Id;
   type: 'chord';
   pitches: Pitch[];
-  duration: Duration;
+  duration: DurationValue;
   voiceId: Id;
-  articulations?: Articulation[];
-  dynamic?: Dynamic;
   stemDirection?: StemDirection;
 }
 
@@ -142,20 +138,55 @@ export interface Voice {
   id: Id;
   name?: string;
   index: number;
+  timingMode?: VoiceTimingMode;
   items: VoiceItem[];
 }
 
-export interface Measure {
-  id: Id;
-  number: number;
+export interface MeasureState {
   clef?: Clef;
   meter?: Meter;
   keySignature?: KeySignature;
   tempo?: Tempo;
-  directions?: string[];
-  voices: Voice[];
+}
+
+export interface MeasureLeftModifiers {
+  showClef?: boolean;
+  showMeter?: boolean;
+  showKeySignature?: boolean;
   startBarline?: Barline;
+}
+
+export interface MeasureRightModifiers {
   endBarline?: Barline;
+}
+
+export interface TextDirection {
+  id: Id;
+  type: 'text';
+  text: string;
+  placement?: 'above' | 'below';
+}
+
+export interface TempoDirection {
+  id: Id;
+  type: 'tempo';
+  tempo: Tempo;
+  placement?: 'above' | 'below';
+}
+
+export type Direction = TextDirection | TempoDirection;
+
+export interface Measure {
+  id: Id;
+  number: number;
+
+  state?: MeasureState;
+
+  leftModifiers?: MeasureLeftModifiers;
+  rightModifiers?: MeasureRightModifiers;
+
+  directions?: Direction[];
+  voices: Voice[];
 }
 
 export interface Staff {
@@ -163,11 +194,16 @@ export interface Staff {
   name?: string;
   shortName?: string;
   order: number;
-  clef: Clef;
-  systemGroupId?: Id;
-  systemGroupRole?: 'single' | 'top' | 'bottom';
+  defaultClef: Clef;
   transposition?: number;
   measures: Measure[];
+}
+
+export interface StaffGroup {
+  id: Id;
+  staffIds?: Id[];
+  role: StaffGroupRole;
+  symbol?: StaffGroupSymbol;
 }
 
 export interface ScoreMetadata {
@@ -179,11 +215,68 @@ export interface ScoreMetadata {
   copyright?: string;
 }
 
+export interface ScoreDefaults {
+  meter: Meter;
+  keySignature?: KeySignature;
+  tempo?: Tempo;
+}
+
+export interface AttachmentBase {
+  id: Id;
+  ownerId: Id;
+}
+
+export interface ArticulationAttachment extends AttachmentBase {
+  type: 'articulation';
+  articulation: Articulation;
+}
+
+export interface DynamicAttachment extends AttachmentBase {
+  type: 'dynamic';
+  dynamic: Dynamic;
+  placement?: 'above' | 'below';
+}
+
+export interface LyricAttachment extends AttachmentBase {
+  type: 'lyric';
+  text: string;
+  verse?: number;
+}
+
+export type NoteAttachment =
+  | ArticulationAttachment
+  | DynamicAttachment
+  | LyricAttachment;
+
+export interface Tie {
+  id: Id;
+  fromNoteId: Id;
+  toNoteId: Id;
+}
+
+export interface Slur {
+  id: Id;
+  fromNoteId: Id;
+  toNoteId: Id;
+}
+
+export interface TupletGroup {
+  id: Id;
+  voiceId: Id;
+  itemIds: Id[];
+  ratio: Fraction;
+  bracketed?: boolean;
+  placement?: 'above' | 'below';
+}
+
 export interface Score {
   id: Id;
   metadata?: ScoreMetadata;
-  defaultMeter: Meter;
-  defaultKeySignature?: KeySignature;
-  tempo?: Tempo;
+  defaults: ScoreDefaults;
   staves: Staff[];
+  staffGroups?: StaffGroup[];
+  attachments?: NoteAttachment[];
+  ties?: Tie[];
+  slurs?: Slur[];
+  tuplets?: TupletGroup[];
 }

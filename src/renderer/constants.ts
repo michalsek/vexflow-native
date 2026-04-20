@@ -8,13 +8,8 @@ export const insets: ScoreInsets = {
 };
 
 export const spacing: ScoreSpacing = {
-  systemGap: 64,
   staffGap: 96,
-  groupGap: 56,
-  minimumMeasureWidth: 60,
-  measureHorizontalPadding: 0,
-  staffHeight: 96,
-  staffInnerVerticalPadding: 16,
+  minIntrinsicSizeMultiplier: 2,
 };
 
 export const renderOptions: RenderOptions = {

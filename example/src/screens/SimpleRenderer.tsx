@@ -17,8 +17,11 @@ import { ScoreRenderer } from 'vexflow-native/renderer';
 import type {
   Accidental,
   Chord,
-  Duration,
+  Direction,
+  DurationValue,
   Measure,
+  MeasureState,
+  LyricAttachment,
   Note,
   Pitch,
   Score,
@@ -41,6 +44,19 @@ const RENDERER_OPTIONS = [
 ];
 const EMPTY_SIZE: RendererSize = { width: 0, height: 0 };
 const EMPTY_OFFSET: ScrollOffset = { x: 0, y: 0 };
+
+type ScoreFixtureContext = {
+  lyricAttachments: LyricAttachment[];
+};
+
+type MeasureFixtureOverrides = Pick<
+  Measure,
+  'state' | 'leftModifiers' | 'rightModifiers'
+> & {
+  directionLabel?: string;
+};
+
+let activeFixtureContext: ScoreFixtureContext | null = null;
 
 // This file is exempt from the max lines rule
 const SimpleRenderer: React.FC = () => {
@@ -399,50 +415,83 @@ function clampOffset(offset: number, maxOffset: number): number {
 }
 
 function getInitialScore(): Score {
-  return {
-    id: 'simple-renderer-showcase',
-    metadata: {
-      title: 'Renderer Showcase Study',
-      composer: 'vexflow-native examples',
-    },
-    defaultMeter: {
-      beats: 4,
-      beatUnit: 4,
-    },
-    defaultKeySignature: {
-      tonic: 'C',
-      mode: 'major',
-    },
-    staves: [
-      {
-        id: 'showcase-top-staff',
-        order: 0,
-        clef: 'treble',
-        systemGroupId: 'showcase-piano',
-        systemGroupRole: 'top',
-        measures: createTopMeasures(),
-      },
-      {
-        id: 'showcase-bottom-staff',
-        order: 1,
-        clef: 'bass',
-        systemGroupId: 'showcase-piano',
-        systemGroupRole: 'bottom',
-        measures: createBottomMeasures(),
-      },
-    ],
+  const fixtureContext: ScoreFixtureContext = {
+    lyricAttachments: [],
   };
+
+  activeFixtureContext = fixtureContext;
+
+  try {
+    const topMeasures = createTopMeasures();
+    const bottomMeasures = createBottomMeasures();
+    const selectedItemIds = new Set([
+      ...topMeasures.flatMap((measure) =>
+        measure.voices.flatMap((voice) => voice.items.map((item) => item.id))
+      ),
+      ...bottomMeasures.flatMap((measure) =>
+        measure.voices.flatMap((voice) => voice.items.map((item) => item.id))
+      ),
+    ]);
+
+    return {
+      id: 'simple-renderer-showcase',
+      metadata: {
+        title: 'Renderer Showcase Study',
+        composer: 'vexflow-native examples',
+      },
+      defaults: {
+        meter: {
+          beats: 4,
+          beatUnit: 4,
+        },
+        keySignature: {
+          tonic: 'C',
+          mode: 'major',
+        },
+      },
+      staves: [
+        {
+          id: 'showcase-top-staff',
+          order: 0,
+          defaultClef: 'treble',
+          measures: topMeasures,
+        },
+        {
+          id: 'showcase-bottom-staff',
+          order: 1,
+          defaultClef: 'bass',
+          measures: bottomMeasures,
+        },
+      ],
+      staffGroups: [
+        {
+          id: 'showcase-piano',
+          role: 'grandStaff',
+          symbol: 'brace',
+          staffIds: ['showcase-top-staff', 'showcase-bottom-staff'],
+        },
+      ],
+      attachments: fixtureContext.lyricAttachments.filter((attachment) =>
+        selectedItemIds.has(attachment.ownerId)
+      ),
+    };
+  } finally {
+    activeFixtureContext = null;
+  }
 }
 
-const COMMON_TIME: Measure['meter'] = {
+const COMMON_TIME: MeasureState['meter'] = {
   beats: 4,
   beatUnit: 4,
 };
 
-const COMPOUND_BEAM_METER: Measure['meter'] = {
+const COMPOUND_BEAM_METER: MeasureState['meter'] = {
   beats: 6,
   beatUnit: 8,
-  beaming: [3, 3],
+  beamGroups: [
+    { num: 3, den: 8 },
+    { num: 3, den: 8 },
+  ],
 };
 
 function createTopMeasures(): Measure[] {
@@ -459,7 +508,7 @@ function createTopMeasures(): Measure[] {
           note(voiceId, 'top-s1-m1-v1-n4', 'F', 4, 'q', { accidental: '#' }),
         ]),
       ],
-      { directions: ['Accidentals'] }
+      { directionLabel: 'Accidentals' }
     ),
     createMeasure('top', 1, 2, [
       createVoice('top', 1, 2, 0, (voiceId) => [
@@ -515,7 +564,7 @@ function createTopMeasures(): Measure[] {
           note(voiceId, 'top-s2-m6-v1-n2', 'C', 5, 'q'),
         ]),
       ],
-      { directions: ['Dotted rhythms'] }
+      { directionLabel: 'Dotted rhythms' }
     ),
     createMeasure('top', 2, 7, [
       createVoice('top', 2, 7, 0, (voiceId) => [
@@ -523,7 +572,6 @@ function createTopMeasures(): Measure[] {
         note(voiceId, 'top-s2-m7-v1-n2', 'B', 4, '8'),
         note(voiceId, 'top-s2-m7-v1-n3', 'C', 5, 'q', { dots: 1 }),
         note(voiceId, 'top-s2-m7-v1-n4', 'D', 5, '8'),
-        note(voiceId, 'top-s2-m7-v1-n5', 'E', 5, 'q'),
       ]),
     ]),
     createMeasure('top', 2, 8, [
@@ -534,7 +582,6 @@ function createTopMeasures(): Measure[] {
     ]),
     createMeasure('top', 2, 9, [
       createVoice('top', 2, 9, 0, (voiceId) => [
-        note(voiceId, 'top-s2-m9-v1-n1', 'C', 5, 'q'),
         note(voiceId, 'top-s2-m9-v1-n2', 'B', 4, 'h', { dots: 1 }),
         note(voiceId, 'top-s2-m9-v1-n3', 'A', 4, 'q'),
       ]),
@@ -544,7 +591,6 @@ function createTopMeasures(): Measure[] {
         note(voiceId, 'top-s2-m10-v1-n1', 'G', 4, 'q', { dots: 1 }),
         note(voiceId, 'top-s2-m10-v1-n2', 'A', 4, '8'),
         note(voiceId, 'top-s2-m10-v1-n3', 'B', 4, 'h'),
-        note(voiceId, 'top-s2-m10-v1-n4', 'C', 5, 'q'),
       ]),
     ]),
     createMeasure(
@@ -561,7 +607,7 @@ function createTopMeasures(): Measure[] {
           note(voiceId, 'top-s3-m11-v1-n6', 'A', 5, '8'),
         ]),
       ],
-      { directions: ['Beams'], meter: COMPOUND_BEAM_METER }
+      { directionLabel: 'Beams', state: { meter: COMPOUND_BEAM_METER } }
     ),
     createMeasure('top', 3, 12, [
       createVoice('top', 3, 12, 0, (voiceId) => [
@@ -615,7 +661,7 @@ function createTopMeasures(): Measure[] {
           note(voiceId, 'top-s4-m16-v1-n4', 'F', 5, 'q', { lyric: 'this' }),
         ]),
       ],
-      { directions: ['Lyrics'], meter: COMMON_TIME }
+      { directionLabel: 'Lyrics', state: { meter: COMMON_TIME } }
     ),
     createMeasure('top', 4, 17, [
       createVoice('top', 4, 17, 0, (voiceId) => [
@@ -677,7 +723,7 @@ function createTopMeasures(): Measure[] {
           }),
         ]),
       ],
-      { directions: ['Two voices'] }
+      { directionLabel: 'Two voices' }
     ),
     createMeasure('top', 5, 22, [
       createVoice('top', 5, 22, 0, (voiceId) => [
@@ -732,7 +778,7 @@ function createTopMeasures(): Measure[] {
           ),
         ]),
       ],
-      { endBarline: 'final' }
+      { rightModifiers: { endBarline: 'final' } }
     ),
   ];
 }
@@ -748,7 +794,7 @@ function createBottomMeasures(): Measure[] {
           chord(voiceId, 'bottom-s1-m1-v1-c1', [p('C', 3), p('G', 3)], 'w'),
         ]),
       ],
-      { directions: ['Accidentals'] }
+      { directionLabel: 'Accidentals' }
     ),
     createMeasure('bottom', 1, 2, [
       createVoice('bottom', 1, 2, 0, (voiceId) => [
@@ -787,7 +833,7 @@ function createBottomMeasures(): Measure[] {
           note(voiceId, 'bottom-s2-m6-v1-n2', 'G', 2, 'q'),
         ]),
       ],
-      { directions: ['Dotted rhythms'] }
+      { directionLabel: 'Dotted rhythms' }
     ),
     createMeasure('bottom', 2, 7, [
       createVoice('bottom', 2, 7, 0, (voiceId) => [
@@ -828,7 +874,7 @@ function createBottomMeasures(): Measure[] {
           note(voiceId, 'bottom-s3-m11-v1-n6', 'E', 2, '8'),
         ]),
       ],
-      { directions: ['Beams'], meter: COMPOUND_BEAM_METER }
+      { directionLabel: 'Beams', state: { meter: COMPOUND_BEAM_METER } }
     ),
     createMeasure('bottom', 3, 12, [
       createVoice('bottom', 3, 12, 0, (voiceId) => [
@@ -880,7 +926,7 @@ function createBottomMeasures(): Measure[] {
           chord(voiceId, 'bottom-s4-m16-v1-c2', [p('F', 2), p('C', 3)], 'h'),
         ]),
       ],
-      { directions: ['Lyrics'], meter: COMMON_TIME }
+      { directionLabel: 'Lyrics', state: { meter: COMMON_TIME } }
     ),
     createMeasure('bottom', 4, 17, [
       createVoice('bottom', 4, 17, 0, (voiceId) => [
@@ -915,7 +961,7 @@ function createBottomMeasures(): Measure[] {
           chord(voiceId, 'bottom-s5-m21-v1-c1', [p('C', 3), p('G', 3)], 'w'),
         ]),
       ],
-      { directions: ['Two voices'] }
+      { directionLabel: 'Two voices' }
     ),
     createMeasure('bottom', 5, 22, [
       createVoice('bottom', 5, 22, 0, (voiceId) => [
@@ -946,7 +992,7 @@ function createBottomMeasures(): Measure[] {
           ),
         ]),
       ],
-      { endBarline: 'final' }
+      { rightModifiers: { endBarline: 'final' } }
     ),
   ];
 }
@@ -956,13 +1002,21 @@ function createMeasure(
   section: number,
   measureNumber: number,
   voices: Voice[],
-  overrides: Partial<Omit<Measure, 'id' | 'number' | 'voices'>> = {}
+  overrides: MeasureFixtureOverrides = {}
 ): Measure {
+  const id = `${staffPrefix}-s${section}-m${measureNumber}`;
+  const { directionLabel, ...measureOverrides } = overrides;
+
   return {
-    id: `${staffPrefix}-s${section}-m${measureNumber}`,
+    id,
     number: measureNumber,
     voices,
-    ...overrides,
+    ...(directionLabel
+      ? {
+          directions: createTextDirections(id, directionLabel),
+        }
+      : {}),
+    ...measureOverrides,
   };
 }
 
@@ -1001,21 +1055,30 @@ function note(
   id: string,
   step: Pitch['step'],
   octave: number,
-  length: Duration['length'],
+  length: DurationValue['length'],
   options: {
     accidental?: Accidental;
-    dots?: Duration['dots'];
+    dots?: DurationValue['dots'];
     lyric?: string;
     stemDirection?: Note['stemDirection'];
   } = {}
 ): Note {
+  if (options.lyric) {
+    activeFixtureContext?.lyricAttachments.push({
+      id: `${id}-lyric`,
+      ownerId: id,
+      type: 'lyric',
+      text: options.lyric,
+      verse: 1,
+    });
+  }
+
   return {
     id,
     type: 'note',
     voiceId,
     pitch: p(step, octave, options.accidental),
     duration: duration(length, options.dots),
-    ...(options.lyric ? { lyric: options.lyric } : {}),
     ...(options.stemDirection ? { stemDirection: options.stemDirection } : {}),
   };
 }
@@ -1024,9 +1087,9 @@ function chord(
   voiceId: string,
   id: string,
   pitches: Pitch[],
-  length: Duration['length'],
+  length: DurationValue['length'],
   options: {
-    dots?: Duration['dots'];
+    dots?: DurationValue['dots'];
     stemDirection?: Chord['stemDirection'];
   } = {}
 ): Chord {
@@ -1041,11 +1104,22 @@ function chord(
 }
 
 function duration(
-  length: Duration['length'],
-  dots?: Duration['dots']
-): Duration {
+  length: DurationValue['length'],
+  dots?: DurationValue['dots']
+): DurationValue {
   return {
     length,
     ...(dots ? { dots } : {}),
   };
+}
+
+function createTextDirections(measureId: string, text: string): Direction[] {
+  return [
+    {
+      id: `${measureId}-direction-1`,
+      type: 'text',
+      text,
+      placement: 'above',
+    },
+  ];
 }
