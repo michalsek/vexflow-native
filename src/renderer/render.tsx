@@ -2,143 +2,137 @@ import { Formatter, Stave, Voice as VFVoice } from 'vexflow';
 
 import type { SkiaVexflowContext } from '../base';
 import type { Score } from '../state';
-import type { MeasuredScore } from './measure';
-import {
-  buildResolvedMeasureStates,
-  buildMeasurementGroups,
-  makeVFVoice,
-  resolveGroupStaves,
-} from './scoreParsing';
+import type {
+  GroupLayoutContext,
+  MeasureLayoutPlan,
+  ScoreLayoutPlan,
+} from './layout';
+import { makeVFVoice } from './scoreParsing';
 import type { ScoreOptions } from './types';
-import type { RendererType } from './types';
-
-interface Viewport {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-function getSystemStartInViewport(
-  viewport: Viewport,
-  options: ScoreOptions,
-  rendererType: RendererType,
-  isGrandScore: boolean = false
-) {
-  if (rendererType !== 'infiniteScore') {
-    return {
-      systemX: viewport.x + options.insets.left,
-      systemY: viewport.y + options.insets.top,
-    };
-  }
-
-  const hallucinatedStaveHeight = isGrandScore ? 277.5 : 135;
-
-  return {
-    systemX: viewport.x + options.insets.left,
-    systemY:
-      (viewport.y +
-        viewport.height -
-        hallucinatedStaveHeight -
-        options.spacing.staffGap) /
-      2,
-  };
-}
 
 /**
- * Renders the measured score by aligning each staff group's voices on shared staves.
+ * Renders the score from a precomputed layout plan.
  */
 export function renderScore(
   ctx: SkiaVexflowContext,
   score: Score,
-  measuredScore: MeasuredScore,
-  options: ScoreOptions,
-  rendererType: RendererType = 'document',
-  viewport: { x: number; y: number; width: number; height: number }
+  layoutPlan: ScoreLayoutPlan,
+  options: ScoreOptions
 ) {
-  const groups = buildMeasurementGroups(score);
-  const { maxIntrinsicNoteWidth } = measuredScore;
-
   const staffGap = options.spacing.staffGap;
-  let { systemX, systemY } = getSystemStartInViewport(
-    viewport,
-    options,
-    rendererType,
-    score.staves.length > 1
+  const groupsById = new Map(
+    layoutPlan.groups.map((group) => [group.groupId, group])
   );
+  const measuresByGroup = groupMeasuresByIndex(layoutPlan.measures);
 
-  for (const group of groups) {
-    const staves = resolveGroupStaves(score, group);
+  for (const system of layoutPlan.systems) {
+    const group = groupsById.get(system.groupId);
 
-    if (staves.length === 0) {
+    if (!group || group.staves.length === 0) {
       continue;
     }
 
-    const measureCount = Math.min(
-      ...staves.map((staff) => staff.measures.length)
-    );
+    const measurePlans = system.measureIndices
+      .map((measureIndex) =>
+        measuresByGroup.get(system.groupId)?.get(measureIndex)
+      )
+      .filter((measure): measure is MeasureLayoutPlan => Boolean(measure));
 
-    const resolvedStatesByStaff = staves.map((staff) =>
-      buildResolvedMeasureStates(score, staff)
-    );
-
-    for (let measureIndex = 0; measureIndex < measureCount; measureIndex++) {
-      const measured = measuredScore.measures.find(
-        (measure) =>
-          measure.groupId === group.groupId &&
-          measure.measureIndex === measureIndex
-      );
-
-      if (!measured) {
-        continue;
-      }
-
-      const noteWidth = Math.max(
-        measured.intrinsicNoteWidth,
-        maxIntrinsicNoteWidth
-      );
-      const formatter = new Formatter();
-
-      const vfVoicesByStaff: VFVoice[][] = staves.map((staff, staffIndex) => {
-        const measure = staff.measures[measureIndex]!;
-        const resolvedState = resolvedStatesByStaff[staffIndex]![measureIndex]!;
-
-        const vfVoices = measure.voices.map(
-          (voice) =>
-            makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice)
-              .vfVoice
-        );
-
-        if (vfVoices.length > 1) {
-          formatter.joinVoices(vfVoices);
-        }
-
-        return vfVoices;
-      });
-
-      const allVoices = vfVoicesByStaff.flat();
-
-      const renderedStaves = staves.map((staff, index) => {
-        const measure = staff.measures[measureIndex]!;
-        const resolvedState = resolvedStatesByStaff[index]![measureIndex]!;
-        const stave = new Stave(systemX, systemY + index * staffGap, noteWidth);
-
-        if (measureIndex === 0 || measure.leftModifiers?.showClef) {
-          stave.addClef(resolvedState.clef);
-        }
-
-        stave.setContext(ctx).draw();
-        return stave;
-      });
-
-      formatter.formatToStave(allVoices, renderedStaves[0]!);
-
-      vfVoicesByStaff.forEach((vfVoices, staffIndex) => {
-        const stave = renderedStaves[staffIndex]!;
-        vfVoices.forEach((voice) => voice.draw(ctx, stave));
-      });
-
-      systemX += noteWidth;
+    for (const measurePlan of measurePlans) {
+      renderMeasure(ctx, score, group, measurePlan, staffGap);
     }
   }
+}
+
+type StaffRenderArtifacts = {
+  beams: Array<{
+    setContext: (ctx: SkiaVexflowContext) => { draw: () => void };
+  }>;
+  tuplets: Array<{
+    setContext: (ctx: SkiaVexflowContext) => { draw: () => void };
+  }>;
+  vfVoices: VFVoice[];
+};
+
+function renderMeasure(
+  ctx: SkiaVexflowContext,
+  score: Score,
+  group: GroupLayoutContext,
+  measurePlan: MeasureLayoutPlan,
+  staffGap: number
+) {
+  const formatter = new Formatter();
+
+  const staffRenderArtifacts: StaffRenderArtifacts[] = group.staves.map(
+    (staff, staffIndex) => {
+      const measure = staff.measures[measurePlan.measureIndex];
+      const resolvedState =
+        group.resolvedStatesByStaff[staffIndex]?.[measurePlan.measureIndex];
+
+      if (!measure || !resolvedState) {
+        return { vfVoices: [], beams: [], tuplets: [] };
+      }
+
+      const voiceArtifacts = measure.voices.map((voice) =>
+        makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice)
+      );
+      const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
+
+      if (vfVoices.length > 1) {
+        formatter.joinVoices(vfVoices);
+      }
+
+      return {
+        vfVoices,
+        beams: voiceArtifacts.flatMap(({ beams }) => beams),
+        tuplets: voiceArtifacts.flatMap(({ tuplets }) => tuplets),
+      };
+    }
+  );
+
+  const allVoices = staffRenderArtifacts.flatMap(({ vfVoices }) => vfVoices);
+
+  const renderedStaves = group.staves.map((staff, staffIndex) => {
+    const measure = staff.measures[measurePlan.measureIndex]!;
+    const resolvedState =
+      group.resolvedStatesByStaff[staffIndex]![measurePlan.measureIndex]!;
+    const stave = new Stave(
+      measurePlan.x,
+      measurePlan.y + staffIndex * staffGap,
+      measurePlan.width
+    );
+
+    if (measurePlan.measureIndex === 0 || measure.leftModifiers?.showClef) {
+      stave.addClef(resolvedState.clef);
+    }
+
+    stave.setContext(ctx).draw();
+    return stave;
+  });
+
+  if (allVoices.length > 0) {
+    formatter.formatToStave(allVoices, renderedStaves[0]!);
+  }
+
+  staffRenderArtifacts.forEach(({ vfVoices, beams, tuplets }, staffIndex) => {
+    const stave = renderedStaves[staffIndex]!;
+    vfVoices.forEach((voice) => voice.draw(ctx, stave));
+    beams.forEach((beam) => beam.setContext(ctx).draw());
+    tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
+  });
+}
+
+function groupMeasuresByIndex(measures: MeasureLayoutPlan[]) {
+  const measuresByGroup = new Map<string, Map<number, MeasureLayoutPlan>>();
+
+  for (const measure of measures) {
+    const groupMeasures =
+      measuresByGroup.get(measure.groupId) ??
+      new Map<number, MeasureLayoutPlan>();
+
+    groupMeasures.set(measure.measureIndex, measure);
+    measuresByGroup.set(measure.groupId, groupMeasures);
+  }
+
+  return measuresByGroup;
 }
