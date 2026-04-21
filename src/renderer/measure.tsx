@@ -1,5 +1,7 @@
 import { Formatter, Voice as VFVoice } from 'vexflow';
+import { Platform } from 'react-native';
 
+import { installVexflowReactNativeFallbacks } from '../base/setupVexflowReactNative';
 import type { Score } from '../state';
 import {
   buildResolvedMeasureStates,
@@ -34,6 +36,10 @@ export function measureScore(
   const {
     spacing: { minIntrinsicSizeMultiplier },
   } = options;
+
+  if (Platform.OS === 'ios' || Platform.OS === 'android') {
+    installVexflowReactNativeFallbacks();
+  }
 
   for (const group of groups) {
     const staves = resolveGroupStaves(score, group);
