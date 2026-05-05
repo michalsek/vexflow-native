@@ -1,0 +1,46 @@
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js b/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js
+index 1121801..9cdfb4b 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/Platform/Platform.web.js
+@@ -140,6 +140,9 @@ export const Platform = {
+       }
+       throw new Error("Asset source is a number - this is not supported on the web");
+     }
++    if (typeof source === "string") {
++      return source;
++    }
+     if ("uri" in source) {
+       return source.uri;
+     }
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js
+index 0c35f7b..95cf400 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkFontMgr.js
+@@ -13,6 +13,7 @@ export class JsiSkFontMgr extends HostObject {
+     return this.ref.getFamilyName(index);
+   }
+   matchFamilyStyle(_familyName, _fontStyle) {
++    console.log('XX', Object.keys(this.ref));
+     return throwNotImplementedOnRNWeb();
+   }
+ }
+diff --git a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
+index 42f1355..66ccedf 100644
+--- a/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
++++ b/node_modules/@shopify/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
+@@ -1,10 +1,13 @@
+ import { HostObject, throwNotImplementedOnRNWeb } from "./Host";
++import { JsiSkTypeface } from "./JsiSkTypeface";
++
+ export class JsiSkTypefaceFontProvider extends HostObject {
+   constructor(CanvasKit, ref) {
+     super(CanvasKit, ref, "FontMgr");
+   }
+-  matchFamilyStyle(_name, _style) {
+-    return throwNotImplementedOnRNWeb();
++  matchFamilyStyle(name, style) {
++    const typeface = this.ref.matchFamilyStyle(name, style);
++    return new JsiSkTypeface(this.CanvasKit, typeface);
+   }
+   countFamilies() {
+     return this.ref.countFamilies();

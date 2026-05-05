@@ -1,6 +1,6 @@
-import { type VexflowCanvasDrawArgs } from 'vexflow-native';
+import { type OnDrawParams } from 'vexflow-native';
 
-export type CanvasDrawContext = VexflowCanvasDrawArgs['ctx'];
+export type CanvasDrawContext = OnDrawParams['ctx'];
 
 export type VisualCase = {
   id: string;
@@ -8,6 +8,6 @@ export type VisualCase = {
   description?: string;
   canvasWidth?: number;
   canvasHeight?: number;
-  beforeDraw?: (args: VexflowCanvasDrawArgs) => void;
-  draw: (args: VexflowCanvasDrawArgs) => void;
+  beforeDraw?: (args: OnDrawParams) => void;
+  draw: (args: OnDrawParams) => void;
 };

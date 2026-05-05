@@ -2,23 +2,34 @@
   "name": "vexflow-native",
   "version": "0.2.0",
   "description": "React native backend for rendering music notation using @shopify/react-native-skiaact-native-skia",
-  "main": "./lib/module/index.js",
-  "types": "./lib/typescript/src/index.d.ts",
+  "main": "./lib/module/base/index.js",
+  "types": "./lib/typescript/src/base/index.d.ts",
   "exports": {
     ".": {
-      "source": "./src/index.tsx",
-      "types": "./lib/typescript/src/index.d.ts",
-      "default": "./lib/module/index.js"
+      "source": "./src/base/index.ts",
+      "types": "./lib/typescript/src/base/index.d.ts",
+      "default": "./lib/module/base/index.js"
+    },
+    "./state": {
+      "source": "./src/state/index.ts",
+      "types": "./lib/typescript/src/state/index.d.ts",
+      "default": "./lib/module/state/index.js"
+    },
+    "./renderer": {
+      "source": "./src/renderer/index.ts",
+      "types": "./lib/typescript/src/renderer/index.d.ts",
+      "default": "./lib/module/renderer/index.js"
+    },
+    "./musicxml": {
+      "source": "./src/musicxml/index.ts",
+      "types": "./lib/typescript/src/musicxml/index.d.ts",
+      "default": "./lib/module/musicxml/index.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
     "src",
     "lib",
-    "android",
-    "ios",
-    "cpp",
-    "*.podspec",
     "react-native.config.js",
     "!ios/build",
     "!android/build",
@@ -35,8 +46,11 @@
     "example": "yarn workspace vexflow-native-example",
     "clean": "del-cli lib",
     "prepare": "bob build",
+    "postinstall": "yarn workspace vexflow-native-example apply-patches",
     "typecheck": "tsc",
-    "lint": "eslint \"**/*.{js,ts,tsx}\"",
+    "lint": "eslint src example --ext .js,.ts,.tsx",
+    "lint:fix": "yarn lint --fix",
+    "format": "prettier --write README.md package.json \"src/**/*.{ts,tsx}\"",
     "test": "jest",
     "release": "release-it --only-version"
   },
@@ -66,7 +80,7 @@
     "@react-native/babel-preset": "0.83.0",
     "@react-native/eslint-config": "0.83.0",
     "@release-it/conventional-changelog": "^10.0.1",
-    "@shopify/react-native-skia": "^2.4.21",
+    "@shopify/react-native-skia": "2.6.2",
     "@types/jest": "^29.5.14",
     "@types/react": "^19.1.12",
     "commitlint": "^19.8.1",
@@ -80,6 +94,9 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-builder-bob": "^0.40.18",
+    "react-native-gesture-handler": "^2.30.0",
+    "react-native-reanimated": "^4.2.2",
+    "react-native-worklets": "^0.7.4",
     "release-it": "^19.0.4",
     "turbo": "^2.5.6",
     "typescript": "^5.9.2",
@@ -89,6 +106,9 @@
     "@shopify/react-native-skia": "*",
     "react": "*",
     "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-reanimated": "*",
+    "react-native-worklets": "*",
     "vexflow": "*"
   },
   "workspaces": [
@@ -124,7 +144,12 @@
     "preset": "react-native",
     "modulePathIgnorePatterns": [
       "<rootDir>/example/node_modules",
-      "<rootDir>/lib/"
+      "<rootDir>/lib/",
+      "<rootDir>/prev-implementation/"
+    ],
+    "testPathIgnorePatterns": [
+      "<rootDir>/example/",
+      "<rootDir>/prev-implementation/"
     ]
   },
   "commitlint": {
