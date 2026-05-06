@@ -2,7 +2,7 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "vexflow-native": ["./src/index"],
+      "vexflow-native": ["./src/base/index"],
       "vexflow-native/state": ["./src/state/index"],
       "vexflow-native/renderer": ["./src/renderer/index"],
       "vexflow-native/musicxml": ["./src/musicxml/index"]
