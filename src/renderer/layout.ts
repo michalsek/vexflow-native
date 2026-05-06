@@ -1,5 +1,15 @@
 import type { Score, Staff } from '../state';
 import {
+  getAvailableDocumentWidth,
+  getStaffStackHeight,
+  getSystemGap,
+} from './Layout/LayoutMetrics';
+import {
+  layoutDocumentEvenGroup,
+  layoutDocumentGroup,
+  resolveDocumentEvenMeasureWidth,
+} from './Layout/DocumentLayout';
+import {
   buildMeasurementGroups,
   buildResolvedMeasureStates,
   resolveGroupStaves,
@@ -7,17 +17,14 @@ import {
 } from './scoreParsing';
 import type { MeasuredScore } from './measure';
 import type {
-  RendererPoint,
   RendererRect,
   RendererSize,
   RendererType,
   ScoreOptions,
 } from './types';
 
-const STAVE_LINE_BLOCK_HEIGHT = 41;
-const STAVE_STEM_CLEARANCE = 11;
-const MIN_SYSTEM_GAP = 82;
-const SYSTEM_GAP_DIVISOR = 8;
+const VEXFLOW_STAVE_TOP_LINE_OFFSET = 40;
+const VEXFLOW_STAVE_BOTTOM_LINE_OFFSET = 80;
 
 export interface MeasuredGroupMeasure {
   groupId: string;
@@ -82,9 +89,7 @@ export function layoutScore(
 
   if (rendererType === 'infiniteScore') {
     for (const group of groups) {
-      groupResults.push(
-        layoutInfiniteScoreGroup(group, viewport, options, score)
-      );
+      groupResults.push(layoutInfiniteScoreGroup(group, viewport, options));
     }
   } else if (rendererType === 'documentEven') {
     const availableWidth = getAvailableDocumentWidth(viewport, options);
@@ -106,12 +111,14 @@ export function layoutScore(
       cursorY = result.nextY;
     }
   } else {
+    const availableWidth = getAvailableDocumentWidth(viewport, options);
     let cursorY = viewport.y + options.insets.top;
 
     for (const group of groups) {
       const result = layoutDocumentGroup(
         group,
         { x: viewport.x + options.insets.left, y: cursorY },
+        availableWidth,
         options
       );
 
@@ -132,30 +139,6 @@ export function layoutScore(
     measures: groupResults.flatMap((group) => group.measures),
     groups,
   };
-}
-
-function getAvailableDocumentWidth(
-  viewport: RendererRect,
-  options: ScoreOptions
-): number {
-  return Math.max(
-    0,
-    viewport.width - options.insets.left - options.insets.right
-  );
-}
-
-function getStaffStackHeight(staffCount: number, staffGap: number): number {
-  const singleStaffHeight = STAVE_LINE_BLOCK_HEIGHT + STAVE_STEM_CLEARANCE;
-
-  if (staffCount <= 1) {
-    return singleStaffHeight;
-  }
-
-  return singleStaffHeight + (staffCount - 1) * staffGap;
-}
-
-function getSystemGap(staffGap: number): number {
-  return Math.max(MIN_SYSTEM_GAP, staffGap / SYSTEM_GAP_DIVISOR);
 }
 
 function buildGroupLayoutContext(
@@ -183,171 +166,10 @@ function buildGroupLayoutContext(
   }));
 }
 
-function resolveDocumentEvenMeasureWidth(
-  measuredScore: MeasuredScore,
-  availableWidth: number
-): {
-  measuresPerFullLine: number;
-  equalMeasureWidth: number;
-} {
-  const widestMeasure = Math.max(measuredScore.maxIntrinsicNoteWidth, 1);
-
-  if (availableWidth <= 0) {
-    return {
-      measuresPerFullLine: 1,
-      equalMeasureWidth: widestMeasure,
-    };
-  }
-
-  const measuresPerFullLine = Math.max(
-    1,
-    Math.floor(availableWidth / widestMeasure)
-  );
-
-  return {
-    measuresPerFullLine,
-    equalMeasureWidth: availableWidth / measuresPerFullLine,
-  };
-}
-
-function layoutDocumentEvenGroup(
-  group: GroupLayoutContext,
-  origin: RendererPoint,
-  availableWidth: number,
-  equalMeasureWidth: number,
-  measuresPerFullLine: number,
-  options: ScoreOptions
-): GroupLayoutResult {
-  const systems: SystemLayoutPlan[] = [];
-  const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
-    group.staves.length,
-    options.spacing.staffGap
-  );
-
-  if (group.measures.length === 0) {
-    return {
-      groupId: group.groupId,
-      systems,
-      measures,
-      nextY: origin.y,
-    };
-  }
-
-  let cursorY = origin.y;
-  const systemGap = getSystemGap(options.spacing.staffGap);
-
-  for (
-    let systemIndex = 0, startIndex = 0;
-    startIndex < group.measures.length;
-    systemIndex++, startIndex += measuresPerFullLine
-  ) {
-    const chunk = group.measures.slice(
-      startIndex,
-      startIndex + measuresPerFullLine
-    );
-    let cursorX = origin.x;
-
-    systems.push({
-      groupId: group.groupId,
-      systemIndex,
-      x: origin.x,
-      y: cursorY,
-      width:
-        chunk.length === measuresPerFullLine
-          ? availableWidth
-          : chunk.length * equalMeasureWidth,
-      height: staffStackHeight,
-      staffCount: group.staves.length,
-      measureIndices: chunk.map((measure) => measure.measureIndex),
-    });
-
-    for (const measure of chunk) {
-      measures.push({
-        groupId: group.groupId,
-        measureIndex: measure.measureIndex,
-        x: cursorX,
-        y: cursorY,
-        width: equalMeasureWidth,
-        height: staffStackHeight,
-        systemIndex,
-      });
-
-      cursorX += equalMeasureWidth;
-    }
-
-    cursorY += staffStackHeight + systemGap;
-  }
-
-  return {
-    groupId: group.groupId,
-    systems,
-    measures,
-    nextY: cursorY,
-  };
-}
-
-function layoutDocumentGroup(
-  group: GroupLayoutContext,
-  origin: RendererPoint,
-  options: ScoreOptions
-): GroupLayoutResult {
-  const systems: SystemLayoutPlan[] = [];
-  const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
-    group.staves.length,
-    options.spacing.staffGap
-  );
-
-  if (group.measures.length === 0) {
-    return {
-      groupId: group.groupId,
-      systems,
-      measures,
-      nextY: origin.y,
-    };
-  }
-
-  let cursorX = origin.x;
-
-  for (const measure of group.measures) {
-    measures.push({
-      groupId: group.groupId,
-      measureIndex: measure.measureIndex,
-      x: cursorX,
-      y: origin.y,
-      width: measure.intrinsicWidth,
-      height: staffStackHeight,
-      systemIndex: 0,
-    });
-
-    cursorX += measure.intrinsicWidth;
-  }
-
-  systems.push({
-    groupId: group.groupId,
-    systemIndex: 0,
-    x: origin.x,
-    y: origin.y,
-    width: cursorX - origin.x,
-    height: staffStackHeight,
-    staffCount: group.staves.length,
-    measureIndices: group.measures.map((measure) => measure.measureIndex),
-  });
-
-  return {
-    groupId: group.groupId,
-    systems,
-    measures,
-    nextY: origin.y + staffStackHeight + getSystemGap(options.spacing.staffGap),
-  };
-}
-
 function layoutInfiniteScoreGroup(
   group: GroupLayoutContext,
   viewport: RendererRect,
-  options: ScoreOptions,
-  _score: Score
+  options: ScoreOptions
 ): GroupLayoutResult {
   const systems: SystemLayoutPlan[] = [];
   const measures: MeasureLayoutPlan[] = [];
@@ -359,10 +181,10 @@ function layoutInfiniteScoreGroup(
     ...group.measures.map((measure) => measure.intrinsicWidth),
     0
   );
-  const totalHeight = staffStackHeight + getSystemGap(options.spacing.staffGap);
+  const systemWidth = group.measures.length * maxIntrinsicWidth;
   const origin = {
-    x: viewport.x + options.insets.left,
-    y: (viewport.y + viewport.height - totalHeight) / 2,
+    x: getInfiniteScoreOriginX(systemWidth, viewport, options),
+    y: getInfiniteScoreOriginY(group.staves.length, viewport, options),
   };
 
   let cursorX = origin.x;
@@ -398,8 +220,42 @@ function layoutInfiniteScoreGroup(
     groupId: group.groupId,
     systems,
     measures,
-    nextY: origin.y + totalHeight,
+    nextY: origin.y + staffStackHeight + getSystemGap(options.spacing.staffGap),
   };
+}
+
+function getInfiniteScoreOriginX(
+  systemWidth: number,
+  viewport: RendererRect,
+  options: ScoreOptions
+): number {
+  const insetContentWidth =
+    systemWidth + options.insets.left + options.insets.right;
+
+  if (insetContentWidth <= viewport.width) {
+    return viewport.x + (viewport.width - systemWidth) / 2;
+  }
+
+  return viewport.x + options.insets.left;
+}
+
+function getInfiniteScoreOriginY(
+  staffCount: number,
+  viewport: RendererRect,
+  options: ScoreOptions
+): number {
+  const visibleStaffHeight =
+    staffCount <= 1
+      ? VEXFLOW_STAVE_BOTTOM_LINE_OFFSET - VEXFLOW_STAVE_TOP_LINE_OFFSET
+      : (staffCount - 1) * options.spacing.staffGap +
+        VEXFLOW_STAVE_BOTTOM_LINE_OFFSET -
+        VEXFLOW_STAVE_TOP_LINE_OFFSET;
+
+  return (
+    viewport.y +
+    (viewport.height - visibleStaffHeight) / 2 -
+    VEXFLOW_STAVE_TOP_LINE_OFFSET
+  );
 }
 
 function measureContentSize(

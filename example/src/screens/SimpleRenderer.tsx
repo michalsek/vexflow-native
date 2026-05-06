@@ -1,22 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import {
-  StyleSheet,
-  type LayoutChangeEvent,
-  type StyleProp,
-  type ViewStyle,
-  View,
-} from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import React, { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useFonts } from '@shopify/react-native-skia';
-import Animated, {
-  cancelAnimation,
-  type SharedValue,
-  useAnimatedReaction,
-  useAnimatedStyle,
-  useDerivedValue,
-  useSharedValue,
-  withDecay,
-} from 'react-native-reanimated';
 
 import { ScoreRenderer } from 'vexflow-native/renderer';
 import type {
@@ -38,15 +22,12 @@ import bravuraFont from '../../assets/fonts/Bravura.otf';
 import { Column, DropDown, Row, Screen } from '../components';
 
 type RendererMode = 'documentEven' | 'document' | 'infiniteScore';
-type RendererSize = { width: number; height: number };
-type ScrollbarAxis = 'horizontal' | 'vertical';
 
 const RENDERER_OPTIONS = [
   { label: 'Document Even', value: 'documentEven' as const },
   { label: 'Document Auto', value: 'document' as const },
   { label: 'Infinite Score', value: 'infiniteScore' as const },
 ];
-const EMPTY_SIZE: RendererSize = { width: 0, height: 0 };
 
 type ScoreFixtureContext = {
   lyricAttachments: LyricAttachment[];
@@ -66,94 +47,9 @@ const SimpleRenderer: React.FC = () => {
   const [rendererType, setRendererType] =
     useState<RendererMode>('documentEven');
   const [score] = useState<Score>(() => getInitialScore());
-
-  const scrollOffset = useSharedValue(0);
-  const viewportSizeValue = useSharedValue<RendererSize>(EMPTY_SIZE);
-  const contentSizeValue = useSharedValue<RendererSize>(EMPTY_SIZE);
-  const panStartOffset = useSharedValue(0);
   const fontManager = useFonts({
     Bravura: [bravuraFont],
   });
-
-  const maxScrollValue = useDerivedValue(() =>
-    rendererType === 'infiniteScore'
-      ? Math.max(
-          0,
-          contentSizeValue.value.width - viewportSizeValue.value.width
-        )
-      : Math.max(
-          0,
-          contentSizeValue.value.height - viewportSizeValue.value.height
-        )
-  );
-
-  useAnimatedReaction(
-    () => maxScrollValue.value,
-    (nextMaxScroll) => {
-      const nextOffset = clampOffset(scrollOffset.value, nextMaxScroll);
-
-      if (nextOffset !== scrollOffset.value) {
-        scrollOffset.value = nextOffset;
-      }
-    },
-    [maxScrollValue, scrollOffset]
-  );
-
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .onStart(() => {
-          cancelAnimation(scrollOffset);
-          panStartOffset.value = scrollOffset.value;
-        })
-        .onUpdate((event) => {
-          const nextMaxScroll = maxScrollValue.value;
-          const translation =
-            rendererType === 'infiniteScore'
-              ? event.translationX
-              : event.translationY;
-
-          scrollOffset.value = clampOffset(
-            panStartOffset.value - translation,
-            nextMaxScroll
-          );
-        })
-        .onEnd((event) => {
-          const nextMaxScroll = maxScrollValue.value;
-          const velocity =
-            rendererType === 'infiniteScore'
-              ? event.velocityX
-              : event.velocityY;
-
-          scrollOffset.value =
-            nextMaxScroll > 0
-              ? withDecay({
-                  clamp: [0, nextMaxScroll],
-                  velocity: -velocity,
-                })
-              : 0;
-        }),
-    [maxScrollValue, panStartOffset, rendererType, scrollOffset]
-  );
-
-  const handleViewportLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const nextSize = {
-        width: event.nativeEvent.layout.width,
-        height: event.nativeEvent.layout.height,
-      };
-
-      viewportSizeValue.value = nextSize;
-    },
-    [viewportSizeValue]
-  );
-
-  const handleContentSizeChange = useCallback(
-    (nextSize: RendererSize) => {
-      contentSizeValue.value = nextSize;
-    },
-    [contentSizeValue]
-  );
 
   if (!fontManager) {
     return null;
@@ -182,38 +78,12 @@ const SimpleRenderer: React.FC = () => {
         </Row>
 
         <View style={styles.viewportCard}>
-          <View style={styles.viewport} onLayout={handleViewportLayout}>
-            <GestureDetector gesture={panGesture}>
-              <View style={styles.viewportGestureSurface}>
-                <ScoreRenderer
-                  score={score}
-                  defaultFont="Bravura"
-                  fontManager={fontManager}
-                  rendererType={rendererType}
-                  scrollOffset={scrollOffset}
-                  onContentSizeChange={handleContentSizeChange}
-                />
-              </View>
-            </GestureDetector>
-
-            {rendererType === 'infiniteScore' ? (
-              <DebugScrollbar
-                axis="horizontal"
-                viewportSize={viewportSizeValue}
-                contentSize={contentSizeValue}
-                scrollOffset={scrollOffset}
-                style={styles.horizontalScrollbar}
-              />
-            ) : (
-              <DebugScrollbar
-                axis="vertical"
-                viewportSize={viewportSizeValue}
-                contentSize={contentSizeValue}
-                scrollOffset={scrollOffset}
-                style={styles.verticalScrollbar}
-              />
-            )}
-          </View>
+          <ScoreRenderer
+            score={score}
+            defaultFont="Bravura"
+            fontManager={fontManager}
+            rendererType={rendererType}
+          />
         </View>
       </Column>
     </Screen>
@@ -238,147 +108,11 @@ const styles = StyleSheet.create({
     flex: 1,
     maxWidth: 240,
   },
-  metrics: {
-    minWidth: 120,
-  },
-  metricText: {
-    fontSize: 12,
-  },
   viewportCard: {
     flex: 1,
     overflow: 'hidden',
   },
-  viewport: {
-    flex: 1,
-    minHeight: 320,
-    position: 'relative',
-  },
-  viewportGestureSurface: {
-    flex: 1,
-  },
-  horizontalScrollbar: {
-    left: 12,
-    right: 12,
-    bottom: 12,
-    height: 6,
-  },
-  verticalScrollbar: {
-    top: 4,
-    bottom: 20,
-    right: 2,
-    width: 6,
-  },
-  scrollbarTrack: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: 'rgba(15, 23, 42, 0.14)',
-  },
-  scrollbarThumb: {
-    position: 'absolute',
-    borderRadius: 999,
-    backgroundColor: 'rgba(15, 23, 42, 0.56)',
-  },
-  horizontalScrollbarThumb: {
-    top: 0,
-    bottom: 0,
-  },
-  verticalScrollbarThumb: {
-    left: 0,
-    right: 0,
-  },
 });
-
-type DebugScrollbarProps = {
-  axis: ScrollbarAxis;
-  viewportSize: SharedValue<RendererSize>;
-  contentSize: SharedValue<RendererSize>;
-  scrollOffset: SharedValue<number>;
-  style?: StyleProp<ViewStyle>;
-};
-
-const DebugScrollbar: React.FC<DebugScrollbarProps> = ({
-  axis,
-  viewportSize,
-  contentSize,
-  scrollOffset,
-  style,
-}) => {
-  const trackExtent = useSharedValue(0);
-  const thumbStyle = useAnimatedStyle(() => {
-    const viewportExtent =
-      axis === 'horizontal'
-        ? viewportSize.value.width
-        : viewportSize.value.height;
-    const contentExtent =
-      axis === 'horizontal'
-        ? contentSize.value.width
-        : contentSize.value.height;
-    const offset = scrollOffset.value;
-    const maxScroll = Math.max(0, contentExtent - viewportExtent);
-    const normalizedContentExtent = Math.max(contentExtent, viewportExtent);
-    const thumbExtent =
-      trackExtent.value > 0 && normalizedContentExtent > 0
-        ? Math.max(
-            28,
-            Math.min(
-              trackExtent.value,
-              (viewportExtent / normalizedContentExtent) * trackExtent.value
-            )
-          )
-        : 0;
-    const maxThumbOffset = Math.max(0, trackExtent.value - thumbExtent);
-    const thumbOffset =
-      maxScroll > 0 && maxThumbOffset > 0
-        ? (offset / maxScroll) * maxThumbOffset
-        : 0;
-
-    return axis === 'horizontal'
-      ? {
-          transform: [{ translateX: thumbOffset }],
-          width: thumbExtent,
-        }
-      : {
-          height: thumbExtent,
-          transform: [{ translateY: thumbOffset }],
-        };
-  }, [axis]);
-
-  const handleTrackLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      const nextTrackExtent =
-        axis === 'horizontal'
-          ? event.nativeEvent.layout.width
-          : event.nativeEvent.layout.height;
-
-      trackExtent.value = nextTrackExtent;
-    },
-    [axis, trackExtent]
-  );
-
-  return (
-    <View
-      onLayout={handleTrackLayout}
-      style={[styles.scrollbarTrack, style]}
-      pointerEvents="none"
-    >
-      <Animated.View
-        style={[
-          styles.scrollbarThumb,
-          axis === 'horizontal'
-            ? styles.horizontalScrollbarThumb
-            : styles.verticalScrollbarThumb,
-          thumbStyle,
-        ]}
-      />
-    </View>
-  );
-};
-
-function clampOffset(offset: number, maxOffset: number): number {
-  'worklet';
-
-  return Math.min(Math.max(offset, 0), maxOffset);
-}
 
 function getInitialScore(): Score {
   const fixtureContext: ScoreFixtureContext = {

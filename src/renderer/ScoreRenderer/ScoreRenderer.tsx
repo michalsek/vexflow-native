@@ -1,5 +1,5 @@
 import type React from 'react';
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo } from 'react';
 import {
   Canvas,
   Group,
@@ -10,24 +10,26 @@ import {
   useCanvasRef,
   useCanvasSize,
 } from '@shopify/react-native-skia';
-import { StyleSheet } from 'react-native';
-import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
+import { StyleSheet, View } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useDerivedValue } from 'react-native-reanimated';
 
-import type { VexflowRecordingCommand } from '../base';
+import type { VexflowRecordingCommand } from '../../base';
+import { renderVexflowRecordingCommands } from '../../base/VexflowRecordingReplay';
+import { insets, renderOptions, spacing } from '../constants';
 import type {
   RendererSize,
   RendererType,
   ScoreOptions,
   ScoreRendererProps,
   Viewport,
-} from './types';
-import { insets, spacing, renderOptions } from './constants';
-import { renderVexflowRecordingCommands } from '../base/VexflowRecordingReplay';
-import { useScoreRecording } from './useScoreRecording';
-import { createVisibleViewport } from './viewport';
+} from '../types';
+import { useScoreRecording } from '../useScoreRecording';
+import { createVisibleViewport } from '../viewport';
+import ScoreScrollbar from './ScoreScrollbar';
+import { getMaxScroll, useScoreScroll } from './useScoreScroll';
 
 const EMPTY_OPTIONS: Partial<ScoreOptions> = {};
-const EMPTY_SCROLL_OFFSET = 0;
 
 const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   score,
@@ -35,19 +37,14 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   defaultFont,
   fontManager,
   options: userOptions = EMPTY_OPTIONS,
-  scrollOffset,
-  onContentSizeChange,
+  scrollEnabled = true,
+  showScrollbars = true,
 }) => {
   const options = useMemo(() => withDefaultOptions(userOptions), [userOptions]);
   const effectiveRendererType = rendererType ?? 'document';
-  const defaultScrollOffset = useSharedValue(EMPTY_SCROLL_OFFSET);
-  const effectiveScrollOffset = scrollOffset ?? defaultScrollOffset;
 
   const canvasRef = useCanvasRef();
   const { size: canvasSize } = useCanvasSize(canvasRef);
-  const reportedContentSizeRef = useRef(
-    layoutPlanSizeKey({ width: 0, height: 0 })
-  );
   const viewport = useMemo(
     () => ({
       x: 0,
@@ -66,21 +63,14 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     viewport,
   });
   const contentSize = layoutPlan.contentSize;
-
-  useEffect(() => {
-    if (!onContentSizeChange) {
-      return;
-    }
-
-    const nextContentSizeKey = layoutPlanSizeKey(contentSize);
-
-    if (reportedContentSizeRef.current === nextContentSizeKey) {
-      return;
-    }
-
-    reportedContentSizeRef.current = nextContentSizeKey;
-    onContentSizeChange(contentSize);
-  }, [contentSize, onContentSizeChange]);
+  const scrollState = useScoreScroll({
+    contentSize,
+    rendererType: effectiveRendererType,
+    scrollEnabled,
+    viewportSize: canvasSize,
+  });
+  const hasScrollableOverflow =
+    getMaxScroll(effectiveRendererType, canvasSize, contentSize) > 0;
 
   const viewportClip = useMemo(
     () => Skia.XYWHRect(0, 0, canvasSize.width, canvasSize.height),
@@ -98,7 +88,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
 
   const pictureTransform = useDerivedValue(() => {
     return createPictureTransform(
-      effectiveScrollOffset.value,
+      scrollState.scrollOffset.value,
       effectiveRendererType,
       { width: canvasSize.width, height: canvasSize.height },
       contentSize
@@ -108,17 +98,38 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     canvasSize.width,
     contentSize,
     effectiveRendererType,
-    effectiveScrollOffset,
+    scrollState.scrollOffset,
   ]);
 
   return (
-    <Canvas style={styles.canvas} ref={canvasRef}>
-      <Group clip={viewportClip}>
-        <Group transform={pictureTransform}>
-          <Picture picture={picture} />
-        </Group>
-      </Group>
-    </Canvas>
+    <View style={styles.container}>
+      <GestureDetector gesture={scrollState.panGesture}>
+        <View style={styles.gestureSurface}>
+          <Canvas style={styles.canvas} ref={canvasRef}>
+            <Group clip={viewportClip}>
+              <Group transform={pictureTransform}>
+                <Picture picture={picture} />
+              </Group>
+            </Group>
+          </Canvas>
+        </View>
+      </GestureDetector>
+
+      {showScrollbars && hasScrollableOverflow ? (
+        <ScoreScrollbar
+          axis={scrollState.axis}
+          contentSize={scrollState.contentSize}
+          enabled={scrollEnabled}
+          scrollOffset={scrollState.scrollOffset}
+          style={
+            scrollState.axis === 'horizontal'
+              ? styles.horizontalScrollbar
+              : styles.verticalScrollbar
+          }
+          viewportSize={scrollState.viewportSize}
+        />
+      ) : null}
+    </View>
   );
 };
 
@@ -187,18 +198,27 @@ function withDefaultOptions(options: Partial<ScoreOptions>): ScoreOptions {
   };
 }
 
-function layoutPlanSizeKey({
-  width,
-  height,
-}: {
-  width: number;
-  height: number;
-}): string {
-  return `${width}:${height}`;
-}
-
 const styles = StyleSheet.create({
   canvas: {
     flex: 1,
+  },
+  container: {
+    flex: 1,
+    position: 'relative',
+  },
+  gestureSurface: {
+    flex: 1,
+  },
+  horizontalScrollbar: {
+    bottom: 12,
+    height: 6,
+    left: 12,
+    right: 12,
+  },
+  verticalScrollbar: {
+    bottom: 20,
+    right: 2,
+    top: 4,
+    width: 6,
   },
 });

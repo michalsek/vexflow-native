@@ -29,19 +29,45 @@ function loadScoreRendererModule() {
       PictureRecorder: mockPictureRecorder,
       XYWHRect: mockXYWHRect,
     },
+    useCanvasRef: jest.fn(() => ({ current: null })),
+    useCanvasSize: jest.fn(() => ({ size: { height: 0, width: 0 } })),
   }));
 
   jest.doMock('react-native', () => ({
     StyleSheet: {
       create: (styles: unknown) => styles,
     },
+    View: 'View',
+  }));
+
+  const mockPanGesture = {
+    enabled: jest.fn(() => mockPanGesture),
+    minDistance: jest.fn(() => mockPanGesture),
+    onEnd: jest.fn(() => mockPanGesture),
+    onStart: jest.fn(() => mockPanGesture),
+    onUpdate: jest.fn(() => mockPanGesture),
+  };
+
+  jest.doMock('react-native-gesture-handler', () => ({
+    Gesture: {
+      Pan: jest.fn(() => mockPanGesture),
+    },
+    GestureDetector: 'GestureDetector',
   }));
 
   jest.doMock('react-native-reanimated', () => ({
+    __esModule: true,
+    default: {
+      View: 'AnimatedView',
+    },
+    cancelAnimation: jest.fn(),
+    useAnimatedReaction: jest.fn(),
+    useAnimatedStyle: jest.fn((factory: () => unknown) => factory()),
     useDerivedValue: jest.fn((factory: () => unknown) => ({
       value: factory(),
     })),
     useSharedValue: jest.fn((value: unknown) => ({ value })),
+    withDecay: jest.fn((config: unknown) => config),
   }));
 
   jest.doMock('../../base/VexflowRecordingReplay', () => ({
@@ -52,8 +78,14 @@ function loadScoreRendererModule() {
     require('../ScoreRenderer') as typeof import('../ScoreRenderer');
 
   return {
+    clampOffset: module.clampOffset,
+    createClampedScrollOffset: module.createClampedScrollOffset,
     createPictureTransform: module.createPictureTransform,
     createScorePicture: module.createScorePicture,
+    getMaxScroll: module.getMaxScroll,
+    getScrollbarMetrics: module.getScrollbarMetrics,
+    getScrollOffsetFromThumbOffset: module.getScrollOffsetFromThumbOffset,
+    getThumbOffsetFromScrollOffset: module.getThumbOffsetFromScrollOffset,
     mockBeginRecording,
     mockCanvas,
     mockFinishRecordingAsPicture,
@@ -145,5 +177,77 @@ describe('ScoreRenderer picture cache helpers', () => {
       )
     ).toEqual([{ translateX: 0 }, { translateY: 0 }]);
     expect(module.mockRenderVexflowRecordingCommands).not.toHaveBeenCalled();
+  });
+});
+
+describe('ScoreRenderer scroll helpers', () => {
+  it('uses vertical max scroll for document renderers', () => {
+    const module = loadScoreRendererModule();
+
+    expect(
+      module.getMaxScroll(
+        'document',
+        { width: 200, height: 100 },
+        { width: 1200, height: 340 }
+      )
+    ).toBe(240);
+    expect(
+      module.getMaxScroll(
+        'documentEven',
+        { width: 200, height: 100 },
+        { width: 1200, height: 90 }
+      )
+    ).toBe(0);
+  });
+
+  it('uses horizontal max scroll for infinite score rendering', () => {
+    const module = loadScoreRendererModule();
+
+    expect(
+      module.getMaxScroll(
+        'infiniteScore',
+        { width: 200, height: 100 },
+        { width: 640, height: 1200 }
+      )
+    ).toBe(440);
+  });
+
+  it('clamps scroll offsets after content or viewport changes', () => {
+    const module = loadScoreRendererModule();
+
+    expect(
+      module.createClampedScrollOffset(
+        500,
+        'document',
+        { width: 200, height: 100 },
+        { width: 200, height: 260 }
+      )
+    ).toBe(160);
+    expect(
+      module.createClampedScrollOffset(
+        -20,
+        'infiniteScore',
+        { width: 200, height: 100 },
+        { width: 640, height: 100 }
+      )
+    ).toBe(0);
+  });
+
+  it('maps scrollbar thumb offsets to scroll offsets', () => {
+    const module = loadScoreRendererModule();
+    const metrics = module.getScrollbarMetrics(
+      'horizontal',
+      { width: 200, height: 100 },
+      { width: 800, height: 100 },
+      120
+    );
+
+    expect(metrics).toEqual({
+      maxScroll: 600,
+      maxThumbOffset: 90,
+      thumbExtent: 30,
+    });
+    expect(module.getThumbOffsetFromScrollOffset(300, metrics)).toBe(45);
+    expect(module.getScrollOffsetFromThumbOffset(45, metrics)).toBe(300);
   });
 });

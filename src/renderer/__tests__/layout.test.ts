@@ -88,6 +88,13 @@ function makePianoScore(noteCounts: number[]): Score {
   };
 }
 
+function getMeasuredWidths(measuredScore: ReturnType<typeof measureScore>) {
+  return measuredScore.measures
+    .filter((measure) => measure.groupId === 'piano')
+    .sort((left, right) => left.measureIndex - right.measureIndex)
+    .map((measure) => Math.max(measure.intrinsicNoteWidth, 1));
+}
+
 describe('layoutScore', () => {
   it('uses one global equal width in documentEven and fills each full system', () => {
     const score = makePianoScore([1, 2, 3, 4, 5]);
@@ -171,13 +178,17 @@ describe('layoutScore', () => {
     });
   });
 
-  it('keeps document mode as one horizontal run using intrinsic widths', () => {
+  it('wraps document mode by intrinsic width and stretches each line', () => {
     const score = makePianoScore([1, 2, 4]);
     const measuredScore = measureScore(score, TEST_OPTIONS);
+    const measuredWidths = getMeasuredWidths(measuredScore);
+    const availableWidth =
+      measuredWidths[0]! + measuredWidths[1]! + measuredWidths[2]! / 2;
     const viewport = {
       x: 0,
       y: 0,
-      width: 900,
+      width:
+        availableWidth + TEST_OPTIONS.insets.left + TEST_OPTIONS.insets.right,
       height: 420,
     };
 
@@ -188,19 +199,138 @@ describe('layoutScore', () => {
       'document',
       viewport
     );
-    const expectedWidths = measuredScore.measures
-      .filter((measure) => measure.groupId === 'piano')
-      .sort((left, right) => left.measureIndex - right.measureIndex)
-      .map((measure) => measure.intrinsicNoteWidth);
+    const firstLineRatio =
+      availableWidth / (measuredWidths[0]! + measuredWidths[1]!);
 
-    expect(plan.systems).toHaveLength(1);
-    plan.measures.forEach((measure, index) => {
-      expect(measure.width).toBeCloseTo(expectedWidths[index]!, 5);
+    expect(plan.systems).toHaveLength(2);
+    expect(plan.systems[0]?.measureIndices).toEqual([0, 1]);
+    expect(plan.systems[1]?.measureIndices).toEqual([2]);
+    plan.systems.forEach((system) => {
+      expect(system.width).toBeCloseTo(availableWidth, 5);
     });
-    expect(plan.systems[0]?.width).toBeCloseTo(
-      expectedWidths.reduce((sum, width) => sum + width, 0),
+
+    expect(plan.measures[0]?.width).toBeCloseTo(
+      measuredWidths[0]! * firstLineRatio,
       5
     );
+    expect(plan.measures[1]?.width).toBeCloseTo(
+      measuredWidths[1]! * firstLineRatio,
+      5
+    );
+    expect(plan.measures[2]?.width).toBeCloseTo(availableWidth, 5);
+    expect(
+      (plan.measures[0]?.x ?? 0) + (plan.measures[0]?.width ?? 0)
+    ).toBeCloseTo(plan.measures[1]?.x ?? 0, 5);
+    expect(plan.contentSize.width).toBeCloseTo(viewport.width, 5);
+
+    const bottom = Math.max(
+      ...plan.systems.map((system) => system.y + system.height)
+    );
+
+    expect(plan.contentSize.height).toBeCloseTo(
+      bottom + TEST_OPTIONS.insets.bottom,
+      5
+    );
+  });
+
+  it('keeps an over-wide document measure on one stretched line', () => {
+    const score = makePianoScore([8, 1]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+    const measuredWidths = getMeasuredWidths(measuredScore);
+    const availableWidth = measuredWidths[0]! * 0.75;
+    const viewport = {
+      x: 0,
+      y: 0,
+      width:
+        availableWidth + TEST_OPTIONS.insets.left + TEST_OPTIONS.insets.right,
+      height: 420,
+    };
+
+    const plan = layoutScore(
+      score,
+      measuredScore,
+      TEST_OPTIONS,
+      'document',
+      viewport
+    );
+
+    expect(plan.systems).toHaveLength(2);
+    expect(plan.systems[0]?.measureIndices).toEqual([0]);
+    expect(plan.systems[0]?.width).toBeCloseTo(availableWidth, 5);
+    expect(plan.measures[0]?.width).toBeCloseTo(availableWidth, 5);
+  });
+
+  it('centers a short infinite score horizontally and vertically in the viewport', () => {
+    const score = makePianoScore([1]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+    const viewport = {
+      x: 10,
+      y: 20,
+      width:
+        measuredScore.maxIntrinsicNoteWidth +
+        TEST_OPTIONS.insets.left +
+        TEST_OPTIONS.insets.right +
+        120,
+      height: 500,
+    };
+
+    const plan = layoutScore(
+      score,
+      measuredScore,
+      TEST_OPTIONS,
+      'infiniteScore',
+      viewport
+    );
+    const system = plan.systems[0];
+
+    if (!system) {
+      throw new Error('Expected infinite score system');
+    }
+
+    expect(system.x).toBeCloseTo(
+      viewport.x + (viewport.width - system.width) / 2,
+      5
+    );
+    const visibleStaffTop = system.y + 40;
+    const visibleStaffBottom = system.y + TEST_OPTIONS.spacing.staffGap + 80;
+
+    expect((visibleStaffTop + visibleStaffBottom) / 2).toBeCloseTo(
+      viewport.y + viewport.height / 2,
+      5
+    );
+    expect(plan.measures[0]?.x).toBeCloseTo(system.x, 5);
+    expect(plan.contentSize.width).toBeCloseTo(viewport.width, 5);
+    expect(plan.contentSize.height).toBeCloseTo(viewport.height, 5);
+  });
+
+  it('keeps a wide infinite score aligned to the start inset for scrolling', () => {
+    const score = makePianoScore([1, 2, 3, 4]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+    const systemWidth = measuredScore.maxIntrinsicNoteWidth * 4;
+    const viewport = {
+      x: 10,
+      y: 20,
+      width:
+        systemWidth + TEST_OPTIONS.insets.left + TEST_OPTIONS.insets.right - 12,
+      height: 500,
+    };
+
+    const plan = layoutScore(
+      score,
+      measuredScore,
+      TEST_OPTIONS,
+      'infiniteScore',
+      viewport
+    );
+    const system = plan.systems[0];
+
+    if (!system) {
+      throw new Error('Expected infinite score system');
+    }
+
+    expect(system.x).toBeCloseTo(viewport.x + TEST_OPTIONS.insets.left, 5);
+    expect(system.width).toBeCloseTo(systemWidth, 5);
+    expect(plan.contentSize.width).toBeGreaterThan(viewport.width);
   });
 });
 
