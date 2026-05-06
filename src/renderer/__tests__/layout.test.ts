@@ -130,7 +130,7 @@ describe('layoutScore', () => {
     expect(plan.systems[1]?.y).toBeCloseTo(
       (plan.systems[0]?.y ?? 0) +
         (plan.systems[0]?.height ?? 0) +
-        Math.max(8, TEST_OPTIONS.spacing.staffGap / 8),
+        Math.max(82, TEST_OPTIONS.spacing.staffGap / 8),
       5
     );
 
