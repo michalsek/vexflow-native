@@ -1,25 +1,33 @@
 import type React from 'react';
-import { useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import {
   Canvas,
+  Group,
   Picture,
   Skia,
+  type SkTypefaceFontProvider,
+  type Transforms3d,
   useCanvasRef,
   useCanvasSize,
 } from '@shopify/react-native-skia';
 import { StyleSheet } from 'react-native';
+import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
-import type { ScoreOptions, ScoreRendererProps } from './types';
+import type { VexflowRecordingCommand } from '../base';
+import type {
+  RendererSize,
+  RendererType,
+  ScoreOptions,
+  ScoreRendererProps,
+  Viewport,
+} from './types';
 import { insets, spacing, renderOptions } from './constants';
-import SkiaVexflowContext from '../base/SkiaVexflowContext';
-import { layoutScore } from './layout';
+import { renderVexflowRecordingCommands } from '../base/VexflowRecordingReplay';
+import { useScoreRecording } from './useScoreRecording';
 import { createVisibleViewport } from './viewport';
 
 const EMPTY_OPTIONS: Partial<ScoreOptions> = {};
-const EMPTY_SCROLL_OFFSET = { x: 0, y: 0 };
-
-import { measureScore } from './measure';
-import { renderScore } from './render';
+const EMPTY_SCROLL_OFFSET = 0;
 
 const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   score,
@@ -27,111 +35,149 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   defaultFont,
   fontManager,
   options: userOptions = EMPTY_OPTIONS,
-  scrollOffset = EMPTY_SCROLL_OFFSET,
+  scrollOffset,
   onContentSizeChange,
 }) => {
-  const options = withDefaultOptions(userOptions);
+  const options = useMemo(() => withDefaultOptions(userOptions), [userOptions]);
   const effectiveRendererType = rendererType ?? 'document';
+  const defaultScrollOffset = useSharedValue(EMPTY_SCROLL_OFFSET);
+  const effectiveScrollOffset = scrollOffset ?? defaultScrollOffset;
 
   const canvasRef = useCanvasRef();
   const { size: canvasSize } = useCanvasSize(canvasRef);
   const reportedContentSizeRef = useRef(
     layoutPlanSizeKey({ width: 0, height: 0 })
   );
-
-  /**
-   * Creates a disposable picture which is used to measure the score layout without rendering it.
-   * The layout plan is stored in a useMemo to avoid re-measuring on every render,
-   * and is only re-computed when the score, renderer type, options, canvas size, default font,
-   * or font manager change.
-   */
-  const measuredScore = useMemo(
-    () => measureScore(score, options),
-    [score, options]
+  const viewport = useMemo(
+    () => ({
+      x: 0,
+      y: 0,
+      width: canvasSize.width,
+      height: canvasSize.height,
+    }),
+    [canvasSize.height, canvasSize.width]
   );
-
-  const layoutPlan = useMemo(
-    () =>
-      layoutScore(score, measuredScore, options, effectiveRendererType, {
-        x: 0,
-        y: 0,
-        width: canvasSize.width,
-        height: canvasSize.height,
-      }),
-    [
-      canvasSize.height,
-      canvasSize.width,
-      effectiveRendererType,
-      measuredScore,
-      options,
-      score,
-    ]
-  );
-
-  const visibleViewport = useMemo(
-    () =>
-      createVisibleViewport(
-        scrollOffset,
-        { width: canvasSize.width, height: canvasSize.height },
-        layoutPlan.contentSize
-      ),
-    [canvasSize.height, canvasSize.width, layoutPlan.contentSize, scrollOffset]
-  );
+  const { commands: recordedCommands, layoutPlan } = useScoreRecording({
+    defaultFont,
+    fontManager,
+    options,
+    rendererType: effectiveRendererType,
+    score,
+    viewport,
+  });
+  const contentSize = layoutPlan.contentSize;
 
   useEffect(() => {
     if (!onContentSizeChange) {
       return;
     }
 
-    const nextContentSizeKey = layoutPlanSizeKey(layoutPlan.contentSize);
+    const nextContentSizeKey = layoutPlanSizeKey(contentSize);
 
     if (reportedContentSizeRef.current === nextContentSizeKey) {
       return;
     }
 
     reportedContentSizeRef.current = nextContentSizeKey;
-    onContentSizeChange(layoutPlan.contentSize);
-  }, [layoutPlan.contentSize, onContentSizeChange]);
+    onContentSizeChange(contentSize);
+  }, [contentSize, onContentSizeChange]);
 
-  /**
-   * Creates a picture from the full layout plan while limiting drawing to the
-   * currently visible viewport. Full measurement and layout stay intact so
-   * wrapping, repeated modifiers, and content size remain stable while scrolling.
-   */
+  const viewportClip = useMemo(
+    () => Skia.XYWHRect(0, 0, canvasSize.width, canvasSize.height),
+    [canvasSize.height, canvasSize.width]
+  );
+
   const picture = useMemo(() => {
-    const recorder = Skia.PictureRecorder();
-    const canvas = recorder.beginRecording(
-      Skia.XYWHRect(0, 0, canvasSize.width, canvasSize.height)
+    return createScorePicture({
+      contentSize,
+      defaultFont,
+      fontManager,
+      recordedCommands,
+    });
+  }, [contentSize, defaultFont, fontManager, recordedCommands]);
+
+  const pictureTransform = useDerivedValue(() => {
+    return createPictureTransform(
+      effectiveScrollOffset.value,
+      effectiveRendererType,
+      { width: canvasSize.width, height: canvasSize.height },
+      contentSize
     );
-
-    const ctx = new SkiaVexflowContext(canvas, fontManager, defaultFont);
-
-    ctx.save();
-    ctx.clipRect(0, 0, canvasSize.width, canvasSize.height);
-    ctx.translate(-visibleViewport.x, -visibleViewport.y);
-    renderScore(ctx, score, layoutPlan, options);
-    ctx.restore();
-    return recorder.finishRecordingAsPicture();
   }, [
     canvasSize.height,
     canvasSize.width,
-    fontManager,
-    defaultFont,
-    layoutPlan,
-    options,
-    score,
-    visibleViewport.x,
-    visibleViewport.y,
+    contentSize,
+    effectiveRendererType,
+    effectiveScrollOffset,
   ]);
 
   return (
     <Canvas style={styles.canvas} ref={canvasRef}>
-      <Picture picture={picture} />
+      <Group clip={viewportClip}>
+        <Group transform={pictureTransform}>
+          <Picture picture={picture} />
+        </Group>
+      </Group>
     </Canvas>
   );
 };
 
-export default ScoreRenderer;
+export default memo(ScoreRenderer);
+
+export function createScorePicture({
+  contentSize,
+  defaultFont,
+  fontManager,
+  recordedCommands,
+}: {
+  contentSize: RendererSize;
+  defaultFont: string;
+  fontManager: SkTypefaceFontProvider;
+  recordedCommands: readonly VexflowRecordingCommand[];
+}) {
+  try {
+    const recorder = Skia.PictureRecorder();
+    const canvas = recorder.beginRecording(
+      Skia.XYWHRect(0, 0, contentSize.width, contentSize.height)
+    );
+
+    renderVexflowRecordingCommands(
+      canvas,
+      recordedCommands,
+      fontManager,
+      defaultFont
+    );
+    return recorder.finishRecordingAsPicture();
+  } catch (error) {
+    console.error('ScoreRenderer picture render failed', error);
+    throw error;
+  }
+}
+
+export function createPictureTransform(
+  scrollOffset: number,
+  rendererType: RendererType,
+  viewport: Viewport,
+  contentSize: RendererSize
+): Transforms3d {
+  'worklet';
+
+  const visibleViewport = createVisibleViewport(
+    scrollOffset,
+    rendererType,
+    viewport,
+    contentSize
+  );
+
+  return [
+    {
+      translateX: visibleViewport.x === 0 ? 0 : -visibleViewport.x,
+    },
+    {
+      translateY: visibleViewport.y === 0 ? 0 : -visibleViewport.y,
+    },
+  ];
+}
 
 function withDefaultOptions(options: Partial<ScoreOptions>): ScoreOptions {
   return {

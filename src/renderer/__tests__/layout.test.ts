@@ -205,10 +205,43 @@ describe('layoutScore', () => {
 });
 
 describe('createVisibleViewport', () => {
-  it('clamps scroll offsets to the available content size', () => {
+  it('uses vertical scroll offsets for document mode', () => {
     expect(
       createVisibleViewport(
-        { x: 600, y: -20 },
+        600,
+        'document',
+        { width: 300, height: 200 },
+        { width: 800, height: 450 }
+      )
+    ).toEqual({
+      x: 0,
+      y: 250,
+      width: 300,
+      height: 200,
+    });
+  });
+
+  it('uses vertical scroll offsets for documentEven mode', () => {
+    expect(
+      createVisibleViewport(
+        -20,
+        'documentEven',
+        { width: 300, height: 200 },
+        { width: 800, height: 450 }
+      )
+    ).toEqual({
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 200,
+    });
+  });
+
+  it('uses horizontal scroll offsets for infiniteScore mode', () => {
+    expect(
+      createVisibleViewport(
+        600,
+        'infiniteScore',
         { width: 300, height: 200 },
         { width: 800, height: 450 }
       )

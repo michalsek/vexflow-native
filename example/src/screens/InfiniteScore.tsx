@@ -8,7 +8,7 @@
 //   useWindowDimensions,
 // } from 'react-native';
 // import {
-//   SkiaVexflowContext,
+//   VexflowRecordingContext,
 //   VEXFLOW_SCORE_COLORS,
 //   VexflowCanvas,
 //   type VexflowCanvasDrawArgs,
@@ -52,7 +52,7 @@ export default InfiniteScore;
 //     [isDark]
 //   );
 //   const previewFont = useFont(bravuraFont, 30);
-//   const engine = useMemo(() => new RendererCore<SkiaVexflowContext>(), []);
+//   const engine = useMemo(() => new RendererCore<VexflowRecordingContext>(), []);
 
 //   const viewportWidth = Math.max(320, Math.floor(width) - 32);
 //   const config = useMemo(
@@ -82,7 +82,7 @@ export default InfiniteScore;
 //     const canvas = recorder.beginRecording(
 //       Skia.XYWHRect(0, 0, plan.contentSize.width, plan.contentSize.height)
 //     );
-//     const context = new SkiaVexflowContext(canvas, previewFont, {
+//     const context = new VexflowRecordingContext(previewFont, {
 //       defaultFillStyle: scoreColors.fill,
 //       defaultStrokeStyle: scoreColors.stroke,
 //     });

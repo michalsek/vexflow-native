@@ -1,17 +1,22 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  PanResponder,
   StyleSheet,
   type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useFonts } from '@shopify/react-native-skia';
+import Animated, {
+  cancelAnimation,
+  type SharedValue,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  withDecay,
+} from 'react-native-reanimated';
 
 import { ScoreRenderer } from 'vexflow-native/renderer';
 import type {
@@ -30,10 +35,9 @@ import type {
 } from 'vexflow-native/state';
 
 import bravuraFont from '../../assets/fonts/Bravura.otf';
-import { Column, DropDown, Row, Screen, Text } from '../components';
+import { Column, DropDown, Row, Screen } from '../components';
 
-type RendererMode = 'documentEven' | 'infiniteScore';
-type ScrollOffset = { x: number; y: number };
+type RendererMode = 'documentEven' | 'document' | 'infiniteScore';
 type RendererSize = { width: number; height: number };
 type ScrollbarAxis = 'horizontal' | 'vertical';
 
@@ -43,7 +47,6 @@ const RENDERER_OPTIONS = [
   { label: 'Infinite Score', value: 'infiniteScore' as const },
 ];
 const EMPTY_SIZE: RendererSize = { width: 0, height: 0 };
-const EMPTY_OFFSET: ScrollOffset = { x: 0, y: 0 };
 
 type ScoreFixtureContext = {
   lyricAttachments: LyricAttachment[];
@@ -62,91 +65,94 @@ let activeFixtureContext: ScoreFixtureContext | null = null;
 const SimpleRenderer: React.FC = () => {
   const [rendererType, setRendererType] =
     useState<RendererMode>('documentEven');
-  const [scrollOffset, setScrollOffset] = useState<ScrollOffset>(EMPTY_OFFSET);
-  const [viewportSize, setViewportSize] = useState<RendererSize>(EMPTY_SIZE);
-  const [contentSize, setContentSize] = useState<RendererSize>(EMPTY_SIZE);
   const [score] = useState<Score>(() => getInitialScore());
+
+  const scrollOffset = useSharedValue(0);
+  const viewportSizeValue = useSharedValue<RendererSize>(EMPTY_SIZE);
+  const contentSizeValue = useSharedValue<RendererSize>(EMPTY_SIZE);
+  const panStartOffset = useSharedValue(0);
   const fontManager = useFonts({
     Bravura: [bravuraFont],
   });
 
-  const maxScroll = useMemo(
-    () => ({
-      x: Math.max(0, contentSize.width - viewportSize.width),
-      y: Math.max(0, contentSize.height - viewportSize.height),
-    }),
-    [contentSize, viewportSize]
+  const maxScrollValue = useDerivedValue(() =>
+    rendererType === 'infiniteScore'
+      ? Math.max(
+          0,
+          contentSizeValue.value.width - viewportSizeValue.value.width
+        )
+      : Math.max(
+          0,
+          contentSizeValue.value.height - viewportSizeValue.value.height
+        )
   );
-  const maxScrollX = maxScroll.x;
-  const maxScrollY = maxScroll.y;
 
-  useEffect(() => {
-    setScrollOffset((previousOffset) => {
-      const nextOffset = {
-        x: clampOffset(previousOffset.x, maxScrollX),
-        y: clampOffset(previousOffset.y, maxScrollY),
+  useAnimatedReaction(
+    () => maxScrollValue.value,
+    (nextMaxScroll) => {
+      const nextOffset = clampOffset(scrollOffset.value, nextMaxScroll);
+
+      if (nextOffset !== scrollOffset.value) {
+        scrollOffset.value = nextOffset;
+      }
+    },
+    [maxScrollValue, scrollOffset]
+  );
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onStart(() => {
+          cancelAnimation(scrollOffset);
+          panStartOffset.value = scrollOffset.value;
+        })
+        .onUpdate((event) => {
+          const nextMaxScroll = maxScrollValue.value;
+          const translation =
+            rendererType === 'infiniteScore'
+              ? event.translationX
+              : event.translationY;
+
+          scrollOffset.value = clampOffset(
+            panStartOffset.value - translation,
+            nextMaxScroll
+          );
+        })
+        .onEnd((event) => {
+          const nextMaxScroll = maxScrollValue.value;
+          const velocity =
+            rendererType === 'infiniteScore'
+              ? event.velocityX
+              : event.velocityY;
+
+          scrollOffset.value =
+            nextMaxScroll > 0
+              ? withDecay({
+                  clamp: [0, nextMaxScroll],
+                  velocity: -velocity,
+                })
+              : 0;
+        }),
+    [maxScrollValue, panStartOffset, rendererType, scrollOffset]
+  );
+
+  const handleViewportLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextSize = {
+        width: event.nativeEvent.layout.width,
+        height: event.nativeEvent.layout.height,
       };
 
-      return nextOffset.x === previousOffset.x &&
-        nextOffset.y === previousOffset.y
-        ? previousOffset
-        : nextOffset;
-    });
-  }, [maxScrollX, maxScrollY, rendererType]);
-
-  const handleViewportLayout = useCallback((event: LayoutChangeEvent) => {
-    const nextSize = {
-      width: event.nativeEvent.layout.width,
-      height: event.nativeEvent.layout.height,
-    };
-
-    setViewportSize((previousSize) =>
-      previousSize.width === nextSize.width &&
-      previousSize.height === nextSize.height
-        ? previousSize
-        : nextSize
-    );
-  }, []);
-
-  const handleContentSizeChange = useCallback((nextSize: RendererSize) => {
-    setContentSize((previousSize) =>
-      previousSize.width === nextSize.width &&
-      previousSize.height === nextSize.height
-        ? previousSize
-        : nextSize
-    );
-  }, []);
-
-  const setHorizontalOffset = useCallback(
-    (nextOffset: number) => {
-      setScrollOffset((previousOffset) => {
-        const clampedOffset = clampOffset(nextOffset, maxScrollX);
-
-        return clampedOffset === previousOffset.x
-          ? previousOffset
-          : {
-              ...previousOffset,
-              x: clampedOffset,
-            };
-      });
+      viewportSizeValue.value = nextSize;
     },
-    [maxScrollX]
+    [viewportSizeValue]
   );
 
-  const setVerticalOffset = useCallback(
-    (nextOffset: number) => {
-      setScrollOffset((previousOffset) => {
-        const clampedOffset = clampOffset(nextOffset, maxScrollY);
-
-        return clampedOffset === previousOffset.y
-          ? previousOffset
-          : {
-              ...previousOffset,
-              y: clampedOffset,
-            };
-      });
+  const handleContentSizeChange = useCallback(
+    (nextSize: RendererSize) => {
+      contentSizeValue.value = nextSize;
     },
-    [maxScrollY]
+    [contentSizeValue]
   );
 
   if (!fontManager) {
@@ -173,53 +179,40 @@ const SimpleRenderer: React.FC = () => {
               onChange={(value) => setRendererType(value as RendererMode)}
             />
           </View>
-          <Column align="flex-end" gap={2} style={styles.metrics}>
-            <Text variant="muted" style={styles.metricText}>
-              Viewport {Math.round(viewportSize.width)} x{' '}
-              {Math.round(viewportSize.height)}
-            </Text>
-            <Text variant="muted" style={styles.metricText}>
-              Content {Math.round(contentSize.width)} x{' '}
-              {Math.round(contentSize.height)}
-            </Text>
-            <Text variant="muted" style={styles.metricText}>
-              Offset {Math.round(scrollOffset.x)} x {Math.round(scrollOffset.y)}
-            </Text>
-          </Column>
         </Row>
 
         <View style={styles.viewportCard}>
           <View style={styles.viewport} onLayout={handleViewportLayout}>
-            <ScoreRenderer
-              score={score}
-              defaultFont="Bravura"
-              fontManager={fontManager}
-              rendererType={rendererType}
-              scrollOffset={scrollOffset}
-              onContentSizeChange={handleContentSizeChange}
-            />
+            <GestureDetector gesture={panGesture}>
+              <View style={styles.viewportGestureSurface}>
+                <ScoreRenderer
+                  score={score}
+                  defaultFont="Bravura"
+                  fontManager={fontManager}
+                  rendererType={rendererType}
+                  scrollOffset={scrollOffset}
+                  onContentSizeChange={handleContentSizeChange}
+                />
+              </View>
+            </GestureDetector>
 
-            {maxScrollX > 0 ? (
+            {rendererType === 'infiniteScore' ? (
               <DebugScrollbar
                 axis="horizontal"
-                viewportExtent={viewportSize.width}
-                contentExtent={contentSize.width}
-                offset={scrollOffset.x}
-                onChange={setHorizontalOffset}
+                viewportSize={viewportSizeValue}
+                contentSize={contentSizeValue}
+                scrollOffset={scrollOffset}
                 style={styles.horizontalScrollbar}
               />
-            ) : null}
-
-            {maxScrollY > 0 ? (
+            ) : (
               <DebugScrollbar
                 axis="vertical"
-                viewportExtent={viewportSize.height}
-                contentExtent={contentSize.height}
-                offset={scrollOffset.y}
-                onChange={setVerticalOffset}
+                viewportSize={viewportSizeValue}
+                contentSize={contentSizeValue}
+                scrollOffset={scrollOffset}
                 style={styles.verticalScrollbar}
               />
-            ) : null}
+            )}
           </View>
         </View>
       </Column>
@@ -260,6 +253,9 @@ const styles = StyleSheet.create({
     minHeight: 320,
     position: 'relative',
   },
+  viewportGestureSurface: {
+    flex: 1,
+  },
   horizontalScrollbar: {
     left: 12,
     right: 12,
@@ -294,78 +290,58 @@ const styles = StyleSheet.create({
 
 type DebugScrollbarProps = {
   axis: ScrollbarAxis;
-  viewportExtent: number;
-  contentExtent: number;
-  offset: number;
-  onChange: (offset: number) => void;
-  style?: object;
+  viewportSize: SharedValue<RendererSize>;
+  contentSize: SharedValue<RendererSize>;
+  scrollOffset: SharedValue<number>;
+  style?: StyleProp<ViewStyle>;
 };
 
 const DebugScrollbar: React.FC<DebugScrollbarProps> = ({
   axis,
-  viewportExtent,
-  contentExtent,
-  offset,
-  onChange,
+  viewportSize,
+  contentSize,
+  scrollOffset,
   style,
 }) => {
-  const [trackExtent, setTrackExtent] = useState(0);
-  const dragStartThumbOffset = useRef(0);
-  const thumbOffsetRef = useRef(0);
-  const maxThumbOffsetRef = useRef(0);
-  const maxScrollRef = useRef(0);
-  const onChangeRef = useRef(onChange);
-  const maxScroll = Math.max(0, contentExtent - viewportExtent);
-  const thumbExtent =
-    trackExtent > 0
-      ? Math.max(
-          28,
-          Math.min(
-            trackExtent,
-            (viewportExtent / Math.max(contentExtent, viewportExtent)) *
-              trackExtent
+  const trackExtent = useSharedValue(0);
+  const thumbStyle = useAnimatedStyle(() => {
+    const viewportExtent =
+      axis === 'horizontal'
+        ? viewportSize.value.width
+        : viewportSize.value.height;
+    const contentExtent =
+      axis === 'horizontal'
+        ? contentSize.value.width
+        : contentSize.value.height;
+    const offset = scrollOffset.value;
+    const maxScroll = Math.max(0, contentExtent - viewportExtent);
+    const normalizedContentExtent = Math.max(contentExtent, viewportExtent);
+    const thumbExtent =
+      trackExtent.value > 0 && normalizedContentExtent > 0
+        ? Math.max(
+            28,
+            Math.min(
+              trackExtent.value,
+              (viewportExtent / normalizedContentExtent) * trackExtent.value
+            )
           )
-        )
-      : 0;
-  const maxThumbOffset = Math.max(0, trackExtent - thumbExtent);
-  const thumbOffset =
-    maxScroll > 0 && maxThumbOffset > 0
-      ? (offset / maxScroll) * maxThumbOffset
-      : 0;
+        : 0;
+    const maxThumbOffset = Math.max(0, trackExtent.value - thumbExtent);
+    const thumbOffset =
+      maxScroll > 0 && maxThumbOffset > 0
+        ? (offset / maxScroll) * maxThumbOffset
+        : 0;
 
-  useEffect(() => {
-    thumbOffsetRef.current = thumbOffset;
-    maxThumbOffsetRef.current = maxThumbOffset;
-    maxScrollRef.current = maxScroll;
-    onChangeRef.current = onChange;
-  }, [maxScroll, maxThumbOffset, onChange, thumbOffset]);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: () => {
-          dragStartThumbOffset.current = thumbOffsetRef.current;
-        },
-        onPanResponderMove: (_event, gestureState) => {
-          const delta =
-            axis === 'horizontal' ? gestureState.dx : gestureState.dy;
-          const nextThumbOffset = clampOffset(
-            dragStartThumbOffset.current + delta,
-            maxThumbOffsetRef.current
-          );
-          const nextOffset =
-            maxThumbOffsetRef.current > 0
-              ? (nextThumbOffset / maxThumbOffsetRef.current) *
-                maxScrollRef.current
-              : 0;
-
-          onChangeRef.current(nextOffset);
-        },
-      }),
-    [axis]
-  );
+    return axis === 'horizontal'
+      ? {
+          transform: [{ translateX: thumbOffset }],
+          width: thumbExtent,
+        }
+      : {
+          height: thumbExtent,
+          transform: [{ translateY: thumbOffset }],
+        };
+  }, [axis]);
 
   const handleTrackLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -374,36 +350,24 @@ const DebugScrollbar: React.FC<DebugScrollbarProps> = ({
           ? event.nativeEvent.layout.width
           : event.nativeEvent.layout.height;
 
-      setTrackExtent((previousTrackExtent) =>
-        previousTrackExtent === nextTrackExtent
-          ? previousTrackExtent
-          : nextTrackExtent
-      );
+      trackExtent.value = nextTrackExtent;
     },
-    [axis]
+    [axis, trackExtent]
   );
 
   return (
     <View
       onLayout={handleTrackLayout}
       style={[styles.scrollbarTrack, style]}
-      pointerEvents="box-none"
+      pointerEvents="none"
     >
-      <View
-        {...panResponder.panHandlers}
+      <Animated.View
         style={[
           styles.scrollbarThumb,
           axis === 'horizontal'
-            ? {
-                ...styles.horizontalScrollbarThumb,
-                left: thumbOffset,
-                width: thumbExtent,
-              }
-            : {
-                ...styles.verticalScrollbarThumb,
-                top: thumbOffset,
-                height: thumbExtent,
-              },
+            ? styles.horizontalScrollbarThumb
+            : styles.verticalScrollbarThumb,
+          thumbStyle,
         ]}
       />
     </View>
@@ -411,6 +375,8 @@ const DebugScrollbar: React.FC<DebugScrollbarProps> = ({
 };
 
 function clampOffset(offset: number, maxOffset: number): number {
+  'worklet';
+
   return Math.min(Math.max(offset, 0), maxOffset);
 }
 

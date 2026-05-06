@@ -1,6 +1,6 @@
 import { Formatter, Stave, Voice as VFVoice } from 'vexflow';
 
-import type { SkiaVexflowContext } from '../base';
+import type { VexflowRecordingContext } from '../base';
 import type { Score } from '../state';
 import type {
   GroupLayoutContext,
@@ -14,7 +14,7 @@ import type { ScoreOptions } from './types';
  * Renders the score from a precomputed layout plan.
  */
 export function renderScore(
-  ctx: SkiaVexflowContext,
+  ctx: VexflowRecordingContext,
   score: Score,
   layoutPlan: ScoreLayoutPlan,
   options: ScoreOptions
@@ -46,16 +46,16 @@ export function renderScore(
 
 type StaffRenderArtifacts = {
   beams: Array<{
-    setContext: (ctx: SkiaVexflowContext) => { draw: () => void };
+    setContext: (ctx: VexflowRecordingContext) => { draw: () => void };
   }>;
   tuplets: Array<{
-    setContext: (ctx: SkiaVexflowContext) => { draw: () => void };
+    setContext: (ctx: VexflowRecordingContext) => { draw: () => void };
   }>;
   vfVoices: VFVoice[];
 };
 
 function renderMeasure(
-  ctx: SkiaVexflowContext,
+  ctx: VexflowRecordingContext,
   score: Score,
   group: GroupLayoutContext,
   measurePlan: MeasureLayoutPlan,

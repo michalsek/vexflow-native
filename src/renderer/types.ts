@@ -1,4 +1,5 @@
 import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
+import type { SharedValue } from 'react-native-reanimated';
 
 import type { Score } from '../state';
 
@@ -10,7 +11,7 @@ export interface ScoreRendererProps {
   fontManager: SkTypefaceFontProvider;
   rendererType?: RendererType;
   options?: Partial<ScoreOptions>;
-  scrollOffset?: RendererPoint;
+  scrollOffset?: SharedValue<number>;
   onContentSizeChange?: (size: RendererSize) => void;
 }
 

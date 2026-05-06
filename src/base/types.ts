@@ -1,8 +1,8 @@
 import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
-import type SkiaVexflowContext from './SkiaVexflowContext';
+import type VexflowRecordingContext from './VexflowRecordingContext';
 
 export interface OnDrawParams {
-  ctx: SkiaVexflowContext;
+  ctx: VexflowRecordingContext;
   width: number;
   height: number;
 }
