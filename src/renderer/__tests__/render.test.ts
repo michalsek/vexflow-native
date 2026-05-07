@@ -189,7 +189,6 @@ describe('renderScore', () => {
               intrinsicWidth: 152,
               measureNumbers: [1],
               staffBounds: SINGLE_STAFF_BOUNDS,
-              voiceArtifactsByStaff: [],
             },
           ],
         },
@@ -205,24 +204,10 @@ describe('renderScore', () => {
     expect(mockTupletDraw).toHaveBeenCalledTimes(1);
   });
 
-  it('uses measured voice artifacts without rebuilding VexFlow voices', () => {
+  it('builds fresh VexFlow voices while using measured layout data', () => {
     const item = { id: 'item-1', targetStaffId: undefined };
-    const measuredVoiceArtifacts = {
-      vfVoice: { draw: mockVoiceDraw },
-      notes: [{ setStave: mockNoteSetStave }],
-      beams: [
-        {
-          setContext: mockBeamSetContext.mockReturnValue({
-            draw: mockBeamDraw,
-          }),
-        },
-      ],
-      tuplets: [],
-      items: [item],
-      ownerStaffId: 'staff-1',
-    };
     const score: Score = {
-      id: 'render-measured-artifacts',
+      id: 'render-fresh-artifacts',
       defaults: {
         meter: { beats: 4, beatUnit: 4 },
       },
@@ -290,7 +275,6 @@ describe('renderScore', () => {
               intrinsicWidth: 152,
               measureNumbers: [1],
               staffBounds: SINGLE_STAFF_BOUNDS,
-              voiceArtifactsByStaff: [[measuredVoiceArtifacts as never]],
             },
           ],
         },
@@ -299,7 +283,7 @@ describe('renderScore', () => {
 
     renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
 
-    expect(mockMakeVFVoice).not.toHaveBeenCalled();
+    expect(mockMakeVFVoice).toHaveBeenCalledTimes(1);
     expect(mockVoiceDraw).toHaveBeenCalledTimes(1);
     expect(mockBeamDraw).toHaveBeenCalledTimes(1);
   });
@@ -404,7 +388,6 @@ describe('renderScore', () => {
               intrinsicWidth: 152,
               measureNumbers: [1, 1],
               staffBounds: TWO_STAFF_BOUNDS,
-              voiceArtifactsByStaff: [],
             },
           ],
         },
@@ -542,7 +525,6 @@ describe('renderScore', () => {
               intrinsicWidth: 152,
               measureNumbers: [1],
               staffBounds: SINGLE_STAFF_BOUNDS,
-              voiceArtifactsByStaff: [],
             },
           ],
         },
@@ -650,7 +632,6 @@ function makeConnectorLayoutPlan(
           intrinsicWidth: 136,
           measureNumbers: [measureIndex + 1, measureIndex + 1],
           staffBounds: TWO_STAFF_BOUNDS,
-          voiceArtifactsByStaff: [],
         })),
       },
     ],

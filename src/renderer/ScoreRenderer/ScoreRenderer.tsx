@@ -51,6 +51,10 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     () => ({ backgroundColor: resolvedColorScheme.background }),
     [resolvedColorScheme.background]
   );
+  const canvasStyle = useMemo(
+    () => StyleSheet.flatten([styles.canvas, backgroundStyle]),
+    [backgroundStyle]
+  );
   const effectiveRendererType = rendererType ?? 'document';
 
   const canvasRef = useCanvasRef();
@@ -142,7 +146,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
           style={[styles.gestureSurface, backgroundStyle]}
           onLayout={handleLayout}
         >
-          <Canvas style={[styles.canvas, backgroundStyle]} ref={canvasRef}>
+          <Canvas style={canvasStyle} ref={canvasRef}>
             <Group clip={viewportClip}>
               <Group transform={pictureTransform}>
                 {picture ? <Picture picture={picture} /> : null}
