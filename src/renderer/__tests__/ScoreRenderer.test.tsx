@@ -61,6 +61,8 @@ function loadScoreRendererModule() {
   jest.doMock('react-native', () => ({
     StyleSheet: {
       create: (styles: unknown) => styles,
+      flatten: (styles: unknown) =>
+        Array.isArray(styles) ? Object.assign({}, ...styles) : styles,
     },
     View: 'View',
   }));
