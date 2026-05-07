@@ -26,7 +26,17 @@ export type Accidental =
   | 'quarter-flat'
   | 'quarter-sharp';
 
-export type NoteLength = 'w' | 'h' | 'q' | '8' | '16' | '32' | '64' | '128';
+export type NoteLength =
+  | 'long'
+  | 'breve'
+  | 'w'
+  | 'h'
+  | 'q'
+  | '8'
+  | '16'
+  | '32'
+  | '64'
+  | '128';
 
 export type StemDirection = 'up' | 'down' | 'auto';
 
@@ -111,6 +121,7 @@ export interface Note {
   pitch: Pitch;
   duration: DurationValue;
   voiceId: Id;
+  targetStaffId?: Id;
   stemDirection?: StemDirection;
 }
 
@@ -119,6 +130,7 @@ export interface Rest {
   type: 'rest';
   duration: DurationValue;
   voiceId: Id;
+  targetStaffId?: Id;
   kind?: 'visible' | 'spacer' | 'hidden';
   staffLine?: number;
 }
@@ -129,6 +141,7 @@ export interface Chord {
   pitches: Pitch[];
   duration: DurationValue;
   voiceId: Id;
+  targetStaffId?: Id;
   stemDirection?: StemDirection;
 }
 

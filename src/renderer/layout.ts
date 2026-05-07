@@ -1,4 +1,15 @@
-import type { Score, Staff } from '../state';
+import type { Score, Staff, StaffGroup } from '../state';
+import {
+  getAvailableDocumentWidth,
+  getSystemGap,
+} from './Layout/LayoutMetrics';
+import {
+  layoutDocumentEvenGroup,
+  layoutDocumentGroup,
+  resolveDocumentEvenMeasureWidth,
+} from './Layout/DocumentLayout';
+import { resolveSystemVerticalLayout } from './Layout/VerticalSpacing';
+import type { SystemVerticalLayout } from './Layout/VerticalSpacing';
 import {
   buildMeasurementGroups,
   buildResolvedMeasureStates,
@@ -6,28 +17,25 @@ import {
   type ResolvedMeasureState,
 } from './scoreParsing';
 import type { MeasuredScore } from './measure';
+import type { StaffVerticalBounds } from './measure';
 import type {
-  RendererPoint,
   RendererRect,
   RendererSize,
   RendererType,
   ScoreOptions,
 } from './types';
 
-const STAVE_LINE_BLOCK_HEIGHT = 41;
-const STAVE_STEM_CLEARANCE = 11;
-const MIN_SYSTEM_GAP = 82;
-const SYSTEM_GAP_DIVISOR = 8;
-
 export interface MeasuredGroupMeasure {
   groupId: string;
   measureIndex: number;
   intrinsicWidth: number;
   measureNumbers: number[];
+  staffBounds: StaffVerticalBounds[];
 }
 
 export interface GroupLayoutContext {
   groupId: string;
+  staffGroup?: StaffGroup;
   staffIds: string[];
   staves: Staff[];
   resolvedStatesByStaff: ResolvedMeasureState[][];
@@ -41,6 +49,7 @@ export interface MeasureLayoutPlan {
   y: number;
   width: number;
   height: number;
+  staffYOffsets: number[];
   systemIndex: number;
 }
 
@@ -52,6 +61,7 @@ export interface SystemLayoutPlan {
   width: number;
   height: number;
   staffCount: number;
+  staffYOffsets: number[];
   measureIndices: number[];
 }
 
@@ -82,9 +92,7 @@ export function layoutScore(
 
   if (rendererType === 'infiniteScore') {
     for (const group of groups) {
-      groupResults.push(
-        layoutInfiniteScoreGroup(group, viewport, options, score)
-      );
+      groupResults.push(layoutInfiniteScoreGroup(group, viewport, options));
     }
   } else if (rendererType === 'documentEven') {
     const availableWidth = getAvailableDocumentWidth(viewport, options);
@@ -106,12 +114,14 @@ export function layoutScore(
       cursorY = result.nextY;
     }
   } else {
+    const availableWidth = getAvailableDocumentWidth(viewport, options);
     let cursorY = viewport.y + options.insets.top;
 
     for (const group of groups) {
       const result = layoutDocumentGroup(
         group,
         { x: viewport.x + options.insets.left, y: cursorY },
+        availableWidth,
         options
       );
 
@@ -134,30 +144,6 @@ export function layoutScore(
   };
 }
 
-function getAvailableDocumentWidth(
-  viewport: RendererRect,
-  options: ScoreOptions
-): number {
-  return Math.max(
-    0,
-    viewport.width - options.insets.left - options.insets.right
-  );
-}
-
-function getStaffStackHeight(staffCount: number, staffGap: number): number {
-  const singleStaffHeight = STAVE_LINE_BLOCK_HEIGHT + STAVE_STEM_CLEARANCE;
-
-  if (staffCount <= 1) {
-    return singleStaffHeight;
-  }
-
-  return singleStaffHeight + (staffCount - 1) * staffGap;
-}
-
-function getSystemGap(staffGap: number): number {
-  return Math.max(MIN_SYSTEM_GAP, staffGap / SYSTEM_GAP_DIVISOR);
-}
-
 function buildGroupLayoutContext(
   score: Score,
   measuredScore: MeasuredScore
@@ -166,6 +152,7 @@ function buildGroupLayoutContext(
 
   return groups.map((group) => ({
     groupId: group.groupId,
+    staffGroup: group.staffGroup,
     staffIds: group.staffIds,
     staves: resolveGroupStaves(score, group),
     resolvedStatesByStaff: resolveGroupStaves(score, group).map((staff) =>
@@ -179,179 +166,20 @@ function buildGroupLayoutContext(
         measureIndex: measure.measureIndex,
         intrinsicWidth: measure.intrinsicNoteWidth,
         measureNumbers: measure.measureNumbers,
+        staffBounds: measure.staffBounds,
       })),
   }));
-}
-
-function resolveDocumentEvenMeasureWidth(
-  measuredScore: MeasuredScore,
-  availableWidth: number
-): {
-  measuresPerFullLine: number;
-  equalMeasureWidth: number;
-} {
-  const widestMeasure = Math.max(measuredScore.maxIntrinsicNoteWidth, 1);
-
-  if (availableWidth <= 0) {
-    return {
-      measuresPerFullLine: 1,
-      equalMeasureWidth: widestMeasure,
-    };
-  }
-
-  const measuresPerFullLine = Math.max(
-    1,
-    Math.floor(availableWidth / widestMeasure)
-  );
-
-  return {
-    measuresPerFullLine,
-    equalMeasureWidth: availableWidth / measuresPerFullLine,
-  };
-}
-
-function layoutDocumentEvenGroup(
-  group: GroupLayoutContext,
-  origin: RendererPoint,
-  availableWidth: number,
-  equalMeasureWidth: number,
-  measuresPerFullLine: number,
-  options: ScoreOptions
-): GroupLayoutResult {
-  const systems: SystemLayoutPlan[] = [];
-  const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
-    group.staves.length,
-    options.spacing.staffGap
-  );
-
-  if (group.measures.length === 0) {
-    return {
-      groupId: group.groupId,
-      systems,
-      measures,
-      nextY: origin.y,
-    };
-  }
-
-  let cursorY = origin.y;
-  const systemGap = getSystemGap(options.spacing.staffGap);
-
-  for (
-    let systemIndex = 0, startIndex = 0;
-    startIndex < group.measures.length;
-    systemIndex++, startIndex += measuresPerFullLine
-  ) {
-    const chunk = group.measures.slice(
-      startIndex,
-      startIndex + measuresPerFullLine
-    );
-    let cursorX = origin.x;
-
-    systems.push({
-      groupId: group.groupId,
-      systemIndex,
-      x: origin.x,
-      y: cursorY,
-      width:
-        chunk.length === measuresPerFullLine
-          ? availableWidth
-          : chunk.length * equalMeasureWidth,
-      height: staffStackHeight,
-      staffCount: group.staves.length,
-      measureIndices: chunk.map((measure) => measure.measureIndex),
-    });
-
-    for (const measure of chunk) {
-      measures.push({
-        groupId: group.groupId,
-        measureIndex: measure.measureIndex,
-        x: cursorX,
-        y: cursorY,
-        width: equalMeasureWidth,
-        height: staffStackHeight,
-        systemIndex,
-      });
-
-      cursorX += equalMeasureWidth;
-    }
-
-    cursorY += staffStackHeight + systemGap;
-  }
-
-  return {
-    groupId: group.groupId,
-    systems,
-    measures,
-    nextY: cursorY,
-  };
-}
-
-function layoutDocumentGroup(
-  group: GroupLayoutContext,
-  origin: RendererPoint,
-  options: ScoreOptions
-): GroupLayoutResult {
-  const systems: SystemLayoutPlan[] = [];
-  const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
-    group.staves.length,
-    options.spacing.staffGap
-  );
-
-  if (group.measures.length === 0) {
-    return {
-      groupId: group.groupId,
-      systems,
-      measures,
-      nextY: origin.y,
-    };
-  }
-
-  let cursorX = origin.x;
-
-  for (const measure of group.measures) {
-    measures.push({
-      groupId: group.groupId,
-      measureIndex: measure.measureIndex,
-      x: cursorX,
-      y: origin.y,
-      width: measure.intrinsicWidth,
-      height: staffStackHeight,
-      systemIndex: 0,
-    });
-
-    cursorX += measure.intrinsicWidth;
-  }
-
-  systems.push({
-    groupId: group.groupId,
-    systemIndex: 0,
-    x: origin.x,
-    y: origin.y,
-    width: cursorX - origin.x,
-    height: staffStackHeight,
-    staffCount: group.staves.length,
-    measureIndices: group.measures.map((measure) => measure.measureIndex),
-  });
-
-  return {
-    groupId: group.groupId,
-    systems,
-    measures,
-    nextY: origin.y + staffStackHeight + getSystemGap(options.spacing.staffGap),
-  };
 }
 
 function layoutInfiniteScoreGroup(
   group: GroupLayoutContext,
   viewport: RendererRect,
-  options: ScoreOptions,
-  _score: Score
+  options: ScoreOptions
 ): GroupLayoutResult {
   const systems: SystemLayoutPlan[] = [];
   const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
+  const verticalLayout = resolveSystemVerticalLayout(
+    group.measures,
     group.staves.length,
     options.spacing.staffGap
   );
@@ -359,10 +187,10 @@ function layoutInfiniteScoreGroup(
     ...group.measures.map((measure) => measure.intrinsicWidth),
     0
   );
-  const totalHeight = staffStackHeight + getSystemGap(options.spacing.staffGap);
+  const systemWidth = group.measures.length * maxIntrinsicWidth;
   const origin = {
-    x: viewport.x + options.insets.left,
-    y: (viewport.y + viewport.height - totalHeight) / 2,
+    x: getInfiniteScoreOriginX(systemWidth, viewport, options),
+    y: getInfiniteScoreOriginY(verticalLayout, viewport),
   };
 
   let cursorX = origin.x;
@@ -376,7 +204,8 @@ function layoutInfiniteScoreGroup(
       x: cursorX,
       y: origin.y,
       width,
-      height: staffStackHeight,
+      height: verticalLayout.height,
+      staffYOffsets: verticalLayout.staffYOffsets,
       systemIndex: 0,
     });
 
@@ -389,8 +218,9 @@ function layoutInfiniteScoreGroup(
     x: origin.x,
     y: origin.y,
     width: cursorX - origin.x,
-    height: staffStackHeight,
+    height: verticalLayout.height,
     staffCount: group.staves.length,
+    staffYOffsets: verticalLayout.staffYOffsets,
     measureIndices: group.measures.map((measure) => measure.measureIndex),
   });
 
@@ -398,8 +228,35 @@ function layoutInfiniteScoreGroup(
     groupId: group.groupId,
     systems,
     measures,
-    nextY: origin.y + totalHeight,
+    nextY:
+      origin.y + verticalLayout.height + getSystemGap(options.spacing.staffGap),
   };
+}
+
+function getInfiniteScoreOriginX(
+  systemWidth: number,
+  viewport: RendererRect,
+  options: ScoreOptions
+): number {
+  const insetContentWidth =
+    systemWidth + options.insets.left + options.insets.right;
+
+  if (insetContentWidth <= viewport.width) {
+    return viewport.x + (viewport.width - systemWidth) / 2;
+  }
+
+  return viewport.x + options.insets.left;
+}
+
+function getInfiniteScoreOriginY(
+  verticalLayout: SystemVerticalLayout,
+  viewport: RendererRect
+): number {
+  return (
+    viewport.y +
+    viewport.height / 2 -
+    (verticalLayout.visibleTop + verticalLayout.visibleBottom) / 2
+  );
 }
 
 function measureContentSize(
@@ -447,6 +304,6 @@ function measureContentSize(
 
   return {
     width: Math.max(viewport.width, measuredWidth),
-    height: Math.max(viewport.height, measuredHeight),
+    height: viewport.height,
   };
 }

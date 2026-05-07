@@ -186,5 +186,8 @@
       "release-it"
     ],
     "version": "0.57.2"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.7.3"
   }
 }

@@ -26,6 +26,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     title: 'Simple Renderer',
     description: 'Render a simple score using ScoreRenderer and the score type',
   },
+  {
+    route: 'MusicXmlImport',
+    title: 'MusicXML Import',
+    description: 'Parse a bundled MusicXML fixture and render the score.',
+  },
   // {
   //   route: 'VexflowTestSuite',
   //   title: 'VexFlow Test Suite',

@@ -3,11 +3,13 @@ import {
   Beam,
   Dot,
   Fraction as VFFraction,
+  GhostNote,
   StaveNote,
   Stem,
   Tuplet,
   Voice as VFVoice,
 } from 'vexflow';
+import type { StemmableNote } from 'vexflow';
 
 import type {
   Clef,
@@ -17,6 +19,7 @@ import type {
   Pitch,
   Score,
   Staff,
+  StaffGroup,
   StemDirection,
   Tempo,
   TupletGroup,
@@ -27,6 +30,7 @@ import type {
 
 export type StaffGroupLookup = {
   groupId: string;
+  staffGroup?: StaffGroup;
   staffIds: string[];
 };
 
@@ -35,6 +39,12 @@ export interface ResolvedMeasureState {
   meter: Meter;
   keySignature?: KeySignature;
   tempo?: Tempo;
+}
+
+export type VFVoiceNote = StemmableNote;
+
+export interface MakeVFVoiceOptions {
+  resolveClef?: (item: VoiceItem) => Clef;
 }
 
 /**
@@ -70,15 +80,20 @@ export function pitchToVFKey(pitch: Pitch): string {
  * Converts a duration into the VexFlow duration token, including rests.
  */
 export function durationToVF(duration: DurationValue, isRest = false): string {
+  const length =
+    duration.length === 'long' || duration.length === 'breve'
+      ? '1/2'
+      : duration.length;
+
   if (isRest) {
-    return `${duration.length}r`;
+    return `${length}r`;
   }
 
   if (duration.dots) {
-    return `${duration.length}${'d'.repeat(duration.dots)}`;
+    return `${length}${'d'.repeat(duration.dots)}`;
   }
 
-  return duration.length;
+  return length;
 }
 
 /**
@@ -113,8 +128,12 @@ export function addPitchAccidentals(note: StaveNote, pitches: Pitch[]) {
 /**
  * Builds a VexFlow stave note from a score voice item and clef.
  */
-export function voiceItemToStaveNote(item: VoiceItem, clef: Clef): StaveNote {
+export function voiceItemToStaveNote(item: VoiceItem, clef: Clef): VFVoiceNote {
   if (item.type === 'rest') {
+    if (item.kind === 'hidden' || item.kind === 'spacer') {
+      return new GhostNote(durationToVF(item.duration));
+    }
+
     const note = new StaveNote({
       clef,
       keys: ['b/4'],
@@ -156,6 +175,13 @@ export function beamGroupsToVF(meter?: Meter): VFFraction[] | undefined {
   }
 
   return meter.beamGroups.map((group) => new VFFraction(group.num, group.den));
+}
+
+function hasExplicitStemDirection(item: VoiceItem): boolean {
+  return (
+    item.type !== 'rest' &&
+    (item.stemDirection === 'up' || item.stemDirection === 'down')
+  );
 }
 
 /**
@@ -214,16 +240,19 @@ export function makeVFVoice(
   score: Score,
   meter: Meter,
   clef: Clef,
-  voice: Voice
+  voice: Voice,
+  options: MakeVFVoiceOptions = {}
 ): {
   vfVoice: VFVoice;
-  notes: StaveNote[];
+  notes: VFVoiceNote[];
   beams: Beam[];
   tuplets: Tuplet[];
 } {
-  const notes = voice.items.map((item) => voiceItemToStaveNote(item, clef));
+  const notes = voice.items.map((item) =>
+    voiceItemToStaveNote(item, options.resolveClef?.(item) ?? clef)
+  );
 
-  const noteByItemId = new Map<string, StaveNote>();
+  const noteByItemId = new Map<string, VFVoiceNote>();
   voice.items.forEach((item, index) =>
     noteByItemId.set(item.id, notes[index]!)
   );
@@ -233,6 +262,10 @@ export function makeVFVoice(
     beatValue: meter.beatUnit,
   });
 
+  if (voice.timingMode) {
+    vfVoice.setMode(modeToVF(voice.timingMode));
+  }
+
   try {
     vfVoice.addTickables(notes);
   } catch (error) {
@@ -241,12 +274,16 @@ export function makeVFVoice(
     );
   }
 
-  if (voice.timingMode) {
-    vfVoice.setMode(modeToVF(voice.timingMode));
-  }
-
   const groups = beamGroupsToVF(meter);
-  const beams = Beam.generateBeams(notes, groups ? { groups } : undefined);
+  const maintainStemDirections = voice.items.some(hasExplicitStemDirection);
+  const beamOptions =
+    groups || maintainStemDirections
+      ? {
+          ...(groups ? { groups } : {}),
+          ...(maintainStemDirections ? { maintainStemDirections } : {}),
+        }
+      : undefined;
+  const beams = Beam.generateBeams(notes, beamOptions);
 
   const tuplets = findTupletsForVoice(score, voice)
     .map((group) => {
@@ -279,6 +316,7 @@ export function makeVFVoice(
 export function buildMeasurementGroups(score: Score): StaffGroupLookup[] {
   const explicitGroups = (score.staffGroups ?? []).map((group) => ({
     groupId: group.id,
+    staffGroup: group,
     staffIds: [...(group.staffIds ?? [])].sort((staffIdA, staffIdB) => {
       const staffA = score.staves.find((staff) => staff.id === staffIdA);
       const staffB = score.staves.find((staff) => staff.id === staffIdB);

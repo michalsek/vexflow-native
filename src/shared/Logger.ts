@@ -2,27 +2,27 @@ import { Platform } from 'react-native';
 
 export enum LogCategory {
   FontManager = 'FontManager',
-  SkiaVexflowContext = 'SkiaVexflowContext',
+  VexflowRecordingContext = 'VexflowRecordingContext',
   VexflowCanvas = 'VexflowCanvas',
   Default = 'Default',
 }
 
 const disabledCategories: Set<LogCategory> = new Set([
   LogCategory.FontManager,
-  // LogCategory.SkiaVexflowContext,
+  // LogCategory.VexflowRecordingContext,
   // LogCategory.VexflowCanvas,
 ]);
 
 const categoryColors: Record<LogCategory, string> = Platform.select({
   web: {
     [LogCategory.FontManager]: '#1d56b3',
-    [LogCategory.SkiaVexflowContext]: 'green',
+    [LogCategory.VexflowRecordingContext]: 'green',
     [LogCategory.VexflowCanvas]: 'cyan',
     [LogCategory.Default]: 'black',
   },
   default: {
     [LogCategory.FontManager]: '\x1b[34m', // Blue
-    [LogCategory.SkiaVexflowContext]: '\x1b[32m', // Green
+    [LogCategory.VexflowRecordingContext]: '\x1b[32m', // Green
     [LogCategory.VexflowCanvas]: '\x1b[36m', // Cyan
     [LogCategory.Default]: '\x1b[0m', // Reset
   },

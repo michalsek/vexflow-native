@@ -1,6 +1,7 @@
 import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
 
 import type { Score } from '../state';
+import type { ScoreColorScheme } from './colorScheme';
 
 export type RendererType = 'infiniteScore' | 'document' | 'documentEven';
 
@@ -8,10 +9,11 @@ export interface ScoreRendererProps {
   score: Score;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
+  colorScheme?: ScoreColorScheme;
   rendererType?: RendererType;
   options?: Partial<ScoreOptions>;
-  scrollOffset?: RendererPoint;
-  onContentSizeChange?: (size: RendererSize) => void;
+  scrollEnabled?: boolean;
+  showScrollbars?: boolean;
 }
 
 export interface Viewport {

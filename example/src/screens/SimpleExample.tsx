@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { StyleSheet } from 'react-native';
 import { useFonts } from '@shopify/react-native-skia';
 
 import { Formatter, Stave, StaveNote, Voice } from 'vexflow';
@@ -38,10 +39,7 @@ const SimpleExample: React.FC = () => {
   }
 
   return (
-    <Screen
-      safeAreaEdges={['left', 'right', 'bottom']}
-      style={{ backgroundColor: 'white' }}
-    >
+    <Screen safeAreaEdges={['left', 'right', 'bottom']} style={styles.screen}>
       <VexflowCanvas
         onDraw={onDraw}
         fontManager={fontManager}
@@ -52,3 +50,9 @@ const SimpleExample: React.FC = () => {
 };
 
 export default SimpleExample;
+
+const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: 'white',
+  },
+});

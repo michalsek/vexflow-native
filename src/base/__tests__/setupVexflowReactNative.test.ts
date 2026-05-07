@@ -19,6 +19,10 @@ describe('installVexflowReactNativeFallbacks', () => {
     });
 
     jest.doMock('vexflow', () => ({
+      Element: {
+        getTextMeasurementCanvas: jest.fn(),
+        setTextMeasurementCanvas: jest.fn(),
+      },
       Font: {
         fromCSSString: originalFromCSSString,
       },
@@ -66,6 +70,10 @@ describe('installVexflowReactNativeFallbacks', () => {
     const originalFromCSSString = jest.fn();
 
     jest.doMock('vexflow', () => ({
+      Element: {
+        getTextMeasurementCanvas: jest.fn(),
+        setTextMeasurementCanvas: jest.fn(),
+      },
       Font: {
         fromCSSString: originalFromCSSString,
       },
@@ -92,5 +100,51 @@ describe('installVexflowReactNativeFallbacks', () => {
     expect(Font!.fromCSSString).toBe(originalFromCSSString);
     testExports!.originalFromCSSString('10pt Arial');
     expect(originalFromCSSString).toHaveBeenCalledWith('10pt Arial');
+  });
+});
+
+describe('ensureVexflowTextMeasurementCanvas', () => {
+  it('installs an empty text measurement context when no canvas context exists', () => {
+    jest.doMock('react-native', () => ({
+      Platform: {
+        OS: 'ios',
+      },
+    }));
+
+    const getTextMeasurementCanvas = jest.fn();
+    const setTextMeasurementCanvas = jest.fn();
+
+    jest.doMock('vexflow', () => ({
+      Element: {
+        getTextMeasurementCanvas,
+        setTextMeasurementCanvas,
+      },
+      Font: {
+        fromCSSString: jest.fn(),
+      },
+    }));
+
+    let ensureVexflowTextMeasurementCanvas: () => void;
+
+    jest.isolateModules(() => {
+      ({
+        ensureVexflowTextMeasurementCanvas,
+      } = require('../setupVexflowReactNative'));
+    });
+
+    ensureVexflowTextMeasurementCanvas!();
+
+    expect(setTextMeasurementCanvas).toHaveBeenCalledTimes(1);
+
+    const measurementCanvas = setTextMeasurementCanvas.mock.calls[0]?.[0] as {
+      getContext: (type: string) => {
+        measureText: (text: string) => { width: number };
+      } | null;
+    };
+
+    expect(measurementCanvas.getContext('webgl')).toBeNull();
+    expect(measurementCanvas.getContext('2d')?.measureText('abc')).toEqual(
+      expect.objectContaining({ width: 0 })
+    );
   });
 });

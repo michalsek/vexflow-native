@@ -9,7 +9,8 @@ import React, { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 
 import type { VexflowCanvasProps } from './types';
-import SkiaVexflowContext from './SkiaVexflowContext';
+import VexflowRecordingContext from './VexflowRecordingContext';
+import { renderVexflowRecordingCommands } from './VexflowRecordingReplay';
 
 const VexflowCanvas: React.FC<VexflowCanvasProps> = (props) => {
   const {
@@ -30,9 +31,15 @@ const VexflowCanvas: React.FC<VexflowCanvasProps> = (props) => {
       Skia.XYWHRect(0, 0, canvasSize.width, canvasSize.height)
     );
 
-    const ctx = new SkiaVexflowContext(canvas, fontManager, defaultFont);
+    const ctx = new VexflowRecordingContext(fontManager, defaultFont);
 
     onDraw({ ctx, width: canvasSize.width, height: canvasSize.height });
+    renderVexflowRecordingCommands(
+      canvas,
+      ctx.finish(),
+      fontManager,
+      defaultFont
+    );
 
     return recorder.finishRecordingAsPicture();
   }, [onDraw, canvasSize, fontManager, defaultFont]);

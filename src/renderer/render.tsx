@@ -1,7 +1,8 @@
-import { Formatter, Stave, Voice as VFVoice } from 'vexflow';
+import { Formatter, Stave, StaveConnector, Voice as VFVoice } from 'vexflow';
+import type { StaveConnectorType } from 'vexflow';
 
-import type { SkiaVexflowContext } from '../base';
-import type { Score } from '../state';
+import type { VexflowRecordingContext } from '../base';
+import type { Score, StaffGroupSymbol, VoiceItem } from '../state';
 import type {
   GroupLayoutContext,
   MeasureLayoutPlan,
@@ -9,17 +10,17 @@ import type {
 } from './layout';
 import { makeVFVoice } from './scoreParsing';
 import type { ScoreOptions } from './types';
+import type { VFVoiceNote } from './scoreParsing';
 
 /**
  * Renders the score from a precomputed layout plan.
  */
 export function renderScore(
-  ctx: SkiaVexflowContext,
+  ctx: VexflowRecordingContext,
   score: Score,
   layoutPlan: ScoreLayoutPlan,
-  options: ScoreOptions
+  _options: ScoreOptions
 ) {
-  const staffGap = options.spacing.staffGap;
   const groupsById = new Map(
     layoutPlan.groups.map((group) => [group.groupId, group])
   );
@@ -38,30 +39,49 @@ export function renderScore(
       )
       .filter((measure): measure is MeasureLayoutPlan => Boolean(measure));
 
-    for (const measurePlan of measurePlans) {
-      renderMeasure(ctx, score, group, measurePlan, staffGap);
+    for (const [measureIndex, measurePlan] of measurePlans.entries()) {
+      renderMeasure(ctx, score, group, measurePlan, {
+        isFirstMeasureInSystem: measureIndex === 0,
+        isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
+      });
     }
   }
 }
 
 type StaffRenderArtifacts = {
   beams: Array<{
-    setContext: (ctx: SkiaVexflowContext) => { draw: () => void };
+    setContext: (ctx: VexflowRecordingContext) => { draw: () => void };
+  }>;
+  voiceArtifacts: Array<{
+    items: VoiceItem[];
+    notes: VFVoiceNote[];
+    ownerStaffId: string;
   }>;
   tuplets: Array<{
-    setContext: (ctx: SkiaVexflowContext) => { draw: () => void };
+    setContext: (ctx: VexflowRecordingContext) => { draw: () => void };
   }>;
   vfVoices: VFVoice[];
 };
 
+interface RenderMeasureOptions {
+  isFirstMeasureInSystem: boolean;
+  isLastMeasureInSystem: boolean;
+}
+
 function renderMeasure(
-  ctx: SkiaVexflowContext,
+  ctx: VexflowRecordingContext,
   score: Score,
   group: GroupLayoutContext,
   measurePlan: MeasureLayoutPlan,
-  staffGap: number
+  options: RenderMeasureOptions
 ) {
   const formatter = new Formatter();
+  const resolvedStateByStaffId = new Map(
+    group.staves.map((staff, staffIndex) => [
+      staff.id,
+      group.resolvedStatesByStaff[staffIndex]?.[measurePlan.measureIndex],
+    ])
+  );
 
   const staffRenderArtifacts: StaffRenderArtifacts[] = group.staves.map(
     (staff, staffIndex) => {
@@ -70,12 +90,20 @@ function renderMeasure(
         group.resolvedStatesByStaff[staffIndex]?.[measurePlan.measureIndex];
 
       if (!measure || !resolvedState) {
-        return { vfVoices: [], beams: [], tuplets: [] };
+        return { vfVoices: [], voiceArtifacts: [], beams: [], tuplets: [] };
       }
 
-      const voiceArtifacts = measure.voices.map((voice) =>
-        makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice)
-      );
+      const voiceArtifacts = measure.voices.map((voice) => ({
+        ...makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
+          resolveClef: (item) =>
+            item.targetStaffId
+              ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
+                resolvedState.clef
+              : resolvedState.clef,
+        }),
+        items: voice.items,
+        ownerStaffId: staff.id,
+      }));
       const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
       if (vfVoices.length > 1) {
@@ -84,6 +112,13 @@ function renderMeasure(
 
       return {
         vfVoices,
+        voiceArtifacts: voiceArtifacts.map(
+          ({ items, notes, ownerStaffId }) => ({
+            notes,
+            items,
+            ownerStaffId,
+          })
+        ),
         beams: voiceArtifacts.flatMap(({ beams }) => beams),
         tuplets: voiceArtifacts.flatMap(({ tuplets }) => tuplets),
       };
@@ -98,7 +133,7 @@ function renderMeasure(
       group.resolvedStatesByStaff[staffIndex]![measurePlan.measureIndex]!;
     const stave = new Stave(
       measurePlan.x,
-      measurePlan.y + staffIndex * staffGap,
+      measurePlan.y + (measurePlan.staffYOffsets[staffIndex] ?? 0),
       measurePlan.width
     );
 
@@ -109,17 +144,125 @@ function renderMeasure(
     stave.setContext(ctx).draw();
     return stave;
   });
+  const renderedStaveByStaffId = new Map(
+    group.staves.map((staff, staffIndex) => [
+      staff.id,
+      renderedStaves[staffIndex],
+    ])
+  );
+
+  renderStaffConnectors(ctx, group, renderedStaves, options);
+
+  staffRenderArtifacts.forEach(({ voiceArtifacts }) => {
+    voiceArtifacts.forEach(({ items, notes, ownerStaffId }) => {
+      items.forEach((item, index) => {
+        const targetStave =
+          renderedStaveByStaffId.get(item.targetStaffId ?? ownerStaffId) ??
+          renderedStaveByStaffId.get(ownerStaffId);
+
+        if (targetStave) {
+          notes[index]?.setStave(targetStave);
+        }
+      });
+    });
+  });
 
   if (allVoices.length > 0) {
     formatter.formatToStave(allVoices, renderedStaves[0]!);
   }
 
-  staffRenderArtifacts.forEach(({ vfVoices, beams, tuplets }, staffIndex) => {
-    const stave = renderedStaves[staffIndex]!;
-    vfVoices.forEach((voice) => voice.draw(ctx, stave));
+  staffRenderArtifacts.forEach(({ vfVoices, beams, tuplets }) => {
+    vfVoices.forEach((voice) => voice.draw(ctx));
     beams.forEach((beam) => beam.setContext(ctx).draw());
     tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
   });
+}
+
+function renderStaffConnectors(
+  ctx: VexflowRecordingContext,
+  group: GroupLayoutContext,
+  renderedStaves: Stave[],
+  options: RenderMeasureOptions
+) {
+  if (!group.staffGroup || renderedStaves.length < 2) {
+    return;
+  }
+
+  const topStave = renderedStaves[0];
+  const bottomStave = renderedStaves[renderedStaves.length - 1];
+
+  if (!topStave || !bottomStave) {
+    return;
+  }
+
+  const connectorSymbol = resolveStaffGroupConnectorSymbol(group);
+
+  if (options.isFirstMeasureInSystem && connectorSymbol) {
+    drawStaveConnector(
+      ctx,
+      topStave,
+      bottomStave,
+      connectorSymbolToVFType(connectorSymbol)
+    );
+  }
+
+  drawStaveConnector(
+    ctx,
+    topStave,
+    bottomStave,
+    requireStaveConnectorType(StaveConnector.type.SINGLE_LEFT)
+  );
+
+  if (options.isLastMeasureInSystem) {
+    drawStaveConnector(
+      ctx,
+      topStave,
+      bottomStave,
+      requireStaveConnectorType(StaveConnector.type.SINGLE_RIGHT)
+    );
+  }
+}
+
+function resolveStaffGroupConnectorSymbol(
+  group: GroupLayoutContext
+): Exclude<StaffGroupSymbol, 'line'> | undefined {
+  if (group.staffGroup?.symbol === 'line') {
+    return undefined;
+  }
+
+  if (group.staffGroup?.symbol) {
+    return group.staffGroup.symbol;
+  }
+
+  return group.staffGroup?.role === 'grandStaff' ? 'brace' : 'bracket';
+}
+
+function connectorSymbolToVFType(symbol: Exclude<StaffGroupSymbol, 'line'>) {
+  return symbol === 'brace'
+    ? requireStaveConnectorType(StaveConnector.type.BRACE)
+    : requireStaveConnectorType(StaveConnector.type.BRACKET);
+}
+
+function drawStaveConnector(
+  ctx: VexflowRecordingContext,
+  topStave: Stave,
+  bottomStave: Stave,
+  type: StaveConnectorType
+) {
+  new StaveConnector(topStave, bottomStave)
+    .setType(type)
+    .setContext(ctx)
+    .draw();
+}
+
+function requireStaveConnectorType(
+  type: Exclude<StaveConnectorType, string> | undefined
+): StaveConnectorType {
+  if (typeof type !== 'number') {
+    throw new Error('Expected VexFlow StaveConnector type constant');
+  }
+
+  return type;
 }
 
 function groupMeasuresByIndex(measures: MeasureLayoutPlan[]) {

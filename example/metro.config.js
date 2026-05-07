@@ -14,7 +14,7 @@ const config = withMetroConfig(getDefaultConfig(__dirname), {
   root,
   dirname: __dirname,
   resolver: {
-    assetExts: ['wasm'],
+    assetExts: ['wasm', 'xml'],
     sourceExts: [
       'ts',
       'tsx',

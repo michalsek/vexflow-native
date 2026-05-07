@@ -1,18 +1,14 @@
 import type { SkFont } from '@shopify/react-native-skia';
-import type SkiaVexflowContext from './SkiaVexflowContext';
-
-function logUnimplemented(methodName: string) {
-  console.log(
-    `TextMeasureContext: Method "${methodName}" is not implemented yet.`
-  );
-}
+import { Font } from 'vexflow';
+import type VexflowRecordingContext from './VexflowRecordingContext';
 
 class TextMeasureContext {
   __workletClass = true;
 
-  private context: SkiaVexflowContext;
+  private context: VexflowRecordingContext;
+  private currentFont = '';
 
-  constructor(context: SkiaVexflowContext) {
+  constructor(context: VexflowRecordingContext) {
     this.context = context;
   }
 
@@ -36,12 +32,20 @@ class TextMeasureContext {
   }
 
   get() {
-    logUnimplemented('get');
-    return '';
+    return this.currentFont;
   }
 
-  set(_value: string) {
-    logUnimplemented('set');
+  set(value: string) {
+    this.currentFont = value;
+    this.context.setFont(Font.fromCSSString(value));
+  }
+
+  get font() {
+    return this.get();
+  }
+
+  set font(value: string) {
+    this.set(value);
   }
 }
 
