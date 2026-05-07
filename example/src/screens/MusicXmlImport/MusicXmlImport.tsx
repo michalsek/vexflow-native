@@ -10,7 +10,7 @@ import {
 } from 'vexflow-native/musicxml';
 
 import bravuraFont from '../../../assets/fonts/Bravura.otf';
-import { Column, DropDown, Heading, Row, Screen, Text } from '../../components';
+import { Column, DropDown, Row, Screen, Text } from '../../components';
 import { useColorScheme } from '../../hooks/useColorScheme';
 import { MUSIC_XML_IMPORT_FIXTURES } from './fixtures';
 
@@ -140,13 +140,6 @@ const MusicXmlImport: React.FC = () => {
           ]}
         >
           <Row align="center" gap={12} justify="space-between" wrap>
-            <View style={styles.heading}>
-              <Heading level={4}>MusicXML Import</Heading>
-              <Text variant="muted" style={styles.headingCaption}>
-                Parse {selectedFixture?.label ?? 'a fixture'} and inspect the
-                rendered score.
-              </Text>
-            </View>
             <Row align="center" gap={8} wrap style={styles.controls}>
               <View style={styles.control}>
                 <DropDown
@@ -210,8 +203,7 @@ const ImportSummaryGrid: React.FC<{ summary: ImportSummary }> = ({
   summary,
 }) => {
   return (
-    <Row gap={8} wrap>
-      <SummaryPill label="Status" value="Parsed" />
+    <Row gap={12} wrap>
       <SummaryPill label="Title" value={summary.title} />
       <SummaryPill label="Composer" value={summary.composer} />
       <SummaryPill label="Staves" value={summary.staffCount.toString()} />
@@ -228,24 +220,14 @@ const ImportSummaryGrid: React.FC<{ summary: ImportSummary }> = ({
 const SummaryPill: React.FC<{ label: string; value: string }> = ({
   label,
   value,
-}) => {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-
-  return (
-    <View
-      style={[
-        styles.summaryPill,
-        isDark ? styles.summaryPillDark : styles.summaryPillLight,
-      ]}
-    >
-      <Text variant="muted" style={styles.summaryLabel}>
-        {label}
-      </Text>
-      <Text style={styles.summaryValue}>{value}</Text>
-    </View>
-  );
-};
+}) => (
+  <View>
+    <Text variant="muted" style={styles.summaryLabel}>
+      {label}
+    </Text>
+    <Text style={styles.summaryValue}>{value}</Text>
+  </View>
+);
 
 function createImportSummary(score: Score): ImportSummary {
   return {
@@ -391,25 +373,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
   },
-  summaryPill: {
-    borderRadius: 6,
-    borderWidth: 1,
-    minWidth: 104,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  summaryPillDark: {
-    backgroundColor: '#111827',
-    borderColor: '#374151',
-  },
-  summaryPillLight: {
-    backgroundColor: '#ffffff',
-    borderColor: '#d1d5db',
-  },
   summaryValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    lineHeight: 18,
   },
   viewport: {
     flex: 1,

@@ -7,7 +7,8 @@ import type {
   MeasuredGroupMeasure,
   SystemLayoutPlan,
 } from '../layout';
-import { getStaffStackHeight, getSystemGap } from './LayoutMetrics';
+import { getSystemGap } from './LayoutMetrics';
+import { resolveSystemVerticalLayout } from './VerticalSpacing';
 
 type DocumentLine = {
   measures: MeasuredGroupMeasure[];
@@ -51,10 +52,6 @@ export function layoutDocumentEvenGroup(
 ): GroupLayoutResult {
   const systems: SystemLayoutPlan[] = [];
   const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
-    group.staves.length,
-    options.spacing.staffGap
-  );
 
   if (group.measures.length === 0) {
     return {
@@ -77,6 +74,11 @@ export function layoutDocumentEvenGroup(
       startIndex,
       startIndex + measuresPerFullLine
     );
+    const verticalLayout = resolveSystemVerticalLayout(
+      chunk,
+      group.staves.length,
+      options.spacing.staffGap
+    );
     let cursorX = origin.x;
 
     systems.push({
@@ -88,8 +90,9 @@ export function layoutDocumentEvenGroup(
         chunk.length === measuresPerFullLine
           ? availableWidth
           : chunk.length * equalMeasureWidth,
-      height: staffStackHeight,
+      height: verticalLayout.height,
       staffCount: group.staves.length,
+      staffYOffsets: verticalLayout.staffYOffsets,
       measureIndices: chunk.map((measure) => measure.measureIndex),
     });
 
@@ -100,14 +103,15 @@ export function layoutDocumentEvenGroup(
         x: cursorX,
         y: cursorY,
         width: equalMeasureWidth,
-        height: staffStackHeight,
+        height: verticalLayout.height,
+        staffYOffsets: verticalLayout.staffYOffsets,
         systemIndex,
       });
 
       cursorX += equalMeasureWidth;
     }
 
-    cursorY += staffStackHeight + systemGap;
+    cursorY += verticalLayout.height + systemGap;
   }
 
   return {
@@ -126,10 +130,6 @@ export function layoutDocumentGroup(
 ): GroupLayoutResult {
   const systems: SystemLayoutPlan[] = [];
   const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
-    group.staves.length,
-    options.spacing.staffGap
-  );
 
   if (group.measures.length === 0) {
     return {
@@ -147,6 +147,11 @@ export function layoutDocumentGroup(
   for (const [systemIndex, line] of lines.entries()) {
     const lineWidth = availableWidth > 0 ? availableWidth : line.intrinsicWidth;
     const stretchRatio = lineWidth / line.intrinsicWidth;
+    const verticalLayout = resolveSystemVerticalLayout(
+      line.measures,
+      group.staves.length,
+      options.spacing.staffGap
+    );
     let cursorX = origin.x;
 
     systems.push({
@@ -155,8 +160,9 @@ export function layoutDocumentGroup(
       x: origin.x,
       y: cursorY,
       width: lineWidth,
-      height: staffStackHeight,
+      height: verticalLayout.height,
       staffCount: group.staves.length,
+      staffYOffsets: verticalLayout.staffYOffsets,
       measureIndices: line.measures.map((measure) => measure.measureIndex),
     });
 
@@ -169,14 +175,15 @@ export function layoutDocumentGroup(
         x: cursorX,
         y: cursorY,
         width,
-        height: staffStackHeight,
+        height: verticalLayout.height,
+        staffYOffsets: verticalLayout.staffYOffsets,
         systemIndex,
       });
 
       cursorX += width;
     }
 
-    cursorY += staffStackHeight + systemGap;
+    cursorY += verticalLayout.height + systemGap;
   }
 
   return {

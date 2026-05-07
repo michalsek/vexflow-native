@@ -19,9 +19,8 @@ export function renderScore(
   ctx: VexflowRecordingContext,
   score: Score,
   layoutPlan: ScoreLayoutPlan,
-  options: ScoreOptions
+  _options: ScoreOptions
 ) {
-  const staffGap = options.spacing.staffGap;
   const groupsById = new Map(
     layoutPlan.groups.map((group) => [group.groupId, group])
   );
@@ -41,7 +40,7 @@ export function renderScore(
       .filter((measure): measure is MeasureLayoutPlan => Boolean(measure));
 
     for (const [measureIndex, measurePlan] of measurePlans.entries()) {
-      renderMeasure(ctx, score, group, measurePlan, staffGap, {
+      renderMeasure(ctx, score, group, measurePlan, {
         isFirstMeasureInSystem: measureIndex === 0,
         isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
       });
@@ -74,7 +73,6 @@ function renderMeasure(
   score: Score,
   group: GroupLayoutContext,
   measurePlan: MeasureLayoutPlan,
-  staffGap: number,
   options: RenderMeasureOptions
 ) {
   const formatter = new Formatter();
@@ -131,7 +129,7 @@ function renderMeasure(
       group.resolvedStatesByStaff[staffIndex]![measurePlan.measureIndex]!;
     const stave = new Stave(
       measurePlan.x,
-      measurePlan.y + staffIndex * staffGap,
+      measurePlan.y + (measurePlan.staffYOffsets[staffIndex] ?? 0),
       measurePlan.width
     );
 

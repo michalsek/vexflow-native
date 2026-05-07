@@ -6,7 +6,7 @@ const mockFormatterFormatToStave = jest.fn();
 const mockStaveAddClef = jest.fn();
 const mockStaveSetContext = jest.fn();
 const mockStaveDraw = jest.fn();
-const mockStaveInstances: unknown[] = [];
+const mockStaveInstances: Array<{ constructorArgs: unknown[] }> = [];
 const mockStaveConnectorType = {
   SINGLE_RIGHT: 0,
   SINGLE_LEFT: 1,
@@ -49,10 +49,12 @@ jest.mock('vexflow', () => ({
     formatToStave = mockFormatterFormatToStave;
   },
   Stave: class MockStave {
-    constructor() {
+    constructor(...constructorArgs: unknown[]) {
+      this.constructorArgs = constructorArgs;
       mockStaveInstances.push(this);
     }
 
+    constructorArgs: unknown[];
     addClef = mockStaveAddClef;
     setContext = mockStaveSetContext.mockReturnThis();
     draw = mockStaveDraw.mockReturnThis();
@@ -109,6 +111,11 @@ const TEST_OPTIONS = {
   spacing: { ...spacing },
   render: { ...renderOptions },
 };
+const SINGLE_STAFF_BOUNDS = [{ top: 40, bottom: 80 }];
+const TWO_STAFF_BOUNDS = [
+  { top: 40, bottom: 80 },
+  { top: 40, bottom: 80 },
+];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -151,6 +158,7 @@ describe('renderScore', () => {
           width: 152,
           height: 135,
           staffCount: 1,
+          staffYOffsets: [0],
           measureIndices: [0],
         },
       ],
@@ -162,6 +170,7 @@ describe('renderScore', () => {
           y: 24,
           width: 152,
           height: 135,
+          staffYOffsets: [0],
           systemIndex: 0,
         },
       ],
@@ -179,6 +188,7 @@ describe('renderScore', () => {
               measureIndex: 0,
               intrinsicWidth: 152,
               measureNumbers: [1],
+              staffBounds: SINGLE_STAFF_BOUNDS,
             },
           ],
         },
@@ -262,6 +272,7 @@ describe('renderScore', () => {
           width: 152,
           height: 135,
           staffCount: 2,
+          staffYOffsets: [0, 120],
           measureIndices: [0],
         },
       ],
@@ -273,6 +284,7 @@ describe('renderScore', () => {
           y: 24,
           width: 152,
           height: 135,
+          staffYOffsets: [0, 120],
           systemIndex: 0,
         },
       ],
@@ -291,6 +303,7 @@ describe('renderScore', () => {
               measureIndex: 0,
               intrinsicWidth: 152,
               measureNumbers: [1, 1],
+              staffBounds: TWO_STAFF_BOUNDS,
             },
           ],
         },
@@ -299,6 +312,8 @@ describe('renderScore', () => {
 
     renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
 
+    expect(mockStaveInstances[0]?.constructorArgs).toEqual([24, 24, 152]);
+    expect(mockStaveInstances[1]?.constructorArgs).toEqual([24, 144, 152]);
     expect(mockNoteSetStave).toHaveBeenNthCalledWith(1, mockStaveInstances[0]);
     expect(mockNoteSetStave).toHaveBeenNthCalledWith(2, mockStaveInstances[1]);
 
@@ -394,6 +409,7 @@ describe('renderScore', () => {
           width: 152,
           height: 135,
           staffCount: 1,
+          staffYOffsets: [0],
           measureIndices: [0],
         },
       ],
@@ -405,6 +421,7 @@ describe('renderScore', () => {
           y: 24,
           width: 152,
           height: 135,
+          staffYOffsets: [0],
           systemIndex: 0,
         },
       ],
@@ -423,6 +440,7 @@ describe('renderScore', () => {
               measureIndex: 0,
               intrinsicWidth: 152,
               measureNumbers: [1],
+              staffBounds: SINGLE_STAFF_BOUNDS,
             },
           ],
         },
@@ -494,6 +512,7 @@ function makeConnectorLayoutPlan(
         width: 272,
         height: 135,
         staffCount: 2,
+        staffYOffsets: [0, 120],
         measureIndices,
       },
     ],
@@ -504,6 +523,7 @@ function makeConnectorLayoutPlan(
       y: 24,
       width: 136,
       height: 135,
+      staffYOffsets: [0, 120],
       systemIndex: 0,
     })),
     groups: [
@@ -527,6 +547,7 @@ function makeConnectorLayoutPlan(
           measureIndex,
           intrinsicWidth: 136,
           measureNumbers: [measureIndex + 1, measureIndex + 1],
+          staffBounds: TWO_STAFF_BOUNDS,
         })),
       },
     ],

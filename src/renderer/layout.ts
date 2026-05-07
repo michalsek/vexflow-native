@@ -1,7 +1,6 @@
 import type { Score, Staff, StaffGroup } from '../state';
 import {
   getAvailableDocumentWidth,
-  getStaffStackHeight,
   getSystemGap,
 } from './Layout/LayoutMetrics';
 import {
@@ -9,6 +8,8 @@ import {
   layoutDocumentGroup,
   resolveDocumentEvenMeasureWidth,
 } from './Layout/DocumentLayout';
+import { resolveSystemVerticalLayout } from './Layout/VerticalSpacing';
+import type { SystemVerticalLayout } from './Layout/VerticalSpacing';
 import {
   buildMeasurementGroups,
   buildResolvedMeasureStates,
@@ -16,6 +17,7 @@ import {
   type ResolvedMeasureState,
 } from './scoreParsing';
 import type { MeasuredScore } from './measure';
+import type { StaffVerticalBounds } from './measure';
 import type {
   RendererRect,
   RendererSize,
@@ -23,14 +25,12 @@ import type {
   ScoreOptions,
 } from './types';
 
-const VEXFLOW_STAVE_TOP_LINE_OFFSET = 40;
-const VEXFLOW_STAVE_BOTTOM_LINE_OFFSET = 80;
-
 export interface MeasuredGroupMeasure {
   groupId: string;
   measureIndex: number;
   intrinsicWidth: number;
   measureNumbers: number[];
+  staffBounds: StaffVerticalBounds[];
 }
 
 export interface GroupLayoutContext {
@@ -49,6 +49,7 @@ export interface MeasureLayoutPlan {
   y: number;
   width: number;
   height: number;
+  staffYOffsets: number[];
   systemIndex: number;
 }
 
@@ -60,6 +61,7 @@ export interface SystemLayoutPlan {
   width: number;
   height: number;
   staffCount: number;
+  staffYOffsets: number[];
   measureIndices: number[];
 }
 
@@ -164,6 +166,7 @@ function buildGroupLayoutContext(
         measureIndex: measure.measureIndex,
         intrinsicWidth: measure.intrinsicNoteWidth,
         measureNumbers: measure.measureNumbers,
+        staffBounds: measure.staffBounds,
       })),
   }));
 }
@@ -175,7 +178,8 @@ function layoutInfiniteScoreGroup(
 ): GroupLayoutResult {
   const systems: SystemLayoutPlan[] = [];
   const measures: MeasureLayoutPlan[] = [];
-  const staffStackHeight = getStaffStackHeight(
+  const verticalLayout = resolveSystemVerticalLayout(
+    group.measures,
     group.staves.length,
     options.spacing.staffGap
   );
@@ -186,7 +190,7 @@ function layoutInfiniteScoreGroup(
   const systemWidth = group.measures.length * maxIntrinsicWidth;
   const origin = {
     x: getInfiniteScoreOriginX(systemWidth, viewport, options),
-    y: getInfiniteScoreOriginY(group.staves.length, viewport, options),
+    y: getInfiniteScoreOriginY(verticalLayout, viewport),
   };
 
   let cursorX = origin.x;
@@ -200,7 +204,8 @@ function layoutInfiniteScoreGroup(
       x: cursorX,
       y: origin.y,
       width,
-      height: staffStackHeight,
+      height: verticalLayout.height,
+      staffYOffsets: verticalLayout.staffYOffsets,
       systemIndex: 0,
     });
 
@@ -213,8 +218,9 @@ function layoutInfiniteScoreGroup(
     x: origin.x,
     y: origin.y,
     width: cursorX - origin.x,
-    height: staffStackHeight,
+    height: verticalLayout.height,
     staffCount: group.staves.length,
+    staffYOffsets: verticalLayout.staffYOffsets,
     measureIndices: group.measures.map((measure) => measure.measureIndex),
   });
 
@@ -222,7 +228,8 @@ function layoutInfiniteScoreGroup(
     groupId: group.groupId,
     systems,
     measures,
-    nextY: origin.y + staffStackHeight + getSystemGap(options.spacing.staffGap),
+    nextY:
+      origin.y + verticalLayout.height + getSystemGap(options.spacing.staffGap),
   };
 }
 
@@ -242,21 +249,13 @@ function getInfiniteScoreOriginX(
 }
 
 function getInfiniteScoreOriginY(
-  staffCount: number,
-  viewport: RendererRect,
-  options: ScoreOptions
+  verticalLayout: SystemVerticalLayout,
+  viewport: RendererRect
 ): number {
-  const visibleStaffHeight =
-    staffCount <= 1
-      ? VEXFLOW_STAVE_BOTTOM_LINE_OFFSET - VEXFLOW_STAVE_TOP_LINE_OFFSET
-      : (staffCount - 1) * options.spacing.staffGap +
-        VEXFLOW_STAVE_BOTTOM_LINE_OFFSET -
-        VEXFLOW_STAVE_TOP_LINE_OFFSET;
-
   return (
     viewport.y +
-    (viewport.height - visibleStaffHeight) / 2 -
-    VEXFLOW_STAVE_TOP_LINE_OFFSET
+    viewport.height / 2 -
+    (verticalLayout.visibleTop + verticalLayout.visibleBottom) / 2
   );
 }
 

@@ -95,6 +95,32 @@ function getMeasuredWidths(measuredScore: ReturnType<typeof measureScore>) {
     .map((measure) => Math.max(measure.intrinsicNoteWidth, 1));
 }
 
+function getVisibleSystemBounds(
+  measuredScore: ReturnType<typeof measureScore>,
+  groupId: string,
+  measureIndices: number[],
+  staffYOffsets: number[]
+) {
+  const systemMeasures = measuredScore.measures.filter(
+    (measure) =>
+      measure.groupId === groupId &&
+      measureIndices.includes(measure.measureIndex)
+  );
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+
+  systemMeasures.forEach((measure) => {
+    measure.staffBounds.forEach((bounds, staffIndex) => {
+      const staffOffset = staffYOffsets[staffIndex] ?? 0;
+
+      top = Math.min(top, staffOffset + bounds.top);
+      bottom = Math.max(bottom, staffOffset + bounds.bottom);
+    });
+  });
+
+  return { top, bottom };
+}
+
 describe('layoutScore', () => {
   it('uses one global equal width in documentEven and fills each full system', () => {
     const score = makePianoScore([1, 2, 3, 4, 5]);
@@ -130,9 +156,12 @@ describe('layoutScore', () => {
     expect(plan.systems[0]?.width).toBeCloseTo(availableWidth, 5);
     expect(plan.systems[1]?.width).toBeCloseTo((availableWidth / 3) * 2, 5);
     expect(plan.contentSize.width).toBeCloseTo(viewport.width, 5);
-    expect(plan.systems[0]?.height).toBeCloseTo(
-      52 + TEST_OPTIONS.spacing.staffGap,
-      5
+    expect(plan.systems[0]?.staffYOffsets).toHaveLength(2);
+    expect(plan.systems[0]?.staffYOffsets[1]).toBeGreaterThanOrEqual(
+      TEST_OPTIONS.spacing.staffGap
+    );
+    expect(plan.systems[0]?.height).toBeGreaterThan(
+      TEST_OPTIONS.spacing.staffGap
     );
     expect(plan.systems[1]?.y).toBeCloseTo(
       (plan.systems[0]?.y ?? 0) +
@@ -147,6 +176,87 @@ describe('layoutScore', () => {
 
     expect(plan.contentSize.height).toBeCloseTo(
       bottom + TEST_OPTIONS.insets.bottom,
+      5
+    );
+  });
+
+  it('expands grand staff spacing when measured staff bounds collide', () => {
+    const score = makePianoScore([1]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+    const measure = measuredScore.measures[0];
+
+    if (!measure) {
+      throw new Error('Expected measured score measure');
+    }
+
+    measure.staffBounds = [
+      { top: 40, bottom: 180 },
+      { top: 20, bottom: 80 },
+    ];
+
+    const plan = layoutScore(
+      score,
+      measuredScore,
+      TEST_OPTIONS,
+      'documentEven',
+      {
+        x: 0,
+        y: 0,
+        width:
+          measuredScore.maxIntrinsicNoteWidth +
+          TEST_OPTIONS.insets.left +
+          TEST_OPTIONS.insets.right,
+        height: 420,
+      }
+    );
+    const system = plan.systems[0];
+
+    if (!system) {
+      throw new Error('Expected layout system');
+    }
+
+    expect(system.staffYOffsets[1]).toBeGreaterThan(
+      TEST_OPTIONS.spacing.staffGap
+    );
+    expect(system.height).toBeGreaterThan(180);
+  });
+
+  it('uses each wrapped document system height for the next system origin', () => {
+    const score = makePianoScore([1, 1]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+    const firstMeasure = measuredScore.measures[0];
+    const secondMeasure = measuredScore.measures[1];
+
+    if (!firstMeasure || !secondMeasure) {
+      throw new Error('Expected measured score measures');
+    }
+
+    firstMeasure.staffBounds = [
+      { top: 40, bottom: 220 },
+      { top: 40, bottom: 80 },
+    ];
+    secondMeasure.staffBounds = [
+      { top: 40, bottom: 80 },
+      { top: 40, bottom: 80 },
+    ];
+
+    const availableWidth = measuredScore.maxIntrinsicNoteWidth * 0.75;
+    const plan = layoutScore(score, measuredScore, TEST_OPTIONS, 'document', {
+      x: 0,
+      y: 0,
+      width:
+        availableWidth + TEST_OPTIONS.insets.left + TEST_OPTIONS.insets.right,
+      height: 420,
+    });
+
+    expect(plan.systems).toHaveLength(2);
+    expect(plan.systems[0]?.height).toBeGreaterThan(
+      plan.systems[1]?.height ?? 0
+    );
+    expect(plan.systems[1]?.y).toBeCloseTo(
+      (plan.systems[0]?.y ?? 0) +
+        (plan.systems[0]?.height ?? 0) +
+        Math.max(82, TEST_OPTIONS.spacing.staffGap / 8),
       5
     );
   });
@@ -291,13 +401,16 @@ describe('layoutScore', () => {
       viewport.x + (viewport.width - system.width) / 2,
       5
     );
-    const visibleStaffTop = system.y + 40;
-    const visibleStaffBottom = system.y + TEST_OPTIONS.spacing.staffGap + 80;
-
-    expect((visibleStaffTop + visibleStaffBottom) / 2).toBeCloseTo(
-      viewport.y + viewport.height / 2,
-      5
+    const visibleBounds = getVisibleSystemBounds(
+      measuredScore,
+      system.groupId,
+      system.measureIndices,
+      system.staffYOffsets
     );
+
+    expect(
+      system.y + (visibleBounds.top + visibleBounds.bottom) / 2
+    ).toBeCloseTo(viewport.y + viewport.height / 2, 5);
     expect(plan.measures[0]?.x).toBeCloseTo(system.x, 5);
     expect(plan.contentSize.width).toBeCloseTo(viewport.width, 5);
     expect(plan.contentSize.height).toBeCloseTo(viewport.height, 5);
