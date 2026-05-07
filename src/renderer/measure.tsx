@@ -63,6 +63,12 @@ export function measureScore(
       const formatter = new Formatter();
       const allVoices: VFVoice[] = [];
       const measureNumbers: number[] = [];
+      const resolvedStateByStaffId = new Map(
+        staves.map((staff, staffIndex) => [
+          staff.id,
+          resolvedStatesByStaff[staffIndex]?.[measureIndex],
+        ])
+      );
 
       for (const [staffIndex, staff] of staves.entries()) {
         const measure = staff.measures[measureIndex]!;
@@ -71,8 +77,13 @@ export function measureScore(
 
         const vfVoices = measure.voices.map(
           (voice) =>
-            makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice)
-              .vfVoice
+            makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
+              resolveClef: (item) =>
+                item.targetStaffId
+                  ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
+                    resolvedState.clef
+                  : resolvedState.clef,
+            }).vfVoice
         );
 
         if (vfVoices.length > 1) {

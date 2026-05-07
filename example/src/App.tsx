@@ -14,6 +14,7 @@ import DocumentRenderer from './screens/DocumentRenderer';
 import EvenDocumentRenderer from './screens/EvenDocumentRenderer';
 // import InfiniteScore from './screens/InfiniteScore';
 import Main from './screens/Main';
+import MusicXmlImport from './screens/MusicXmlImport';
 import SimpleExample from './screens/SimpleExample';
 import SimpleRenderer from './screens/SimpleRenderer';
 // import VexflowTestSuite from './screens/VexflowTestSuite';
@@ -77,6 +78,11 @@ const App: React.FC = () => {
             name="SimpleRenderer"
             component={SimpleRenderer}
             options={{ title: 'Simple Renderer' }}
+          />
+          <Stack.Screen
+            name="MusicXmlImport"
+            component={MusicXmlImport}
+            options={{ title: 'MusicXML Import' }}
           />
           {/* <Stack.Screen
           name="VexflowTestSuite"

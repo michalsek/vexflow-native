@@ -1,4 +1,4 @@
-import type { Score, Staff } from '../state';
+import type { Score, Staff, StaffGroup } from '../state';
 import {
   getAvailableDocumentWidth,
   getStaffStackHeight,
@@ -35,6 +35,7 @@ export interface MeasuredGroupMeasure {
 
 export interface GroupLayoutContext {
   groupId: string;
+  staffGroup?: StaffGroup;
   staffIds: string[];
   staves: Staff[];
   resolvedStatesByStaff: ResolvedMeasureState[][];
@@ -149,6 +150,7 @@ function buildGroupLayoutContext(
 
   return groups.map((group) => ({
     groupId: group.groupId,
+    staffGroup: group.staffGroup,
     staffIds: group.staffIds,
     staves: resolveGroupStaves(score, group),
     resolvedStatesByStaff: resolveGroupStaves(score, group).map((staff) =>
