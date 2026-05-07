@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useFonts } from '@shopify/react-native-skia';
 
@@ -20,6 +20,11 @@ import type {
 
 import bravuraFont from '../../assets/fonts/Bravura.otf';
 import { Column, DropDown, Row, Screen } from '../components';
+import { useColorScheme } from '../hooks/useColorScheme';
+import {
+  getScoreRendererColorScheme,
+  SCORE_RENDERER_BACKGROUND,
+} from './ScoreRendererColorScheme';
 
 type RendererMode = 'documentEven' | 'document' | 'infiniteScore';
 
@@ -44,9 +49,15 @@ let activeFixtureContext: ScoreFixtureContext | null = null;
 
 // This file is exempt from the max lines rule
 const SimpleRenderer: React.FC = () => {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const [rendererType, setRendererType] =
     useState<RendererMode>('documentEven');
   const [score] = useState<Score>(() => getInitialScore());
+  const scoreColorScheme = useMemo(
+    () => getScoreRendererColorScheme(isDark),
+    [isDark]
+  );
   const fontManager = useFonts({
     Bravura: [bravuraFont],
   });
@@ -77,11 +88,17 @@ const SimpleRenderer: React.FC = () => {
           </View>
         </Row>
 
-        <View style={styles.viewportCard}>
+        <View
+          style={[
+            styles.viewportCard,
+            isDark ? styles.viewportCardDark : styles.viewportCardLight,
+          ]}
+        >
           <ScoreRenderer
             score={score}
             defaultFont="Bravura"
             fontManager={fontManager}
+            colorScheme={scoreColorScheme}
             rendererType={rendererType}
           />
         </View>
@@ -95,7 +112,6 @@ export default SimpleRenderer;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
   },
   content: {
     flex: 1,
@@ -111,6 +127,12 @@ const styles = StyleSheet.create({
   viewportCard: {
     flex: 1,
     overflow: 'hidden',
+  },
+  viewportCardDark: {
+    backgroundColor: SCORE_RENDERER_BACKGROUND.dark,
+  },
+  viewportCardLight: {
+    backgroundColor: SCORE_RENDERER_BACKGROUND.light,
   },
 });
 

@@ -445,6 +445,44 @@ describe('layoutScore', () => {
     expect(system.width).toBeCloseTo(systemWidth, 5);
     expect(plan.contentSize.width).toBeGreaterThan(viewport.width);
   });
+
+  it('keeps tall infinite score notation centered without vertical content overflow', () => {
+    const score = makePianoScore([1, 2, 3, 4]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+    const viewport = {
+      x: 0,
+      y: 0,
+      width: measuredScore.maxIntrinsicNoteWidth * 2,
+      height: 180,
+    };
+
+    const plan = layoutScore(
+      score,
+      measuredScore,
+      TEST_OPTIONS,
+      'infiniteScore',
+      viewport
+    );
+    const system = plan.systems[0];
+
+    if (!system) {
+      throw new Error('Expected infinite score system');
+    }
+
+    const visibleBounds = getVisibleSystemBounds(
+      measuredScore,
+      system.groupId,
+      system.measureIndices,
+      system.staffYOffsets
+    );
+
+    expect(system.height).toBeGreaterThan(viewport.height);
+    expect(
+      system.y + (visibleBounds.top + visibleBounds.bottom) / 2
+    ).toBeCloseTo(viewport.y + viewport.height / 2, 5);
+    expect(plan.contentSize.width).toBeGreaterThan(viewport.width);
+    expect(plan.contentSize.height).toBeCloseTo(viewport.height, 5);
+  });
 });
 
 describe('createVisibleViewport', () => {

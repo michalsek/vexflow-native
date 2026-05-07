@@ -88,20 +88,33 @@ function renderMeasure(
       const measure = staff.measures[measurePlan.measureIndex];
       const resolvedState =
         group.resolvedStatesByStaff[staffIndex]?.[measurePlan.measureIndex];
+      const measuredArtifacts = group.measures.find(
+        (groupMeasure) => groupMeasure.measureIndex === measurePlan.measureIndex
+      )?.voiceArtifactsByStaff[staffIndex];
 
       if (!measure || !resolvedState) {
         return { vfVoices: [], voiceArtifacts: [], beams: [], tuplets: [] };
       }
 
-      const voiceArtifacts = measure.voices.map((voice) =>
-        makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
-          resolveClef: (item) =>
-            item.targetStaffId
-              ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
-                resolvedState.clef
-              : resolvedState.clef,
-        })
-      );
+      const voiceArtifacts =
+        measuredArtifacts ??
+        measure.voices.map((voice) => ({
+          ...makeVFVoice(
+            score,
+            resolvedState.meter,
+            resolvedState.clef,
+            voice,
+            {
+              resolveClef: (item) =>
+                item.targetStaffId
+                  ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
+                    resolvedState.clef
+                  : resolvedState.clef,
+            }
+          ),
+          items: voice.items,
+          ownerStaffId: staff.id,
+        }));
       const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
       if (vfVoices.length > 1) {
@@ -110,11 +123,13 @@ function renderMeasure(
 
       return {
         vfVoices,
-        voiceArtifacts: voiceArtifacts.map(({ notes }, voiceIndex) => ({
-          notes,
-          items: measure.voices[voiceIndex]!.items,
-          ownerStaffId: staff.id,
-        })),
+        voiceArtifacts: voiceArtifacts.map(
+          ({ items, notes, ownerStaffId }) => ({
+            notes,
+            items,
+            ownerStaffId,
+          })
+        ),
         beams: voiceArtifacts.flatMap(({ beams }) => beams),
         tuplets: voiceArtifacts.flatMap(({ tuplets }) => tuplets),
       };

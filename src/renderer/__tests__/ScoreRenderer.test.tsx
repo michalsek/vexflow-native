@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals';
 function loadScoreRendererModule() {
   jest.resetModules();
 
+  const React = jest.requireActual<typeof import('react')>('react');
   const mockCanvas = { kind: 'canvas' };
   const mockPicture = { kind: 'picture' };
   const mockBeginRecording = jest.fn(() => mockCanvas);
@@ -20,6 +21,30 @@ function loadScoreRendererModule() {
     })
   );
   const mockRenderVexflowRecordingCommands = jest.fn();
+  const mockUseScoreRecording = jest.fn(() => ({
+    commands: [],
+    layoutPlan: { contentSize: { height: 0, width: 0 } },
+  }));
+  let viewportState = { height: 0, width: 0 };
+  const mockSetViewportSize = jest.fn(
+    (
+      nextValue:
+        | typeof viewportState
+        | ((currentValue: typeof viewportState) => typeof viewportState)
+    ) => {
+      viewportState =
+        typeof nextValue === 'function' ? nextValue(viewportState) : nextValue;
+    }
+  );
+
+  jest.doMock('react', () => ({
+    ...React,
+    memo: jest.fn((component: unknown) => component),
+    useCallback: jest.fn((factory: () => unknown) => factory),
+    useEffect: jest.fn((effect: () => void) => effect()),
+    useMemo: jest.fn((factory: () => unknown) => factory()),
+    useState: jest.fn(() => [viewportState, mockSetViewportSize]),
+  }));
 
   jest.doMock('@shopify/react-native-skia', () => ({
     Canvas: 'Canvas',
@@ -74,6 +99,10 @@ function loadScoreRendererModule() {
     renderVexflowRecordingCommands: mockRenderVexflowRecordingCommands,
   }));
 
+  jest.doMock('../useScoreRecording', () => ({
+    useScoreRecording: mockUseScoreRecording,
+  }));
+
   const module =
     require('../ScoreRenderer') as typeof import('../ScoreRenderer');
 
@@ -86,12 +115,15 @@ function loadScoreRendererModule() {
     getScrollbarMetrics: module.getScrollbarMetrics,
     getScrollOffsetFromThumbOffset: module.getScrollOffsetFromThumbOffset,
     getThumbOffsetFromScrollOffset: module.getThumbOffsetFromScrollOffset,
+    ScoreRenderer: module.default as unknown as (props: unknown) => unknown,
     mockBeginRecording,
     mockCanvas,
     mockFinishRecordingAsPicture,
     mockPicture,
     mockPictureRecorder,
     mockRenderVexflowRecordingCommands,
+    mockSetViewportSize,
+    mockUseScoreRecording,
     mockXYWHRect,
   };
 }
@@ -103,6 +135,81 @@ afterEach(() => {
 });
 
 describe('ScoreRenderer picture cache helpers', () => {
+  it('uses live layout size for score recording viewport', () => {
+    const module = loadScoreRendererModule();
+    const score = {
+      id: 'score-renderer-live-layout',
+      defaults: { meter: { beats: 4, beatUnit: 4 } },
+      staves: [],
+    };
+    const fontManager = { kind: 'font-manager' };
+
+    const initialTree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      score,
+    });
+
+    expect(module.mockUseScoreRecording).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enabled: false,
+        viewport: { x: 0, y: 0, width: 0, height: 0 },
+      })
+    );
+    expect(module.mockPictureRecorder).not.toHaveBeenCalled();
+
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 612, width: 393 } },
+    });
+
+    expect(module.mockSetViewportSize).toHaveBeenCalledTimes(1);
+
+    module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      score,
+    });
+
+    expect(module.mockUseScoreRecording).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        viewport: { x: 0, y: 0, width: 393, height: 612 },
+      })
+    );
+    expect(module.mockPictureRecorder).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the resolved color scheme into score recording', () => {
+    const module = loadScoreRendererModule();
+    const score = {
+      id: 'score-renderer-color-scheme',
+      defaults: { meter: { beats: 4, beatUnit: 4 } },
+      staves: [],
+    };
+    const fontManager = { kind: 'font-manager' };
+
+    module.ScoreRenderer({
+      colorScheme: {
+        background: '#111827',
+        foreground: '#F8FAFC',
+        ledgerLine: '#CBD5E1',
+      },
+      defaultFont: 'Bravura',
+      fontManager,
+      score,
+    });
+
+    expect(module.mockUseScoreRecording).toHaveBeenCalledWith(
+      expect.objectContaining({
+        colorScheme: {
+          background: '#111827',
+          foreground: '#F8FAFC',
+          ledgerLine: '#CBD5E1',
+        },
+      })
+    );
+  });
+
   it('records a picture for the full content size', () => {
     const module = loadScoreRendererModule();
     const commands = [{ type: 'save' }] as const;
@@ -200,6 +307,24 @@ describe('ScoreRenderer scroll helpers', () => {
     ).toBe(0);
   });
 
+  it('keeps document bottom scroll range tied to the live viewport height', () => {
+    const module = loadScoreRendererModule();
+    const viewportSize = { width: 393, height: 612 };
+    const contentSize = { width: 393, height: 980 };
+
+    expect(module.getMaxScroll('documentEven', viewportSize, contentSize)).toBe(
+      368
+    );
+    expect(
+      module.createClampedScrollOffset(
+        2000,
+        'document',
+        viewportSize,
+        contentSize
+      )
+    ).toBe(368);
+  });
+
   it('uses horizontal max scroll for infinite score rendering', () => {
     const module = loadScoreRendererModule();
 
@@ -251,3 +376,31 @@ describe('ScoreRenderer scroll helpers', () => {
     expect(module.getScrollOffsetFromThumbOffset(45, metrics)).toBe(300);
   });
 });
+
+function getScoreRendererGestureSurface(element: unknown): {
+  props: {
+    onLayout: (event: {
+      nativeEvent: { layout: { height: number; width: number } };
+    }) => void;
+  };
+} {
+  const root = element as {
+    props: {
+      children: [
+        {
+          props: {
+            children: {
+              props: {
+                onLayout: (event: {
+                  nativeEvent: { layout: { height: number; width: number } };
+                }) => void;
+              };
+            };
+          };
+        }
+      ];
+    };
+  };
+
+  return root.props.children[0].props.children;
+}

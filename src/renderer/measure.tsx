@@ -6,7 +6,7 @@ import {
   ensureVexflowTextMeasurementCanvas,
   installVexflowReactNativeFallbacks,
 } from '../base/setupVexflowReactNative';
-import type { Score, Staff } from '../state';
+import type { Score, Staff, VoiceItem } from '../state';
 import {
   buildResolvedMeasureStates,
   buildMeasurementGroups,
@@ -32,12 +32,18 @@ export interface MeasuredMeasure {
   staffIds: string[];
   staffBounds: StaffVerticalBounds[];
   intrinsicNoteWidth: number;
+  voiceArtifactsByStaff: MeasuredVoiceArtifacts[][];
 }
 
 export interface MeasuredScore {
   measures: MeasuredMeasure[];
   maxIntrinsicNoteWidth: number;
 }
+
+export type MeasuredVoiceArtifacts = ReturnType<typeof makeVFVoice> & {
+  items: VoiceItem[];
+  ownerStaffId: string;
+};
 
 /**
  * Measures each staff group by building VexFlow voices and estimating note width.
@@ -134,6 +140,14 @@ export function measureScore(
           staffIds: group.staffIds,
           staffBounds,
           intrinsicNoteWidth,
+          voiceArtifactsByStaff: voiceArtifactsByStaff.map(
+            ({ measure, ownerStaffId, voiceArtifacts }) =>
+              voiceArtifacts.map((artifacts, voiceIndex) => ({
+                ...artifacts,
+                items: measure.voices[voiceIndex]?.items ?? [],
+                ownerStaffId,
+              }))
+          ),
         });
       } catch (error) {
         throw new Error(

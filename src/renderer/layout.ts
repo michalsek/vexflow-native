@@ -17,6 +17,7 @@ import {
   type ResolvedMeasureState,
 } from './scoreParsing';
 import type { MeasuredScore } from './measure';
+import type { MeasuredVoiceArtifacts } from './measure';
 import type { StaffVerticalBounds } from './measure';
 import type {
   RendererRect,
@@ -31,6 +32,7 @@ export interface MeasuredGroupMeasure {
   intrinsicWidth: number;
   measureNumbers: number[];
   staffBounds: StaffVerticalBounds[];
+  voiceArtifactsByStaff: MeasuredVoiceArtifacts[][];
 }
 
 export interface GroupLayoutContext {
@@ -167,6 +169,7 @@ function buildGroupLayoutContext(
         intrinsicWidth: measure.intrinsicNoteWidth,
         measureNumbers: measure.measureNumbers,
         staffBounds: measure.staffBounds,
+        voiceArtifactsByStaff: measure.voiceArtifactsByStaff,
       })),
   }));
 }
@@ -304,6 +307,6 @@ function measureContentSize(
 
   return {
     width: Math.max(viewport.width, measuredWidth),
-    height: Math.max(viewport.height, measuredHeight),
+    height: viewport.height,
   };
 }

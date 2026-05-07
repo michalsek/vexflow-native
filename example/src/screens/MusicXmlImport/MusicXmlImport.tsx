@@ -12,6 +12,10 @@ import {
 import bravuraFont from '../../../assets/fonts/Bravura.otf';
 import { Column, DropDown, Row, Screen, Text } from '../../components';
 import { useColorScheme } from '../../hooks/useColorScheme';
+import {
+  getScoreRendererColorScheme,
+  SCORE_RENDERER_BACKGROUND,
+} from '../ScoreRendererColorScheme';
 import { MUSIC_XML_IMPORT_FIXTURES } from './fixtures';
 
 type RendererMode = 'documentEven' | 'document' | 'infiniteScore';
@@ -39,6 +43,17 @@ type ImportSummary = {
   title: string;
 };
 
+type FixtureLoadResult = {
+  timings: {
+    assetDownloadMs: number;
+    fetchMs: number;
+    textDecodeMs: number;
+    totalMs: number;
+  };
+  uri: string;
+  xml: string;
+};
+
 const RENDERER_OPTIONS = [
   { label: 'Document Even', value: 'documentEven' as const },
   { label: 'Document Auto', value: 'document' as const },
@@ -53,6 +68,7 @@ const FIXTURE_OPTIONS = MUSIC_XML_IMPORT_FIXTURES.map((fixture) => ({
 const MusicXmlImport: React.FC = () => {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+
   const [fixtureId, setFixtureId] = useState(
     MUSIC_XML_IMPORT_FIXTURES[0]?.value ?? ''
   );
@@ -64,6 +80,10 @@ const MusicXmlImport: React.FC = () => {
   const fontManager = useFonts({
     Bravura: [bravuraFont],
   });
+  const scoreColorScheme = useMemo(
+    () => getScoreRendererColorScheme(isDark),
+    [isDark]
+  );
   const selectedFixture = useMemo(
     () =>
       MUSIC_XML_IMPORT_FIXTURES.find(
@@ -87,20 +107,32 @@ const MusicXmlImport: React.FC = () => {
       setImportResult({ status: 'loading' });
 
       try {
-        const xml = await loadFixtureXml(selectedFixture.asset);
+        const loadResult = await loadFixtureXml(selectedFixture.asset);
 
         if (!isMounted) {
           return;
         }
 
-        const score = parseMusicXmlToScore(xml, {
+        const parseStart = nowMs();
+        const score = parseMusicXmlToScore(loadResult.xml, {
           scoreId: selectedFixture.value,
+        });
+        const parseMs = nowMs() - parseStart;
+        const summary = createImportSummary(score);
+
+        logMusicXmlImportProfile({
+          fixture: selectedFixture.label,
+          load: loadResult.timings,
+          parseMs,
+          summary,
+          uri: loadResult.uri,
+          xmlLength: loadResult.xml.length,
         });
 
         setImportResult({
           score,
           status: 'parsed',
-          summary: createImportSummary(score),
+          summary,
         });
       } catch (error) {
         if (!isMounted) {
@@ -182,12 +214,18 @@ const MusicXmlImport: React.FC = () => {
           )}
         </Column>
 
-        <View style={styles.viewport}>
+        <View
+          style={[
+            styles.viewport,
+            isDark ? styles.viewportDark : styles.viewportLight,
+          ]}
+        >
           {importResult.status === 'parsed' ? (
             <ScoreRenderer
               score={importResult.score}
               defaultFont="Bravura"
               fontManager={fontManager}
+              colorScheme={scoreColorScheme}
               rendererType={rendererType}
             />
           ) : null}
@@ -255,11 +293,18 @@ function getImportErrorMessage(error: unknown): string {
   return 'Unknown MusicXML import error.';
 }
 
-async function loadFixtureXml(fixtureAsset: number): Promise<string> {
+async function loadFixtureXml(
+  fixtureAsset: number
+): Promise<FixtureLoadResult> {
+  const totalStart = nowMs();
   const asset = Asset.fromModule(fixtureAsset);
+  const assetDownloadStart = nowMs();
   const downloadedAsset = await asset.downloadAsync();
+  const assetDownloadMs = nowMs() - assetDownloadStart;
   const uri = downloadedAsset.localUri ?? downloadedAsset.uri;
+  const fetchStart = nowMs();
   const response = await fetch(uri);
+  const fetchMs = nowMs() - fetchStart;
 
   if (!response.ok) {
     throw new MusicXmlParseError(
@@ -267,7 +312,71 @@ async function loadFixtureXml(fixtureAsset: number): Promise<string> {
     );
   }
 
-  return response.text();
+  const textDecodeStart = nowMs();
+  const xml = await response.text();
+  const textDecodeMs = nowMs() - textDecodeStart;
+
+  return {
+    timings: {
+      assetDownloadMs,
+      fetchMs,
+      textDecodeMs,
+      totalMs: nowMs() - totalStart,
+    },
+    uri,
+    xml,
+  };
+}
+
+function logMusicXmlImportProfile({
+  fixture,
+  load,
+  parseMs,
+  summary,
+  uri,
+  xmlLength,
+}: {
+  fixture: string;
+  load: FixtureLoadResult['timings'];
+  parseMs: number;
+  summary: ImportSummary;
+  uri: string;
+  xmlLength: number;
+}) {
+  if (!isDevBuild()) {
+    return;
+  }
+
+  console.info('[MusicXmlImport] fixture profile', {
+    fixture,
+    uri,
+    xmlLength,
+    assetDownloadMs: roundMs(load.assetDownloadMs),
+    fetchMs: roundMs(load.fetchMs),
+    textDecodeMs: roundMs(load.textDecodeMs),
+    loadTotalMs: roundMs(load.totalMs),
+    parseMs: roundMs(parseMs),
+    measures: summary.measureCount,
+    staves: summary.staffCount,
+    attachments: summary.attachmentCount,
+    spanners: summary.spannerCount,
+  });
+}
+
+function nowMs(): number {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
+function roundMs(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function isDevBuild(): boolean {
+  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
+    return false;
+  }
+
+  return typeof __DEV__ === 'undefined' ? false : __DEV__;
 }
 
 const StatusBanner: React.FC<{ message: string }> = ({ message }) => {
@@ -289,7 +398,6 @@ const StatusBanner: React.FC<{ message: string }> = ({ message }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
   },
   content: {
     flex: 1,
@@ -315,7 +423,6 @@ const styles = StyleSheet.create({
     borderColor: '#991b1b',
   },
   errorBannerLight: {
-    backgroundColor: '#fef2f2',
     borderColor: '#fecaca',
   },
   errorMessage: {
@@ -361,10 +468,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
     borderColor: '#374151',
   },
-  statusBannerLight: {
-    backgroundColor: '#ffffff',
-    borderColor: '#d1d5db',
-  },
+  statusBannerLight: {},
   statusMessage: {
     fontSize: 12,
     fontWeight: '600',
@@ -380,5 +484,11 @@ const styles = StyleSheet.create({
   viewport: {
     flex: 1,
     overflow: 'hidden',
+  },
+  viewportDark: {
+    backgroundColor: SCORE_RENDERER_BACKGROUND.dark,
+  },
+  viewportLight: {
+    backgroundColor: SCORE_RENDERER_BACKGROUND.light,
   },
 });

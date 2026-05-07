@@ -9,7 +9,10 @@ import type { FontInfo } from 'vexflow';
 import FontManager from './FontManager';
 import TextMeasureContext from './TextMeasureContext';
 import { installVexflowReactNativeFallbacks } from './setupVexflowReactNative';
-import { parseStyleToColor } from './utils';
+import {
+  resolveVexflowColor,
+  type VexflowColorScheme,
+} from './VexflowColorScheme';
 import type {
   VexflowRecordingCommand,
   VexflowRecordingFont,
@@ -39,10 +42,10 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
   private commands: VexflowRecordingCommand[] = [];
   private currentPath?: VexflowRecordingPathCommand[];
   private fillPaint: VexflowRecordingPaint = {
-    color: parseStyleToColor('black'),
+    color: '#000000',
   };
   private strokePaint: VexflowRecordingPaint = {
-    color: parseStyleToColor('black'),
+    color: '#000000',
     strokeCap: 'butt',
     strokeWidth: 1.5 * WidthScale,
   };
@@ -51,8 +54,16 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
   private fontManager: FontManager;
   private textMeasurementContext: TextMeasureContext;
   private isFinished = false;
+  private colorScheme?: VexflowColorScheme;
 
-  constructor(fontProvider: SkTypefaceFontProvider, defaultFont: string) {
+  constructor(
+    fontProvider: SkTypefaceFontProvider,
+    defaultFont: string,
+    colorScheme?: VexflowColorScheme
+  ) {
+    this.colorScheme = colorScheme;
+    this.fillPaint.color = resolveVexflowColor('black', colorScheme);
+    this.strokePaint.color = resolveVexflowColor('black', colorScheme);
     this.fontManager = new FontManager(fontProvider, defaultFont);
     this.textFontDescriptor = { font: defaultFont };
     this.textFont = this.fontManager.createSkFont(defaultFont);
@@ -103,7 +114,7 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
     if (typeof style === 'string') {
       this.fillPaint = {
         ...this.fillPaint,
-        color: parseStyleToColor(style),
+        color: resolveVexflowColor(style, this.colorScheme),
       };
       return this;
     }
@@ -120,7 +131,7 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
   setStrokeStyle(style: string) {
     this.strokePaint = {
       ...this.strokePaint,
-      color: parseStyleToColor(style),
+      color: resolveVexflowColor(style, this.colorScheme),
     };
     return this;
   }

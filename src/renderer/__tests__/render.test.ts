@@ -189,6 +189,7 @@ describe('renderScore', () => {
               intrinsicWidth: 152,
               measureNumbers: [1],
               staffBounds: SINGLE_STAFF_BOUNDS,
+              voiceArtifactsByStaff: [],
             },
           ],
         },
@@ -202,6 +203,105 @@ describe('renderScore', () => {
     expect(mockBeamDraw).toHaveBeenCalledTimes(1);
     expect(mockTupletSetContext).toHaveBeenCalledTimes(1);
     expect(mockTupletDraw).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses measured voice artifacts without rebuilding VexFlow voices', () => {
+    const item = { id: 'item-1', targetStaffId: undefined };
+    const measuredVoiceArtifacts = {
+      vfVoice: { draw: mockVoiceDraw },
+      notes: [{ setStave: mockNoteSetStave }],
+      beams: [
+        {
+          setContext: mockBeamSetContext.mockReturnValue({
+            draw: mockBeamDraw,
+          }),
+        },
+      ],
+      tuplets: [],
+      items: [item],
+      ownerStaffId: 'staff-1',
+    };
+    const score: Score = {
+      id: 'render-measured-artifacts',
+      defaults: {
+        meter: { beats: 4, beatUnit: 4 },
+      },
+      staves: [
+        {
+          id: 'staff-1',
+          order: 0,
+          defaultClef: 'treble',
+          measures: [
+            {
+              id: 'measure-1',
+              number: 1,
+              voices: [
+                {
+                  id: 'voice-1',
+                  index: 0,
+                  items: [item as VoiceItem],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const layoutPlan: ScoreLayoutPlan = {
+      rendererType: 'documentEven',
+      contentSize: { width: 200, height: 100 },
+      systems: [
+        {
+          groupId: 'staff:staff-1',
+          systemIndex: 0,
+          x: 24,
+          y: 24,
+          width: 152,
+          height: 135,
+          staffCount: 1,
+          staffYOffsets: [0],
+          measureIndices: [0],
+        },
+      ],
+      measures: [
+        {
+          groupId: 'staff:staff-1',
+          measureIndex: 0,
+          x: 24,
+          y: 24,
+          width: 152,
+          height: 135,
+          staffYOffsets: [0],
+          systemIndex: 0,
+        },
+      ],
+      groups: [
+        {
+          groupId: 'staff:staff-1',
+          staffIds: ['staff-1'],
+          staves: score.staves,
+          resolvedStatesByStaff: [
+            [{ clef: 'treble', meter: score.defaults.meter }],
+          ],
+          measures: [
+            {
+              groupId: 'staff:staff-1',
+              measureIndex: 0,
+              intrinsicWidth: 152,
+              measureNumbers: [1],
+              staffBounds: SINGLE_STAFF_BOUNDS,
+              voiceArtifactsByStaff: [[measuredVoiceArtifacts as never]],
+            },
+          ],
+        },
+      ],
+    };
+
+    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+
+    expect(mockMakeVFVoice).not.toHaveBeenCalled();
+    expect(mockVoiceDraw).toHaveBeenCalledTimes(1);
+    expect(mockBeamDraw).toHaveBeenCalledTimes(1);
   });
 
   it('assigns cross-staff voice items to their target staves', () => {
@@ -304,6 +404,7 @@ describe('renderScore', () => {
               intrinsicWidth: 152,
               measureNumbers: [1, 1],
               staffBounds: TWO_STAFF_BOUNDS,
+              voiceArtifactsByStaff: [],
             },
           ],
         },
@@ -441,6 +542,7 @@ describe('renderScore', () => {
               intrinsicWidth: 152,
               measureNumbers: [1],
               staffBounds: SINGLE_STAFF_BOUNDS,
+              voiceArtifactsByStaff: [],
             },
           ],
         },
@@ -548,6 +650,7 @@ function makeConnectorLayoutPlan(
           intrinsicWidth: 136,
           measureNumbers: [measureIndex + 1, measureIndex + 1],
           staffBounds: TWO_STAFF_BOUNDS,
+          voiceArtifactsByStaff: [],
         })),
       },
     ],

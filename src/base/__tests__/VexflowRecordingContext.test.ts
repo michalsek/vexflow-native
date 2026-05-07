@@ -5,7 +5,12 @@ const WIDTH_SCALE = 3 / 4;
 type LoadedContextModule = {
   VexflowRecordingContext: new (
     fontProvider: unknown,
-    defaultFont: string
+    defaultFont: string,
+    colorScheme?: {
+      foreground?: string;
+      background?: string;
+      ledgerLine?: string;
+    }
   ) => any;
   createSkFont: ReturnType<typeof jest.fn>;
   getTextMeasurementCanvas: ReturnType<typeof jest.fn>;
@@ -254,6 +259,104 @@ describe('VexflowRecordingContext', () => {
       {
         type: 'clear',
         color: 'transparent',
+      },
+    ]);
+  });
+
+  it('uses a custom foreground color for initial fill and stroke paint', () => {
+    const module = loadContextModule('android');
+    const context = new module.VexflowRecordingContext({}, 'Bravura', {
+      foreground: '#F97316',
+    });
+
+    context.fillRect(1, 2, 3, 4).beginPath().moveTo(5, 6).lineTo(7, 8).stroke();
+
+    expect(context.finish()).toEqual([
+      {
+        type: 'fillRect',
+        rect: { x: 1, y: 2, width: 3, height: 4 },
+        paint: { color: '#F97316' },
+      },
+      {
+        type: 'strokePath',
+        path: [
+          { type: 'moveTo', x: 5, y: 6 },
+          { type: 'lineTo', x: 7, y: 8 },
+        ],
+        paint: {
+          color: '#F97316',
+          strokeCap: 'butt',
+          strokeWidth: 1.5 * WIDTH_SCALE,
+        },
+      },
+    ]);
+  });
+
+  it('remaps VexFlow foreground aliases to the configured foreground color', () => {
+    const module = loadContextModule('ios');
+    const context = new module.VexflowRecordingContext({}, 'Bravura', {
+      foreground: '#FFFFFF',
+    });
+
+    context
+      .setFillStyle('black')
+      .fillRect(1, 2, 3, 4)
+      .setStrokeStyle('#000')
+      .beginPath()
+      .moveTo(5, 6)
+      .stroke();
+
+    expect(context.finish()).toEqual([
+      {
+        type: 'fillRect',
+        rect: { x: 1, y: 2, width: 3, height: 4 },
+        paint: { color: '#FFFFFF' },
+      },
+      {
+        type: 'strokePath',
+        path: [{ type: 'moveTo', x: 5, y: 6 }],
+        paint: {
+          color: '#FFFFFF',
+          strokeCap: 'butt',
+          strokeWidth: 1.5 * WIDTH_SCALE,
+        },
+      },
+    ]);
+  });
+
+  it('remaps VexFlow ledger line aliases to ledgerLine or foreground', () => {
+    const module = loadContextModule('ios');
+    const context = new module.VexflowRecordingContext({}, 'Bravura', {
+      foreground: '#E5E7EB',
+      ledgerLine: '#94A3B8',
+    });
+    const fallbackContext = new module.VexflowRecordingContext({}, 'Bravura', {
+      foreground: '#E5E7EB',
+    });
+
+    context.setStrokeStyle('#444').beginPath().moveTo(1, 2).stroke();
+    fallbackContext.setStrokeStyle('#444444').beginPath().moveTo(3, 4).stroke();
+
+    expect(context.finish()).toEqual([
+      {
+        type: 'strokePath',
+        path: [{ type: 'moveTo', x: 1, y: 2 }],
+        paint: {
+          color: '#94A3B8',
+          strokeCap: 'butt',
+          strokeWidth: 1.5 * WIDTH_SCALE,
+        },
+      },
+    ]);
+    expect(fallbackContext.finish()).toEqual([
+      {
+        type: 'strokePath',
+        path: [{ type: 'moveTo', x: 3, y: 4 }],
+        paint: {
+          color: '#E5E7EB',
+          strokeCap: 'butt',
+          strokeWidth: 1.5 * WIDTH_SCALE,
+        },
       },
     ]);
   });
