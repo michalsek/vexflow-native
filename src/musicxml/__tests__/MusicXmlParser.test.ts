@@ -87,6 +87,40 @@ const SIMPLE_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
   </part>
 </score-partwise>`;
 
+const BEAMED_STEMS_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Piano</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>480</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>240</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <stem>down</stem>
+        <staff>1</staff>
+        <beam number="1">begin</beam>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>240</duration>
+        <voice>1</voice>
+        <type>eighth</type>
+        <stem>down</stem>
+        <staff>1</staff>
+        <beam number="1">end</beam>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
 describe('parseMusicXmlToScore', () => {
   it('maps partwise MusicXML into Score state', () => {
     const score = parseMusicXmlToScore(SIMPLE_PARTWISE, {
@@ -116,6 +150,7 @@ describe('parseMusicXmlToScore', () => {
     expect(trebleVoice?.items[0]).toMatchObject({
       type: 'chord',
       duration: { length: 'q' },
+      stemDirection: 'up',
       pitches: [
         { step: 'C', octave: 4 },
         { step: 'E', octave: 4 },
@@ -137,6 +172,27 @@ describe('parseMusicXmlToScore', () => {
     );
     expect(score.ties).toHaveLength(1);
     expect(score.slurs).toHaveLength(1);
+  });
+
+  it('preserves explicit stems on beamed MusicXML notes', () => {
+    const score = parseMusicXmlToScore(BEAMED_STEMS_PARTWISE, {
+      scoreId: 'beamed-stems',
+    });
+
+    const notes = score.staves[0]?.measures[0]?.voices[0]?.items.filter(
+      (item) => item.type === 'note'
+    );
+
+    expect(notes).toEqual([
+      expect.objectContaining({
+        type: 'note',
+        stemDirection: 'down',
+      }),
+      expect.objectContaining({
+        type: 'note',
+        stemDirection: 'down',
+      }),
+    ]);
   });
 
   it('parses the bundled MusicXML fixture', () => {

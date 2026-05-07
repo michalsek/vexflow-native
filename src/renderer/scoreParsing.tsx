@@ -177,6 +177,13 @@ export function beamGroupsToVF(meter?: Meter): VFFraction[] | undefined {
   return meter.beamGroups.map((group) => new VFFraction(group.num, group.den));
 }
 
+function hasExplicitStemDirection(item: VoiceItem): boolean {
+  return (
+    item.type !== 'rest' &&
+    (item.stemDirection === 'up' || item.stemDirection === 'down')
+  );
+}
+
 /**
  * Finds the tuplet groups that belong to a given voice.
  */
@@ -268,7 +275,15 @@ export function makeVFVoice(
   }
 
   const groups = beamGroupsToVF(meter);
-  const beams = Beam.generateBeams(notes, groups ? { groups } : undefined);
+  const maintainStemDirections = voice.items.some(hasExplicitStemDirection);
+  const beamOptions =
+    groups || maintainStemDirections
+      ? {
+          ...(groups ? { groups } : {}),
+          ...(maintainStemDirections ? { maintainStemDirections } : {}),
+        }
+      : undefined;
+  const beams = Beam.generateBeams(notes, beamOptions);
 
   const tuplets = findTupletsForVoice(score, voice)
     .map((group) => {
