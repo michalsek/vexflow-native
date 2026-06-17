@@ -18,7 +18,46 @@ import type {
   VexflowRecordingPaint,
   VexflowRecordingPathCommand,
   VexflowRecordingRect,
+  VexflowStyleOverride,
 } from './VexflowRecordingTypes';
+
+/**
+ * Map a CSS `shadowBlur` (a blur radius in px) to a Gaussian sigma for Skia's
+ * drop-shadow filter. Canvas measures shadow blur as a radius; Skia's filter is
+ * parameterised by sigma. `radius / 2` is the conventional approximation used
+ * across Skia-backed canvas shims and gives a visually matching glow.
+ */
+function shadowBlurToSigma(shadowBlur: number): number {
+  'worklet';
+
+  return shadowBlur / 2;
+}
+
+/**
+ * Apply the recorded glow (CSS shadow) to a Skia paint as a drop-shadow image
+ * filter. `dx = dy = 0` turns the drop shadow into a symmetric glow centred on
+ * the ink; `MakeDropShadow` (not `…Only`) keeps the source content, so the note
+ * still draws on top of its halo. No-op unless a `shadowColor` resolved.
+ */
+function applyGlow(skPaint: SkPaint, paint: VexflowRecordingPaint) {
+  'worklet';
+
+  if (paint.shadowColor == null) {
+    return;
+  }
+
+  const sigma = shadowBlurToSigma(paint.shadowBlur ?? 0);
+
+  skPaint.setImageFilter(
+    Skia.ImageFilter.MakeDropShadow(
+      0,
+      0,
+      sigma,
+      sigma,
+      Skia.Color(paint.shadowColor)
+    )
+  );
+}
 
 function toSkiaRect(rect: VexflowRecordingRect) {
   'worklet';
@@ -47,6 +86,7 @@ function createFillPaint(paint: VexflowRecordingPaint): SkPaint {
   skPaint.setStyle(PaintStyle.Fill);
   skPaint.setAntiAlias(true);
   skPaint.setColor(Skia.Color(paint.color));
+  applyGlow(skPaint, paint);
 
   return skPaint;
 }
@@ -60,6 +100,11 @@ function createStrokePaint(paint: VexflowRecordingPaint): SkPaint {
   skPaint.setColor(Skia.Color(paint.color));
   skPaint.setStrokeWidth(paint.strokeWidth ?? 1);
   skPaint.setStrokeCap(mapRecordingLineCap(paint.strokeCap ?? 'butt'));
+  applyGlow(skPaint, paint);
+
+  if (paint.lineDash != null && paint.lineDash.length > 0) {
+    skPaint.setPathEffect(Skia.PathEffect.MakeDash(paint.lineDash));
+  }
 
   return skPaint;
 }
@@ -71,6 +116,56 @@ function createClearPaint(): SkPaint {
   clearPaint.setBlendMode(BlendMode.Clear);
 
   return clearPaint;
+}
+
+type PaintKind = 'fill' | 'stroke';
+
+/**
+ * Resolve a recorded paint against an optional per-group style override map
+ * (`groupId -> VexflowStyleOverride`), merging the override OVER the recorded
+ * paint. Returns the original paint object (referentially) when no override
+ * applies, so untagged chrome (staff lines, clefs, …) is never restyled and a
+ * replay with no `styleOverrides` is byte-identical to a faithful replay.
+ *
+ * `kind` disambiguates which colour field wins: a fill command reads
+ * `fillColor ?? color`, a stroke command reads `strokeColor ?? color`, each
+ * falling back to the recorded colour. Glow (shadow) is applied to both kinds so
+ * the whole note glows; dash is stroke-only. This is the seam that lets a single
+ * recording be replayed many times in different styles (e.g. per-frame from a
+ * shared value) without re-recording.
+ */
+function resolveStyle(
+  paint: VexflowRecordingPaint,
+  groupId: string | undefined,
+  kind: PaintKind,
+  styleOverrides?: Record<string, VexflowStyleOverride>
+): VexflowRecordingPaint {
+  'worklet';
+
+  if (styleOverrides == null || groupId == null) {
+    return paint;
+  }
+
+  const override = styleOverrides[groupId];
+
+  if (override == null) {
+    return paint;
+  }
+
+  const color =
+    kind === 'fill'
+      ? override.fillColor ?? override.color ?? paint.color
+      : override.strokeColor ?? override.color ?? paint.color;
+
+  return {
+    ...paint,
+    color,
+    shadowColor: override.shadowColor ?? paint.shadowColor,
+    shadowBlur: override.shadowBlur ?? paint.shadowBlur,
+    // Dash is stroke-only; ignore any override.lineDash on fill commands.
+    lineDash:
+      kind === 'stroke' ? override.lineDash ?? paint.lineDash : paint.lineDash,
+  };
 }
 
 function createFont(fontManager: FontManager, font: VexflowRecordingFont) {
@@ -148,7 +243,15 @@ export function renderVexflowRecordingCommands(
   canvas: SkCanvas,
   commands: readonly VexflowRecordingCommand[],
   fontProvider: SkTypefaceFontProvider,
-  defaultFont: string
+  defaultFont: string,
+  /**
+   * Optional `groupId -> VexflowStyleOverride` map. Commands tagged (via
+   * `beginColorGroup`/`endColorGroup`) with a `groupId` present here are drawn
+   * with the override merged over their recorded paint — separate fill/stroke
+   * colours, a glow (shadow), and a stroke dash are all expressible. Omit for a
+   * byte-identical replay of the recorded style.
+   */
+  styleOverrides?: Record<string, VexflowStyleOverride>
 ) {
   'worklet';
 
@@ -177,7 +280,9 @@ export function renderVexflowRecordingCommands(
       case 'fillRect':
         canvas.drawRect(
           toSkiaRect(command.rect),
-          createFillPaint(command.paint)
+          createFillPaint(
+            resolveStyle(command.paint, command.groupId, 'fill', styleOverrides)
+          )
         );
         break;
       case 'clearRect':
@@ -186,13 +291,22 @@ export function renderVexflowRecordingCommands(
       case 'fillPath':
         canvas.drawPath(
           buildPath(command.path),
-          createFillPaint(command.paint)
+          createFillPaint(
+            resolveStyle(command.paint, command.groupId, 'fill', styleOverrides)
+          )
         );
         break;
       case 'strokePath':
         canvas.drawPath(
           buildPath(command.path),
-          createStrokePaint(command.paint)
+          createStrokePaint(
+            resolveStyle(
+              command.paint,
+              command.groupId,
+              'stroke',
+              styleOverrides
+            )
+          )
         );
         break;
       case 'fillText':
@@ -200,7 +314,9 @@ export function renderVexflowRecordingCommands(
           command.text,
           command.x,
           command.y,
-          createFillPaint(command.paint),
+          createFillPaint(
+            resolveStyle(command.paint, command.groupId, 'fill', styleOverrides)
+          ),
           createFont(fontManager, command.font)
         );
         break;
