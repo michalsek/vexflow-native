@@ -389,9 +389,6 @@ describe('VexflowRecordingContext', () => {
 
     expect(context.setFillStyle({ gradient: true })).toBe(context);
     expect(context.setBackgroundFillStyle('white')).toBe(context);
-    expect(context.setShadowColor('black')).toBe(context);
-    expect(context.setShadowBlur(4)).toBe(context);
-    expect(context.setLineDash([1, 2, 3])).toBe(context);
     expect(context.resize(100, 200)).toBe(context);
     expect(context.openRotation(30, 40, 50)).toBe(context);
     expect(context.closeRotation()).toBe(context);
@@ -414,13 +411,6 @@ describe('VexflowRecordingContext', () => {
       [
         'VexflowRecordingContext: Method "setBackgroundFillStyle" is not implemented yet.',
       ],
-      [
-        'VexflowRecordingContext: Method "setShadowColor" is not implemented yet.',
-      ],
-      [
-        'VexflowRecordingContext: Method "setShadowBlur" is not implemented yet.',
-      ],
-      ['VexflowRecordingContext: Method "setLineDash" is not implemented yet.'],
       ['VexflowRecordingContext: Method "resize" is not implemented yet.'],
       [
         'VexflowRecordingContext: Method "openRotation" is not implemented yet.',
@@ -451,5 +441,160 @@ describe('VexflowRecordingContext', () => {
     expect(context.closeGroup()).toBe(context);
 
     expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it('stamps the colour group id on commands recorded inside a group and leaves others untagged', () => {
+    const module = loadContextModule('ios');
+    const context = new module.VexflowRecordingContext({}, 'Bravura');
+
+    context
+      .fillRect(0, 0, 1, 1) // before any group — untagged
+      .beginColorGroup('note-1')
+      .fillRect(1, 1, 2, 2) // tagged note-1
+      .beginPath()
+      .moveTo(0, 0)
+      .lineTo(1, 1)
+      .stroke() // tagged note-1
+      .endColorGroup()
+      .fillRect(2, 2, 3, 3); // after the group — untagged again
+
+    const commands = context.finish();
+
+    expect(
+      commands.map((command: { groupId?: string }) => command.groupId)
+    ).toEqual([undefined, 'note-1', 'note-1', undefined]);
+  });
+
+  it('exposes chainable beginColorGroup/endColorGroup that do not log', () => {
+    const module = loadContextModule('ios');
+    const context = new module.VexflowRecordingContext({}, 'Bravura');
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(context.beginColorGroup('g')).toBe(context);
+    expect(context.endColorGroup()).toBe(context);
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it('records shadow colour and blur into both the fill and the stroke paint', () => {
+    const module = loadContextModule('android');
+    const context = new module.VexflowRecordingContext({}, 'Bravura');
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(context.setShadowColor('#00FF00')).toBe(context);
+    expect(context.setShadowBlur(8)).toBe(context);
+
+    context.fillRect(1, 2, 3, 4).beginPath().moveTo(5, 6).lineTo(7, 8).stroke();
+
+    expect(context.finish()).toEqual([
+      {
+        type: 'fillRect',
+        rect: { x: 1, y: 2, width: 3, height: 4 },
+        paint: { color: '#000000', shadowColor: '#00FF00', shadowBlur: 8 },
+      },
+      {
+        type: 'strokePath',
+        path: [
+          { type: 'moveTo', x: 5, y: 6 },
+          { type: 'lineTo', x: 7, y: 8 },
+        ],
+        paint: {
+          color: '#000000',
+          strokeCap: 'butt',
+          strokeWidth: 1.5 * WIDTH_SCALE,
+          shadowColor: '#00FF00',
+          shadowBlur: 8,
+        },
+      },
+    ]);
+    // No "not implemented yet" logs for the now-implemented setters.
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it('resolves the shadow colour through the colour scheme like fill/stroke', () => {
+    const module = loadContextModule('ios');
+    const context = new module.VexflowRecordingContext({}, 'Bravura', {
+      foreground: '#FFFFFF',
+    });
+
+    context.setShadowColor('black').fillRect(0, 0, 1, 1);
+
+    expect(context.finish()).toEqual([
+      {
+        type: 'fillRect',
+        rect: { x: 0, y: 0, width: 1, height: 1 },
+        paint: { color: '#FFFFFF', shadowColor: '#FFFFFF' },
+      },
+    ]);
+  });
+
+  it('records a line dash into the stroke paint only', () => {
+    const module = loadContextModule('android');
+    const context = new module.VexflowRecordingContext({}, 'Bravura');
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(context.setLineDash([4, 2])).toBe(context);
+
+    // Fill paint is unaffected by the dash; stroke paint carries it.
+    context.fillRect(1, 2, 3, 4).beginPath().moveTo(5, 6).lineTo(7, 8).stroke();
+
+    expect(context.finish()).toEqual([
+      {
+        type: 'fillRect',
+        rect: { x: 1, y: 2, width: 3, height: 4 },
+        paint: { color: '#000000' },
+      },
+      {
+        type: 'strokePath',
+        path: [
+          { type: 'moveTo', x: 5, y: 6 },
+          { type: 'lineTo', x: 7, y: 8 },
+        ],
+        paint: {
+          color: '#000000',
+          strokeCap: 'butt',
+          strokeWidth: 1.5 * WIDTH_SCALE,
+          lineDash: [4, 2],
+        },
+      },
+    ]);
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it('clears a previously recorded dash when setLineDash is called with []', () => {
+    const module = loadContextModule('ios');
+    const context = new module.VexflowRecordingContext({}, 'Bravura');
+
+    context
+      .setLineDash([4, 2])
+      .setLineDash([])
+      .beginPath()
+      .moveTo(1, 2)
+      .stroke();
+
+    expect(context.finish()).toEqual([
+      {
+        type: 'strokePath',
+        path: [{ type: 'moveTo', x: 1, y: 2 }],
+        paint: {
+          color: '#000000',
+          strokeCap: 'butt',
+          strokeWidth: 1.5 * WIDTH_SCALE,
+          lineDash: undefined,
+        },
+      },
+    ]);
+  });
+
+  it('clones the recorded dash array so finished commands do not share state', () => {
+    const module = loadContextModule('ios');
+    const context = new module.VexflowRecordingContext({}, 'Bravura');
+
+    context.setLineDash([4, 2]).beginPath().moveTo(1, 2).stroke();
+
+    const finished = context.finish() as any[];
+    finished[0].paint.lineDash[0] = 99;
+
+    expect((context.finish() as any[])[0].paint.lineDash).toEqual([4, 2]);
   });
 });

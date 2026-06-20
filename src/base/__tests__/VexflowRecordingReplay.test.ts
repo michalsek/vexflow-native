@@ -4,6 +4,8 @@ type MockPaint = {
   setAntiAlias: ReturnType<typeof jest.fn>;
   setBlendMode: ReturnType<typeof jest.fn>;
   setColor: ReturnType<typeof jest.fn>;
+  setImageFilter: ReturnType<typeof jest.fn>;
+  setPathEffect: ReturnType<typeof jest.fn>;
   setStrokeCap: ReturnType<typeof jest.fn>;
   setStrokeWidth: ReturnType<typeof jest.fn>;
   setStyle: ReturnType<typeof jest.fn>;
@@ -42,6 +44,8 @@ function createPaint(): MockPaint {
     setAntiAlias: jest.fn(),
     setBlendMode: jest.fn(),
     setColor: jest.fn(),
+    setImageFilter: jest.fn(),
+    setPathEffect: jest.fn(),
     setStrokeCap: jest.fn(),
     setStrokeWidth: jest.fn(),
     setStyle: jest.fn(),
@@ -101,6 +105,27 @@ function loadReplayModule() {
       height,
     })
   );
+  const MakeDropShadow = jest.fn(
+    (
+      dx: number,
+      dy: number,
+      sigmaX: number,
+      sigmaY: number,
+      color: string
+    ) => ({
+      kind: 'drop-shadow',
+      dx,
+      dy,
+      sigmaX,
+      sigmaY,
+      color,
+    })
+  );
+  const MakeDash = jest.fn((intervals: number[], phase?: number) => ({
+    kind: 'dash',
+    intervals,
+    phase,
+  }));
   const createSkFont = jest.fn((...args: unknown[]) => ({
     kind: 'font',
     args,
@@ -127,6 +152,12 @@ function loadReplayModule() {
           return builder;
         }),
       },
+      ImageFilter: {
+        MakeDropShadow,
+      },
+      PathEffect: {
+        MakeDash,
+      },
       XYWHRect,
     },
     StrokeCap,
@@ -140,7 +171,8 @@ function loadReplayModule() {
     canvas: MockCanvas,
     commands: any[],
     fontProvider: unknown,
-    defaultFont: string
+    defaultFont: string,
+    styleOverrides?: Record<string, Record<string, unknown>>
   ) => void;
 
   jest.isolateModules(() => {
@@ -152,6 +184,8 @@ function loadReplayModule() {
     BlendMode,
     ClipOp,
     createSkFont,
+    MakeDash,
+    MakeDropShadow,
     PaintStyle,
     paints,
     pathBuilders,
@@ -315,5 +349,195 @@ describe('renderVexflowRecordingCommands', () => {
       'italic'
     );
     expect(canvas.restore).toHaveBeenCalledTimes(1);
+
+    // Faithful replay (no overrides, no recorded shadow/dash): no glow or dash.
+    for (const paint of module.paints) {
+      expect(paint.setImageFilter).not.toHaveBeenCalled();
+      expect(paint.setPathEffect).not.toHaveBeenCalled();
+    }
+    expect(module.MakeDropShadow).not.toHaveBeenCalled();
+    expect(module.MakeDash).not.toHaveBeenCalled();
+  });
+
+  it('replays a recorded glow as a centred drop-shadow image filter (sigma = blur / 2)', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'fillPath',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000', shadowColor: '#00FF00', shadowBlur: 8 },
+        },
+      ],
+      {},
+      'Bravura'
+    );
+
+    // blur 8 -> sigma 4, centred (dx = dy = 0), tinted with the recorded colour.
+    expect(module.MakeDropShadow).toHaveBeenCalledWith(
+      0,
+      0,
+      4,
+      4,
+      'color:#00FF00'
+    );
+    expect(module.paints[0]!.setImageFilter).toHaveBeenCalledWith({
+      kind: 'drop-shadow',
+      dx: 0,
+      dy: 0,
+      sigmaX: 4,
+      sigmaY: 4,
+      color: 'color:#00FF00',
+    });
+  });
+
+  it('replays a recorded line dash as a stroke-only dash path effect', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'strokePath',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000', strokeWidth: 2, lineDash: [4, 2] },
+        },
+      ],
+      {},
+      'Bravura'
+    );
+
+    expect(module.MakeDash).toHaveBeenCalledWith([4, 2]);
+    expect(module.paints[0]!.setPathEffect).toHaveBeenCalledWith({
+      kind: 'dash',
+      intervals: [4, 2],
+      phase: undefined,
+    });
+  });
+
+  it('applies separate fill and stroke colour overrides to a tagged group', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'fillPath',
+          groupId: 'note-1',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000' },
+        },
+        {
+          type: 'strokePath',
+          groupId: 'note-1',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000', strokeWidth: 2 },
+        },
+      ],
+      {},
+      'Bravura',
+      { 'note-1': { fillColor: '#00FF00', strokeColor: '#FF0000' } }
+    );
+
+    // Fill paint -> fillColor; stroke paint -> strokeColor.
+    expect(module.paints[0]!.setColor).toHaveBeenCalledWith('color:#00FF00');
+    expect(module.paints[1]!.setColor).toHaveBeenCalledWith('color:#FF0000');
+  });
+
+  it('uses the shorthand `color` for both fill and stroke when the specific field is absent', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'fillPath',
+          groupId: 'note-1',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000' },
+        },
+        {
+          type: 'strokePath',
+          groupId: 'note-1',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000', strokeWidth: 2 },
+        },
+      ],
+      {},
+      'Bravura',
+      { 'note-1': { color: '#3366FF' } }
+    );
+
+    expect(module.paints[0]!.setColor).toHaveBeenCalledWith('color:#3366FF');
+    expect(module.paints[1]!.setColor).toHaveBeenCalledWith('color:#3366FF');
+  });
+
+  it('applies an override glow to both the fill and the stroke of a tagged note', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'fillPath',
+          groupId: 'note-1',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000' },
+        },
+        {
+          type: 'strokePath',
+          groupId: 'note-1',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000', strokeWidth: 2 },
+        },
+      ],
+      {},
+      'Bravura',
+      { 'note-1': { shadowColor: '#FFAA00', shadowBlur: 6 } }
+    );
+
+    // Both paints glow; blur 6 -> sigma 3.
+    expect(module.MakeDropShadow).toHaveBeenCalledTimes(2);
+    expect(module.MakeDropShadow).toHaveBeenNthCalledWith(
+      1,
+      0,
+      0,
+      3,
+      3,
+      'color:#FFAA00'
+    );
+    expect(module.paints[0]!.setImageFilter).toHaveBeenCalledTimes(1);
+    expect(module.paints[1]!.setImageFilter).toHaveBeenCalledTimes(1);
+  });
+
+  it('never restyles an untagged command even when overrides are supplied', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'fillPath',
+          // no groupId — staff chrome
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000' },
+        },
+      ],
+      {},
+      'Bravura',
+      { 'note-1': { color: '#FF0000', shadowColor: '#FF0000' } }
+    );
+
+    expect(module.paints[0]!.setColor).toHaveBeenCalledWith('color:#000000');
+    expect(module.paints[0]!.setImageFilter).not.toHaveBeenCalled();
+    expect(module.MakeDropShadow).not.toHaveBeenCalled();
   });
 });

@@ -40,6 +40,7 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
   __workletClass = true;
 
   private commands: VexflowRecordingCommand[] = [];
+  private colorGroupId?: string;
   private currentPath?: VexflowRecordingPathCommand[];
   private fillPaint: VexflowRecordingPaint = {
     color: '#000000',
@@ -136,13 +137,28 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
     return this;
   }
 
-  setShadowColor(_color: string): this {
-    logUnimplemented('setShadowColor');
+  /**
+   * Record a glow/shadow colour (CSS `shadowColor`) into both the fill and the
+   * stroke paint — VexFlow's `ElementStyle.shadowColor` is applied as ctx-level
+   * state that affects whatever is drawn next, fill or stroke. Replayed in Skia
+   * as a drop-shadow image filter (a glow around the ink) and overridable per
+   * group at replay.
+   */
+  setShadowColor(color: string): this {
+    const resolved = resolveVexflowColor(color, this.colorScheme);
+    this.fillPaint = { ...this.fillPaint, shadowColor: resolved };
+    this.strokePaint = { ...this.strokePaint, shadowColor: resolved };
     return this;
   }
 
-  setShadowBlur(_blur: number) {
-    logUnimplemented('setShadowBlur');
+  /**
+   * Record a glow/shadow blur radius (CSS `shadowBlur`) into both the fill and
+   * the stroke paint. Mapped to a Gaussian sigma at replay; only takes effect
+   * when a `shadowColor` is also set.
+   */
+  setShadowBlur(blur: number): this {
+    this.fillPaint = { ...this.fillPaint, shadowBlur: blur };
+    this.strokePaint = { ...this.strokePaint, shadowBlur: blur };
     return this;
   }
 
@@ -162,8 +178,17 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
     return this;
   }
 
-  setLineDash(_dashPattern: number[]) {
-    logUnimplemented('setLineDash');
+  /**
+   * Record a dash pattern (CSS `setLineDash`) into the stroke paint — dashing is
+   * a stroke-only concept (stems, ledger lines, …). Replayed in Skia as a dash
+   * path effect and overridable per group at replay. An empty array clears any
+   * recorded dash (CSS semantics: solid line).
+   */
+  setLineDash(dashPattern: number[]): this {
+    this.strokePaint = {
+      ...this.strokePaint,
+      lineDash: dashPattern.length > 0 ? [...dashPattern] : undefined,
+    };
     return this;
   }
 
@@ -336,6 +361,24 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
     return this;
   }
 
+  /**
+   * Open a colour group. Every command recorded until `endColorGroup()` is
+   * stamped with `id` as its `groupId`, so a replay can recolor the whole group
+   * from a `groupId -> color` override map without re-recording. This is a
+   * dedicated, explicit grouping — distinct from VexFlow's
+   * `openGroup`/`closeGroup` (above, no-ops here), which a real score nests per
+   * element. Returns `this` for chaining.
+   */
+  beginColorGroup(id: string) {
+    this.colorGroupId = id;
+    return this;
+  }
+
+  endColorGroup() {
+    this.colorGroupId = undefined;
+    return this;
+  }
+
   openRotation(_angleDegrees: number, _x: number, _y: number) {
     logUnimplemented('openRotation');
     return this;
@@ -414,6 +457,10 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
       );
     }
 
+    if (this.colorGroupId != null) {
+      command.groupId = this.colorGroupId;
+    }
+
     this.commands.push(command);
   }
 }
@@ -436,7 +483,10 @@ function normalizeLineCap(cap: string): VexflowRecordingLineCap {
 }
 
 function clonePaint(paint: VexflowRecordingPaint): VexflowRecordingPaint {
-  return { ...paint };
+  return {
+    ...paint,
+    ...(paint.lineDash ? { lineDash: [...paint.lineDash] } : null),
+  };
 }
 
 function cloneFont(font: VexflowRecordingFont): VexflowRecordingFont {
