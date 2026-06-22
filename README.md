@@ -294,6 +294,8 @@ export function DirectVexFlow() {
 - `defaultFont`: font family name used as the default VexFlow font.
 - `fontManager`: Skia font provider returned by `useFonts`.
 - `colorScheme`: optional foreground, background, and ledger line colors.
+- `itemStyleOverrides`: optional Reanimated shared value mapping score item ids
+  to replay-time fill/stroke color, glow, and dash overrides.
 - `rendererType`: `document`, `documentEven`, or `infiniteScore`.
 - `options`: optional renderer settings grouped by `insets`, `spacing`, and
   `render`.

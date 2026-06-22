@@ -5,6 +5,7 @@ import {
   Group,
   Picture,
   Skia,
+  type SkPicture,
   type SkTypefaceFontProvider,
   type Transforms3d,
   useCanvasRef,
@@ -20,6 +21,7 @@ import { insets, renderOptions, spacing } from '../constants';
 import type {
   RendererSize,
   RendererType,
+  ScoreItemStyleOverrides,
   ScoreOptions,
   ScoreRendererProps,
   Viewport,
@@ -38,6 +40,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   defaultFont,
   fontManager,
   colorScheme,
+  itemStyleOverrides,
   options: userOptions = EMPTY_OPTIONS,
   scrollEnabled = true,
   showScrollbars = true,
@@ -106,7 +109,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   );
 
   const picture = useMemo(() => {
-    if (!hasViewportSize) {
+    if (!hasViewportSize || itemStyleOverrides) {
       return undefined;
     }
 
@@ -121,6 +124,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     defaultFont,
     fontManager,
     hasViewportSize,
+    itemStyleOverrides,
     recordedCommands,
   ]);
 
@@ -149,7 +153,17 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
           <Canvas style={canvasStyle} ref={canvasRef}>
             <Group clip={viewportClip}>
               <Group transform={pictureTransform}>
-                {picture ? <Picture picture={picture} /> : null}
+                {itemStyleOverrides && hasViewportSize ? (
+                  <AnimatedScorePicture
+                    contentSize={contentSize}
+                    defaultFont={defaultFont}
+                    fontManager={fontManager}
+                    itemStyleOverrides={itemStyleOverrides}
+                    recordedCommands={recordedCommands}
+                  />
+                ) : picture ? (
+                  <Picture picture={picture} />
+                ) : null}
               </Group>
             </Group>
           </Canvas>
@@ -176,31 +190,60 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
 
 export default memo(ScoreRenderer);
 
-export function createScorePicture({
+function AnimatedScorePicture({
   contentSize,
   defaultFont,
   fontManager,
+  itemStyleOverrides,
   recordedCommands,
 }: {
   contentSize: RendererSize;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
+  itemStyleOverrides: NonNullable<ScoreRendererProps['itemStyleOverrides']>;
   recordedCommands: readonly VexflowRecordingCommand[];
+}) {
+  const picture = useDerivedValue<SkPicture>(() => {
+    return createScorePictureWorklet({
+      contentSize,
+      defaultFont,
+      fontManager,
+      recordedCommands,
+      styleOverrides: itemStyleOverrides.value,
+    });
+  }, [
+    contentSize,
+    defaultFont,
+    fontManager,
+    itemStyleOverrides,
+    recordedCommands,
+  ]);
+
+  return <Picture picture={picture} />;
+}
+
+export function createScorePicture({
+  contentSize,
+  defaultFont,
+  fontManager,
+  recordedCommands,
+  styleOverrides,
+}: {
+  contentSize: RendererSize;
+  defaultFont: string;
+  fontManager: SkTypefaceFontProvider;
+  recordedCommands: readonly VexflowRecordingCommand[];
+  styleOverrides?: ScoreItemStyleOverrides;
 }) {
   try {
     const start = nowMs();
-    const recorder = Skia.PictureRecorder();
-    const canvas = recorder.beginRecording(
-      Skia.XYWHRect(0, 0, contentSize.width, contentSize.height)
-    );
-
-    renderVexflowRecordingCommands(
-      canvas,
-      recordedCommands,
+    const picture = createScorePictureWorklet({
+      contentSize,
+      defaultFont,
       fontManager,
-      defaultFont
-    );
-    const picture = recorder.finishRecordingAsPicture();
+      recordedCommands,
+      styleOverrides,
+    });
 
     logScorePictureProfile({
       commandCount: recordedCommands.length,
@@ -213,6 +256,37 @@ export function createScorePicture({
     console.error('ScoreRenderer picture render failed', error);
     throw error;
   }
+}
+
+function createScorePictureWorklet({
+  contentSize,
+  defaultFont,
+  fontManager,
+  recordedCommands,
+  styleOverrides,
+}: {
+  contentSize: RendererSize;
+  defaultFont: string;
+  fontManager: SkTypefaceFontProvider;
+  recordedCommands: readonly VexflowRecordingCommand[];
+  styleOverrides?: ScoreItemStyleOverrides;
+}): SkPicture {
+  'worklet';
+
+  const recorder = Skia.PictureRecorder();
+  const canvas = recorder.beginRecording(
+    Skia.XYWHRect(0, 0, contentSize.width, contentSize.height)
+  );
+
+  renderVexflowRecordingCommands(
+    canvas,
+    recordedCommands,
+    fontManager,
+    defaultFont,
+    styleOverrides
+  );
+
+  return recorder.finishRecordingAsPicture();
 }
 
 export function createPictureTransform(

@@ -21,6 +21,9 @@ function loadScoreRendererModule() {
     })
   );
   const mockRenderVexflowRecordingCommands = jest.fn();
+  const mockUseDerivedValue = jest.fn((factory: () => unknown) => ({
+    value: factory(),
+  }));
   const mockUseScoreRecording = jest.fn(() => ({
     commands: [],
     layoutPlan: { contentSize: { height: 0, width: 0 } },
@@ -90,9 +93,7 @@ function loadScoreRendererModule() {
     cancelAnimation: jest.fn(),
     useAnimatedReaction: jest.fn(),
     useAnimatedStyle: jest.fn((factory: () => unknown) => factory()),
-    useDerivedValue: jest.fn((factory: () => unknown) => ({
-      value: factory(),
-    })),
+    useDerivedValue: mockUseDerivedValue,
     useSharedValue: jest.fn((value: unknown) => ({ value })),
     withDecay: jest.fn((config: unknown) => config),
   }));
@@ -125,6 +126,7 @@ function loadScoreRendererModule() {
     mockPictureRecorder,
     mockRenderVexflowRecordingCommands,
     mockSetViewportSize,
+    mockUseDerivedValue,
     mockUseScoreRecording,
     mockXYWHRect,
   };
@@ -237,9 +239,74 @@ describe('ScoreRenderer picture cache helpers', () => {
       module.mockCanvas,
       commands,
       fontManager,
-      'Bravura'
+      'Bravura',
+      undefined
     );
     expect(module.mockFinishRecordingAsPicture).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes item style overrides into score picture replay', () => {
+    const module = loadScoreRendererModule();
+    const commands = [{ type: 'save' }] as const;
+    const fontManager = { kind: 'font-manager' };
+    const styleOverrides = {
+      'item-1': { color: '#22C55E', shadowColor: '#22C55E', shadowBlur: 6 },
+    };
+
+    module.createScorePicture({
+      contentSize: { width: 320, height: 180 },
+      defaultFont: 'Bravura',
+      fontManager: fontManager as never,
+      recordedCommands: commands as never,
+      styleOverrides,
+    });
+
+    expect(module.mockRenderVexflowRecordingCommands).toHaveBeenCalledWith(
+      module.mockCanvas,
+      commands,
+      fontManager,
+      'Bravura',
+      styleOverrides
+    );
+  });
+
+  it('uses the animated picture branch when item style overrides are provided', () => {
+    const module = loadScoreRendererModule();
+    const score = {
+      id: 'score-renderer-animated-overrides',
+      defaults: { meter: { beats: 4, beatUnit: 4 } },
+      staves: [],
+    };
+    const fontManager = { kind: 'font-manager' };
+    const itemStyleOverrides = {
+      value: { 'item-1': { fillColor: '#22C55E' } },
+    };
+
+    const initialTree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      itemStyleOverrides,
+      score,
+    });
+
+    expect(
+      findElementByTypeName(initialTree, 'AnimatedScorePicture')
+    ).toBeUndefined();
+    expect(module.mockPictureRecorder).not.toHaveBeenCalled();
+
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 612, width: 393 } },
+    });
+
+    const tree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      itemStyleOverrides,
+      score,
+    });
+    const animatedPicture = findElementByTypeName(tree, 'AnimatedScorePicture');
+    expect(animatedPicture?.props.itemStyleOverrides).toBe(itemStyleOverrides);
+    expect(module.mockPictureRecorder).not.toHaveBeenCalled();
   });
 
   it('updates scroll transforms without replaying recording commands', () => {
@@ -405,4 +472,41 @@ function getScoreRendererGestureSurface(element: unknown): {
   };
 
   return root.props.children[0].props.children;
+}
+
+function findElementByTypeName(
+  element: unknown,
+  typeName: string
+): { props: Record<string, unknown> } | undefined {
+  if (!element || typeof element !== 'object') {
+    return undefined;
+  }
+
+  const reactElement = element as {
+    props?: { children?: unknown };
+    type?: { name?: string } | string;
+  };
+
+  if (
+    typeof reactElement.type === 'function' &&
+    reactElement.type.name === typeName
+  ) {
+    return reactElement as { props: Record<string, unknown> };
+  }
+
+  const { children } = reactElement.props ?? {};
+
+  if (Array.isArray(children)) {
+    for (const child of children) {
+      const match = findElementByTypeName(child, typeName);
+
+      if (match) {
+        return match;
+      }
+    }
+
+    return undefined;
+  }
+
+  return findElementByTypeName(children, typeName);
 }

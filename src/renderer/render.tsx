@@ -171,10 +171,37 @@ function renderMeasure(
     formatter.formatToStave(allVoices, renderedStaves[0]!);
   }
 
-  staffRenderArtifacts.forEach(({ vfVoices, beams, tuplets }) => {
-    vfVoices.forEach((voice) => voice.draw(ctx));
-    beams.forEach((beam) => beam.setContext(ctx).draw());
-    tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
+  staffRenderArtifacts.forEach(
+    ({ vfVoices, voiceArtifacts, beams, tuplets }) => {
+      vfVoices.forEach((voice) => voice.setRendered());
+      voiceArtifacts.forEach(({ items, notes }) => {
+        drawVoiceItems(ctx, items, notes);
+      });
+      beams.forEach((beam) => beam.setContext(ctx).draw());
+      tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
+    }
+  );
+}
+
+function drawVoiceItems(
+  ctx: VexflowRecordingContext,
+  items: VoiceItem[],
+  notes: VFVoiceNote[]
+) {
+  items.forEach((item, index) => {
+    const note = notes[index];
+
+    if (!note) {
+      return;
+    }
+
+    ctx.beginColorGroup(item.id);
+
+    try {
+      note.setContext(ctx).drawWithStyle();
+    } finally {
+      ctx.endColorGroup();
+    }
   });
 }
 

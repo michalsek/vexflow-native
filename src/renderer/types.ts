@@ -1,15 +1,20 @@
 import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
+import type { SharedValue } from 'react-native-reanimated';
 
+import type { VexflowStyleOverride } from '../base';
 import type { Score } from '../state';
 import type { ScoreColorScheme } from './colorScheme';
 
 export type RendererType = 'infiniteScore' | 'document' | 'documentEven';
+export type ScoreItemStyleOverride = VexflowStyleOverride;
+export type ScoreItemStyleOverrides = Record<string, ScoreItemStyleOverride>;
 
 export interface ScoreRendererProps {
   score: Score;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
   colorScheme?: ScoreColorScheme;
+  itemStyleOverrides?: SharedValue<ScoreItemStyleOverrides>;
   rendererType?: RendererType;
   options?: Partial<ScoreOptions>;
   scrollEnabled?: boolean;

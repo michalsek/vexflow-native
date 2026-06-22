@@ -27,6 +27,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     description: 'Render a simple score using ScoreRenderer and the score type',
   },
   {
+    route: 'ScoreRendererStyleOverrides',
+    title: 'Style Overrides',
+    description: 'Show item-level ScoreRenderer style overrides.',
+  },
+  {
     route: 'MusicXmlImport',
     title: 'MusicXML Import',
     description: 'Parse a bundled MusicXML fixture and render the score.',

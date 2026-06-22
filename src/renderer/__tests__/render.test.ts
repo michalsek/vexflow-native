@@ -18,6 +18,15 @@ const mockStaveConnectorSetContext = jest.fn();
 const mockStaveConnectorSetType = jest.fn();
 const mockStaveConnectorDraw = jest.fn();
 const mockNoteSetStave = jest.fn();
+const mockNoteSetContext = jest.fn();
+const mockNoteDrawWithStyle = jest.fn();
+const mockVoiceSetRendered = jest.fn();
+const mockBeginColorGroup = jest.fn();
+const mockEndColorGroup = jest.fn();
+const mockRecordingContext = {
+  beginColorGroup: mockBeginColorGroup,
+  endColorGroup: mockEndColorGroup,
+};
 const mockMakeVFVoice = jest.fn(
   (
     _score: unknown,
@@ -26,8 +35,12 @@ const mockMakeVFVoice = jest.fn(
     voice: { items: unknown[] },
     _options?: unknown
   ) => ({
-    vfVoice: { draw: mockVoiceDraw },
-    notes: voice.items.map(() => ({ setStave: mockNoteSetStave })),
+    vfVoice: { setRendered: mockVoiceSetRendered },
+    notes: voice.items.map(() => ({
+      drawWithStyle: mockNoteDrawWithStyle,
+      setContext: mockNoteSetContext.mockReturnThis(),
+      setStave: mockNoteSetStave,
+    })),
     beams: [
       {
         setContext: mockBeamSetContext.mockReturnValue({ draw: mockBeamDraw }),
@@ -83,7 +96,6 @@ jest.mock('vexflow', () => ({
   Voice: class MockVoice {},
 }));
 
-const mockVoiceDraw = jest.fn();
 const mockBeamSetContext = jest.fn();
 const mockBeamDraw = jest.fn();
 const mockTupletSetContext = jest.fn();
@@ -195,9 +207,9 @@ describe('renderScore', () => {
       ],
     };
 
-    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
 
-    expect(mockVoiceDraw).toHaveBeenCalledTimes(1);
+    expect(mockVoiceSetRendered).toHaveBeenCalledTimes(1);
     expect(mockBeamSetContext).toHaveBeenCalledTimes(1);
     expect(mockBeamDraw).toHaveBeenCalledTimes(1);
     expect(mockTupletSetContext).toHaveBeenCalledTimes(1);
@@ -281,11 +293,109 @@ describe('renderScore', () => {
       ],
     };
 
-    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
 
     expect(mockMakeVFVoice).toHaveBeenCalledTimes(1);
-    expect(mockVoiceDraw).toHaveBeenCalledTimes(1);
+    expect(mockVoiceSetRendered).toHaveBeenCalledTimes(1);
+    expect(mockBeginColorGroup).toHaveBeenCalledWith('item-1');
+    expect(mockNoteSetContext).toHaveBeenCalledWith(mockRecordingContext);
+    expect(mockNoteDrawWithStyle).toHaveBeenCalledTimes(1);
+    expect(mockEndColorGroup).toHaveBeenCalledTimes(1);
     expect(mockBeamDraw).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes item color groups when a tickable draw fails', () => {
+    const item = { id: 'throwing-item', targetStaffId: undefined };
+    const score: Score = {
+      id: 'render-failing-item',
+      defaults: {
+        meter: { beats: 4, beatUnit: 4 },
+      },
+      staves: [
+        {
+          id: 'staff-1',
+          order: 0,
+          defaultClef: 'treble',
+          measures: [
+            {
+              id: 'measure-1',
+              number: 1,
+              voices: [
+                {
+                  id: 'voice-1',
+                  index: 0,
+                  items: [item as VoiceItem],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const layoutPlan: ScoreLayoutPlan = {
+      rendererType: 'documentEven',
+      contentSize: { width: 200, height: 100 },
+      systems: [
+        {
+          groupId: 'staff:staff-1',
+          systemIndex: 0,
+          x: 24,
+          y: 24,
+          width: 152,
+          height: 135,
+          staffCount: 1,
+          staffYOffsets: [0],
+          measureIndices: [0],
+        },
+      ],
+      measures: [
+        {
+          groupId: 'staff:staff-1',
+          measureIndex: 0,
+          x: 24,
+          y: 24,
+          width: 152,
+          height: 135,
+          staffYOffsets: [0],
+          systemIndex: 0,
+        },
+      ],
+      groups: [
+        {
+          groupId: 'staff:staff-1',
+          staffIds: ['staff-1'],
+          staves: score.staves,
+          resolvedStatesByStaff: [
+            [{ clef: 'treble', meter: score.defaults.meter }],
+          ],
+          measures: [
+            {
+              groupId: 'staff:staff-1',
+              measureIndex: 0,
+              intrinsicWidth: 152,
+              measureNumbers: [1],
+              staffBounds: SINGLE_STAFF_BOUNDS,
+            },
+          ],
+        },
+      ],
+    };
+    const error = new Error('draw failed');
+    mockNoteDrawWithStyle.mockImplementationOnce(() => {
+      throw error;
+    });
+
+    expect(() =>
+      renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      )
+    ).toThrow(error);
+
+    expect(mockBeginColorGroup).toHaveBeenCalledWith('throwing-item');
+    expect(mockEndColorGroup).toHaveBeenCalledTimes(1);
   });
 
   it('assigns cross-staff voice items to their target staves', () => {
@@ -394,7 +504,7 @@ describe('renderScore', () => {
       ],
     };
 
-    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
 
     expect(mockStaveInstances[0]?.constructorArgs).toEqual([24, 24, 152]);
     expect(mockStaveInstances[1]?.constructorArgs).toEqual([24, 144, 152]);
@@ -415,7 +525,7 @@ describe('renderScore', () => {
     const score = makeConnectorScore('brace');
     const layoutPlan = makeConnectorLayoutPlan(score, [0, 1]);
 
-    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
 
     expect(getConnectorTypes()).toEqual([
       mockStaveConnectorType.BRACE,
@@ -430,7 +540,7 @@ describe('renderScore', () => {
     const score = makeConnectorScore('bracket');
     const layoutPlan = makeConnectorLayoutPlan(score, [0]);
 
-    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
 
     expect(getConnectorTypes()).toEqual([
       mockStaveConnectorType.BRACKET,
@@ -443,7 +553,7 @@ describe('renderScore', () => {
     const score = makeConnectorScore('line');
     const layoutPlan = makeConnectorLayoutPlan(score, [0]);
 
-    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
 
     expect(getConnectorTypes()).toEqual([
       mockStaveConnectorType.SINGLE_LEFT,
@@ -531,7 +641,7 @@ describe('renderScore', () => {
       ],
     };
 
-    renderScore({} as never, score, layoutPlan, TEST_OPTIONS);
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
 
     expect(mockStaveConnectorDraw).not.toHaveBeenCalled();
   });
