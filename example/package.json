@@ -7,7 +7,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "apply-patches": "npx --yes patch-package --patch-dir patches"
+    "apply-patches": "npx --yes patch-package --patch-dir patches",
+    "postinstall": "npx --yes patch-package --patch-dir patches"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

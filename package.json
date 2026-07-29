@@ -1,7 +1,7 @@
 {
   "name": "vexflow-native",
   "version": "1.0.1",
-  "description": "React native backend for rendering music notation using @shopify/react-native-skiaact-native-skia",
+  "description": "React native backend for rendering music notation using @shopify/react-native-skia",
   "main": "./lib/module/base/index.js",
   "types": "./lib/typescript/src/base/index.d.ts",
   "exports": {
@@ -46,7 +46,6 @@
     "example": "yarn workspace vexflow-native-example",
     "clean": "del-cli lib",
     "prepare": "bob build",
-    "postinstall": "yarn workspace vexflow-native-example apply-patches",
     "typecheck": "tsc",
     "lint": "eslint src example --ext .js,.ts,.tsx",
     "lint:fix": "yarn lint --fix",
