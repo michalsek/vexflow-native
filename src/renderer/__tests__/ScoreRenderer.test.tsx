@@ -27,6 +27,11 @@ function loadScoreRendererModule() {
   const mockUseScoreRecording = jest.fn(() => ({
     commands: [],
     layoutPlan: { contentSize: { height: 0, width: 0 } },
+    itemsLayout: {
+      items: {},
+      measures: [],
+      contentSize: { height: 0, width: 0 },
+    } as import('../types').ScoreItemsLayout,
   }));
   let viewportState = { height: 0, width: 0 };
   const mockSetViewportSize = jest.fn(
@@ -307,6 +312,62 @@ describe('ScoreRenderer picture cache helpers', () => {
     const animatedPicture = findElementByTypeName(tree, 'AnimatedScorePicture');
     expect(animatedPicture?.props.itemStyleOverrides).toBe(itemStyleOverrides);
     expect(module.mockPictureRecorder).not.toHaveBeenCalled();
+  });
+
+  it('fires onItemsLayout with the recorded geometry once the viewport has size', () => {
+    const module = loadScoreRendererModule();
+    const itemsLayout = {
+      items: { 'item-1': { x: 60, width: 12, measureIndex: 0 } },
+      measures: [
+        {
+          groupId: 'staff:staff-1',
+          measureIndex: 0,
+          systemIndex: 0,
+          x: 24,
+          width: 345,
+          staveNoteStartX: 34,
+          staveNoteEndX: 369,
+        },
+      ],
+      contentSize: { width: 393, height: 116 },
+    };
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [],
+      layoutPlan: { contentSize: { width: 393, height: 116 } },
+      itemsLayout,
+    });
+    const onItemsLayout = jest.fn();
+    const score = {
+      id: 'score-renderer-items-layout',
+      defaults: { meter: { beats: 4, beatUnit: 4 } },
+      staves: [],
+    };
+    const fontManager = { kind: 'font-manager' };
+
+    const initialTree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      onItemsLayout,
+      score,
+    });
+
+    // The mocked useEffect runs on every render, so the zero-size viewport
+    // guard is what keeps the callback silent here.
+    expect(onItemsLayout).not.toHaveBeenCalled();
+
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 116, width: 393 } },
+    });
+
+    module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      onItemsLayout,
+      score,
+    });
+
+    expect(onItemsLayout).toHaveBeenCalledTimes(1);
+    expect(onItemsLayout).toHaveBeenCalledWith(itemsLayout);
   });
 
   it('updates scroll transforms without replaying recording commands', () => {

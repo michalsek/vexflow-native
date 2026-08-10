@@ -2,29 +2,44 @@ import { Formatter, Stave, StaveConnector, Voice as VFVoice } from 'vexflow';
 import type { StaveConnectorType } from 'vexflow';
 
 import type { VexflowRecordingContext } from '../base';
-import type { Score, StaffGroupSymbol, VoiceItem } from '../state';
+import type {
+  NoteAttachment,
+  Score,
+  StaffGroupSymbol,
+  VoiceItem,
+} from '../state';
 import type {
   GroupLayoutContext,
   MeasureLayoutPlan,
   ScoreLayoutPlan,
 } from './layout';
-import { makeVFVoice } from './scoreParsing';
-import type { ScoreOptions } from './types';
+import { indexAttachmentsByOwner, makeVFVoice } from './scoreParsing';
+import type { ScoreItemsLayout, ScoreOptions } from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
 /**
  * Renders the score from a precomputed layout plan.
+ *
+ * Returns the final formatted geometry of every rendered item (tick x/width,
+ * keyed by item id) plus per-measure stave note bounds — captured right after
+ * `formatToStave`, so the coordinates are the ones the notes are drawn at.
  */
 export function renderScore(
   ctx: VexflowRecordingContext,
   score: Score,
   layoutPlan: ScoreLayoutPlan,
   _options: ScoreOptions
-) {
+): ScoreItemsLayout {
   const groupsById = new Map(
     layoutPlan.groups.map((group) => [group.groupId, group])
   );
   const measuresByGroup = groupMeasuresByIndex(layoutPlan.measures);
+  const attachmentsByOwner = indexAttachmentsByOwner(score);
+  const itemsLayout: ScoreItemsLayout = {
+    items: {},
+    measures: [],
+    contentSize: layoutPlan.contentSize,
+  };
 
   for (const system of layoutPlan.systems) {
     const group = groupsById.get(system.groupId);
@@ -40,12 +55,22 @@ export function renderScore(
       .filter((measure): measure is MeasureLayoutPlan => Boolean(measure));
 
     for (const [measureIndex, measurePlan] of measurePlans.entries()) {
-      renderMeasure(ctx, score, group, measurePlan, {
-        isFirstMeasureInSystem: measureIndex === 0,
-        isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
-      });
+      renderMeasure(
+        ctx,
+        score,
+        group,
+        measurePlan,
+        attachmentsByOwner,
+        {
+          isFirstMeasureInSystem: measureIndex === 0,
+          isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
+        },
+        itemsLayout
+      );
     }
   }
+
+  return itemsLayout;
 }
 
 type StaffRenderArtifacts = {
@@ -73,7 +98,9 @@ function renderMeasure(
   score: Score,
   group: GroupLayoutContext,
   measurePlan: MeasureLayoutPlan,
-  options: RenderMeasureOptions
+  attachmentsByOwner: Map<string, NoteAttachment[]>,
+  options: RenderMeasureOptions,
+  itemsLayout: ScoreItemsLayout
 ) {
   const formatter = new Formatter();
   const resolvedStateByStaffId = new Map(
@@ -95,6 +122,7 @@ function renderMeasure(
 
       const voiceArtifacts = measure.voices.map((voice) => ({
         ...makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
+          attachmentsByOwner,
           resolveClef: (item) =>
             item.targetStaffId
               ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -141,6 +169,12 @@ function renderMeasure(
       stave.addClef(resolvedState.clef);
     }
 
+    if (measure.leftModifiers?.showMeter === true) {
+      stave.addTimeSignature(
+        `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
+      );
+    }
+
     stave.setContext(ctx).draw();
     return stave;
   });
@@ -171,6 +205,13 @@ function renderMeasure(
     formatter.formatToStave(allVoices, renderedStaves[0]!);
   }
 
+  collectMeasureItemsLayout(
+    itemsLayout,
+    measurePlan,
+    renderedStaves[0]!,
+    staffRenderArtifacts
+  );
+
   staffRenderArtifacts.forEach(
     ({ vfVoices, voiceArtifacts, beams, tuplets }) => {
       vfVoices.forEach((voice) => voice.setRendered());
@@ -181,6 +222,47 @@ function renderMeasure(
       tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
     }
   );
+}
+
+/**
+ * Records the formatted geometry of one measure. Must run after
+ * `formatToStave`: `note.getAbsoluteX()` / `note.getWidth()` are only final
+ * (and only legal to call) once the notes are formatted. The MEASUREMENT pass
+ * uses non-final x values, so geometry is captured here in the render pass.
+ */
+function collectMeasureItemsLayout(
+  itemsLayout: ScoreItemsLayout,
+  measurePlan: MeasureLayoutPlan,
+  stave: Stave,
+  staffRenderArtifacts: StaffRenderArtifacts[]
+) {
+  staffRenderArtifacts.forEach(({ voiceArtifacts }) => {
+    voiceArtifacts.forEach(({ items, notes }) => {
+      items.forEach((item, index) => {
+        const note = notes[index];
+
+        if (!note) {
+          return;
+        }
+
+        itemsLayout.items[item.id] = {
+          x: note.getAbsoluteX(),
+          width: note.getWidth(),
+          measureIndex: measurePlan.measureIndex,
+        };
+      });
+    });
+  });
+
+  itemsLayout.measures.push({
+    groupId: measurePlan.groupId,
+    measureIndex: measurePlan.measureIndex,
+    systemIndex: measurePlan.systemIndex,
+    x: measurePlan.x,
+    width: measurePlan.width,
+    staveNoteStartX: stave.getNoteStartX(),
+    staveNoteEndX: stave.getNoteEndX(),
+  });
 }
 
 function drawVoiceItems(

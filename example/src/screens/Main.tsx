@@ -27,6 +27,12 @@ const SCREEN_LINKS: ScreenLink[] = [
     description: 'Render a simple score using ScoreRenderer and the score type',
   },
   {
+    route: 'DrumKitExample',
+    title: 'Drum Kit',
+    description:
+      'Percussion-clef groove with x noteheads, ghost notes, and accents.',
+  },
+  {
     route: 'ScoreRendererStyleOverrides',
     title: 'Style Overrides',
     description: 'Show item-level ScoreRenderer style overrides.',

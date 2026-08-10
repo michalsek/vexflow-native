@@ -1,9 +1,12 @@
 import {
   Accidental as VFAccidental,
+  Articulation as VFArticulation,
   Beam,
   Dot,
   Fraction as VFFraction,
   GhostNote,
+  ModifierPosition,
+  Parenthesis,
   StaveNote,
   Stem,
   Tuplet,
@@ -12,10 +15,13 @@ import {
 import type { StemmableNote } from 'vexflow';
 
 import type {
+  Articulation,
   Clef,
   KeySignature,
   DurationValue,
   Meter,
+  NoteAttachment,
+  Notehead,
   Pitch,
   Score,
   Staff,
@@ -45,7 +51,42 @@ export type VFVoiceNote = StemmableNote;
 
 export interface MakeVFVoiceOptions {
   resolveClef?: (item: VoiceItem) => Clef;
+  /**
+   * Precomputed `score.attachments` index keyed by owner item id. Pass it when
+   * calling `makeVFVoice` in a loop so the index is built once per pass;
+   * omitted, the index is derived from `score.attachments` on each call.
+   */
+  attachmentsByOwner?: Map<string, NoteAttachment[]>;
 }
+
+/**
+ * Maps library notehead names to VexFlow key glyph codes. VexFlow uppercases
+ * the third `/`-separated key segment and resolves the duration-aware glyph
+ * via `Tables.codeNoteHead` ('x' -> X0/X1/X2 family, etc.).
+ */
+export const NOTEHEAD_TO_VF_CODE: Record<Notehead, string> = {
+  'x': 'x',
+  'circle-x': 'cx',
+  'diamond': 'h',
+  'circle': 'ci',
+  'square': 'sq',
+  'triangle': 'tu',
+  'triangle-down': 'td',
+  'slash': 'sf',
+};
+
+/**
+ * Maps library articulation names to VexFlow articulation codes
+ * (`Tables.articulationCodes`).
+ */
+export const ARTICULATION_TO_VF_CODE: Record<Articulation, string> = {
+  staccato: 'a.',
+  staccatissimo: 'av',
+  tenuto: 'a-',
+  accent: 'a>',
+  marcato: 'a^',
+  fermata: 'a@',
+};
 
 /**
  * Maps the library stem direction to the numeric VexFlow value.
@@ -73,7 +114,13 @@ export function pitchToVFKey(pitch: Pitch): string {
       ? 'd#'
       : pitch.accidental ?? '';
 
-  return `${pitch.step.toLowerCase()}${accidental}/${pitch.octave}`;
+  const key = `${pitch.step.toLowerCase()}${accidental}/${pitch.octave}`;
+
+  if (pitch.notehead) {
+    return `${key}/${NOTEHEAD_TO_VF_CODE[pitch.notehead]}`;
+  }
+
+  return key;
 }
 
 /**
@@ -85,15 +132,12 @@ export function durationToVF(duration: DurationValue, isRest = false): string {
       ? '1/2'
       : duration.length;
 
-  if (isRest) {
-    return `${length}r`;
-  }
+  // VexFlow duration tokens are `<duration><dots><type>` (e.g. 'hdr' is a
+  // dotted half rest); the dot count drives the intrinsic tick math, so it
+  // must be present for rests too or strict voices come up short.
+  const dots = 'd'.repeat(duration.dots ?? 0);
 
-  if (duration.dots) {
-    return `${length}${'d'.repeat(duration.dots)}`;
-  }
-
-  return length;
+  return `${length}${dots}${isRest ? 'r' : ''}`;
 }
 
 /**
@@ -126,9 +170,82 @@ export function addPitchAccidentals(note: StaveNote, pitches: Pitch[]) {
 }
 
 /**
+ * Wraps ghost pitches in parentheses by attaching a left and right
+ * `Parenthesis` modifier at each ghost pitch's key index (mirrors
+ * `Parenthesis.buildAndAttach`, but per index instead of per note).
+ */
+export function applyGhostParentheses(
+  note: StaveNote,
+  pitches: readonly Pitch[]
+) {
+  pitches.forEach((pitch, index) => {
+    if (!pitch.ghost) {
+      return;
+    }
+
+    note.addModifier(new Parenthesis(ModifierPosition.LEFT), index);
+    note.addModifier(new Parenthesis(ModifierPosition.RIGHT), index);
+  });
+}
+
+/**
+ * Attaches articulation attachments to a note; placed above by default,
+ * below when the attachment requests it.
+ */
+export function applyArticulations(
+  note: StaveNote,
+  attachments: NoteAttachment[] | undefined
+) {
+  if (!attachments) {
+    return;
+  }
+
+  for (const attachment of attachments) {
+    if (attachment.type !== 'articulation') {
+      continue;
+    }
+
+    const articulation = new VFArticulation(
+      ARTICULATION_TO_VF_CODE[attachment.articulation]
+    );
+
+    if (attachment.placement === 'below') {
+      articulation.setPosition(ModifierPosition.BELOW);
+    }
+
+    note.addModifier(articulation, 0);
+  }
+}
+
+/**
+ * Indexes score-level note attachments by their owner item id.
+ */
+export function indexAttachmentsByOwner(
+  score: Score
+): Map<string, NoteAttachment[]> {
+  const attachmentsByOwner = new Map<string, NoteAttachment[]>();
+
+  for (const attachment of score.attachments ?? []) {
+    const ownedAttachments = attachmentsByOwner.get(attachment.ownerId);
+
+    if (ownedAttachments) {
+      ownedAttachments.push(attachment);
+    } else {
+      attachmentsByOwner.set(attachment.ownerId, [attachment]);
+    }
+  }
+
+  return attachmentsByOwner;
+}
+
+/**
  * Builds a VexFlow stave note from a score voice item and clef.
  */
-export function voiceItemToStaveNote(item: VoiceItem, clef: Clef): VFVoiceNote {
+export function voiceItemToStaveNote(
+  item: VoiceItem,
+  clef: Clef,
+  attachments?: NoteAttachment[]
+): VFVoiceNote {
   if (item.type === 'rest') {
     if (item.kind === 'hidden' || item.kind === 'spacer') {
       return new GhostNote(durationToVF(item.duration));
@@ -151,6 +268,8 @@ export function voiceItemToStaveNote(item: VoiceItem, clef: Clef): VFVoiceNote {
       stemDirection: toVFStemDirection(item.stemDirection),
     });
     addPitchAccidentals(note, [item.pitch]);
+    applyGhostParentheses(note, [item.pitch]);
+    applyArticulations(note, attachments);
     applyDots(note, item.duration.dots);
     return note;
   }
@@ -162,6 +281,8 @@ export function voiceItemToStaveNote(item: VoiceItem, clef: Clef): VFVoiceNote {
     stemDirection: toVFStemDirection(item.stemDirection),
   });
   addPitchAccidentals(note, item.pitches);
+  applyGhostParentheses(note, item.pitches);
+  applyArticulations(note, attachments);
   applyDots(note, item.duration.dots);
   return note;
 }
@@ -248,14 +369,46 @@ export function makeVFVoice(
   beams: Beam[];
   tuplets: Tuplet[];
 } {
+  const attachmentsByOwner =
+    options.attachmentsByOwner ?? indexAttachmentsByOwner(score);
   const notes = voice.items.map((item) =>
-    voiceItemToStaveNote(item, options.resolveClef?.(item) ?? clef)
+    voiceItemToStaveNote(
+      item,
+      options.resolveClef?.(item) ?? clef,
+      attachmentsByOwner.get(item.id)
+    )
   );
 
   const noteByItemId = new Map<string, VFVoiceNote>();
   voice.items.forEach((item, index) =>
     noteByItemId.set(item.id, notes[index]!)
   );
+
+  // Tuplets must be constructed before the notes are added to the voice:
+  // `new Tuplet(...)` applies the tick multiplier to its notes, and
+  // `Voice.addTickables` validates tick counts at add time (STRICT mode
+  // throws 'Too many ticks.' for unscaled tuplet notes otherwise).
+  const tuplets = findTupletsForVoice(score, voice)
+    .map((group) => {
+      const tupletNotes = group.itemIds
+        .map((id) => noteByItemId.get(id))
+        .filter((note): note is StaveNote => Boolean(note));
+
+      if (tupletNotes.length < 2) {
+        return null;
+      }
+
+      return new Tuplet(tupletNotes, {
+        numNotes: group.ratio.num,
+        notesOccupied: group.ratio.den,
+        bracketed: group.bracketed,
+        location:
+          group.placement === 'below'
+            ? Tuplet.LOCATION_BOTTOM
+            : Tuplet.LOCATION_TOP,
+      });
+    })
+    .filter((tuplet): tuplet is Tuplet => Boolean(tuplet));
 
   const vfVoice = new VFVoice({
     numBeats: meter.beats,
@@ -284,28 +437,6 @@ export function makeVFVoice(
         }
       : undefined;
   const beams = Beam.generateBeams(notes, beamOptions);
-
-  const tuplets = findTupletsForVoice(score, voice)
-    .map((group) => {
-      const tupletNotes = group.itemIds
-        .map((id) => noteByItemId.get(id))
-        .filter((note): note is StaveNote => Boolean(note));
-
-      if (tupletNotes.length < 2) {
-        return null;
-      }
-
-      return new Tuplet(tupletNotes, {
-        numNotes: group.ratio.num,
-        notesOccupied: group.ratio.den,
-        bracketed: group.bracketed,
-        location:
-          group.placement === 'below'
-            ? Tuplet.LOCATION_BOTTOM
-            : Tuplet.LOCATION_TOP,
-      });
-    })
-    .filter((tuplet): tuplet is Tuplet => Boolean(tuplet));
 
   return { vfVoice, notes, beams, tuplets };
 }

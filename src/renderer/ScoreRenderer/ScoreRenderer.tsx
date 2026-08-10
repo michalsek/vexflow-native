@@ -1,5 +1,5 @@
 import type React from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Canvas,
   Group,
@@ -44,6 +44,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   options: userOptions = EMPTY_OPTIONS,
   scrollEnabled = true,
   showScrollbars = true,
+  onItemsLayout,
 }) => {
   const options = useMemo(() => withDefaultOptions(userOptions), [userOptions]);
   const resolvedColorScheme = useMemo(
@@ -83,7 +84,11 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     }),
     [viewportSize.height, viewportSize.width]
   );
-  const { commands: recordedCommands, layoutPlan } = useScoreRecording({
+  const {
+    commands: recordedCommands,
+    layoutPlan,
+    itemsLayout,
+  } = useScoreRecording({
     defaultFont,
     enabled: hasViewportSize,
     fontManager,
@@ -94,6 +99,19 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     viewport,
   });
   const contentSize = layoutPlan.contentSize;
+
+  // Deliver formatted item geometry to the consumer. This effect stays on the
+  // plain JS side — neither `onItemsLayout` nor `itemsLayout` may be captured
+  // by a worklet (see the PanGesture serialization note below): a consumer
+  // callback closing over arbitrary objects would crash the worklets
+  // serializer the same way the gesture capture did.
+  useEffect(() => {
+    if (!onItemsLayout || !hasViewportSize) {
+      return;
+    }
+
+    onItemsLayout(itemsLayout);
+  }, [itemsLayout, onItemsLayout, hasViewportSize]);
   const scrollState = useScoreScroll({
     contentSize,
     rendererType: effectiveRendererType,
@@ -128,9 +146,14 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     recordedCommands,
   ]);
 
+  // Destructure the shared value before the worklet below. Referencing
+  // `scrollState.scrollOffset.value` inside the worklet would capture the
+  // whole `scrollState` object — including the non-serializable PanGesture —
+  // and crash the worklets serializer ("Cannot copy value of type `PanGesture`").
+  const { scrollOffset } = scrollState;
   const pictureTransform = useDerivedValue(() => {
     return createPictureTransform(
-      scrollState.scrollOffset.value,
+      scrollOffset.value,
       effectiveRendererType,
       { width: viewportSize.width, height: viewportSize.height },
       contentSize
@@ -138,7 +161,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   }, [
     contentSize,
     effectiveRendererType,
-    scrollState.scrollOffset,
+    scrollOffset,
     viewportSize.height,
     viewportSize.width,
   ]);

@@ -6,8 +6,9 @@ import {
   it,
   jest,
 } from '@jest/globals';
+import { Stave } from 'vexflow';
 
-import type { Meter, Score, Step, VoiceItem } from '../../state';
+import type { Measure, Meter, Score, Step, VoiceItem } from '../../state';
 import { insets, renderOptions, spacing } from '../constants';
 import { measureScore } from '../measure';
 import type { ScoreOptions } from '../types';
@@ -142,4 +143,67 @@ describe('measureScore', () => {
       measureNumbers: [2, 2],
     });
   });
+
+  it('adds the time signature to measurement staves when showMeter is set', () => {
+    const addTimeSignatureSpy = jest.spyOn(Stave.prototype, 'addTimeSignature');
+    const score = makeSingleStaffScore({ showMeter: true });
+
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+
+    expect(measuredScore.measures).toHaveLength(1);
+    expect(addTimeSignatureSpy).toHaveBeenCalledTimes(1);
+    expect(addTimeSignatureSpy).toHaveBeenCalledWith('4/4');
+  });
+
+  it('keeps measurement output unchanged when showMeter is absent', () => {
+    const addTimeSignatureSpy = jest.spyOn(Stave.prototype, 'addTimeSignature');
+
+    const withoutFlag = measureScore(makeSingleStaffScore(), TEST_OPTIONS);
+    const withFalseFlag = measureScore(
+      makeSingleStaffScore({ showMeter: false }),
+      TEST_OPTIONS
+    );
+
+    expect(addTimeSignatureSpy).not.toHaveBeenCalled();
+    expect(withFalseFlag).toEqual(withoutFlag);
+  });
 });
+
+function makeSingleStaffScore(leftModifiers?: Measure['leftModifiers']): Score {
+  return {
+    id: 'single-staff-meter',
+    defaults: {
+      meter: {
+        beats: 4,
+        beatUnit: 4,
+      },
+    },
+    staves: [
+      {
+        id: 'solo',
+        order: 0,
+        defaultClef: 'treble',
+        measures: [
+          {
+            id: 'solo-m1',
+            number: 1,
+            ...(leftModifiers ? { leftModifiers } : {}),
+            voices: [
+              {
+                id: 'solo-m1-v1',
+                index: 0,
+                items: ['C', 'D', 'E', 'F'].map((step, index) => ({
+                  id: `solo-m1-v1-n${index + 1}`,
+                  type: 'note' as const,
+                  voiceId: 'solo-m1-v1',
+                  pitch: { step: step as Step, octave: 4 },
+                  duration: { length: 'q' as const },
+                })),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}

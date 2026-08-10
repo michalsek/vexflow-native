@@ -8,11 +8,18 @@ import { layoutScore, type ScoreLayoutPlan } from './layout';
 import { measureScore } from './measure';
 import { renderScore } from './render';
 import type { ResolvedScoreColorScheme } from './colorScheme';
-import type { RendererRect, RendererType, ScoreOptions } from './types';
+import type {
+  RendererRect,
+  RendererType,
+  ScoreItemsLayout,
+  ScoreOptions,
+} from './types';
 
 export interface ScoreRecording {
   commands: readonly VexflowRecordingCommand[];
   layoutPlan: ScoreLayoutPlan;
+  /** Final formatted item/measure geometry from the same recording pass. */
+  itemsLayout: ScoreItemsLayout;
 }
 
 export function useScoreRecording({
@@ -39,6 +46,7 @@ export function useScoreRecording({
       return {
         commands: [],
         layoutPlan: createEmptyLayoutPlan(rendererType, viewport),
+        itemsLayout: createEmptyItemsLayout(viewport),
       };
     }
 
@@ -62,7 +70,7 @@ export function useScoreRecording({
     const layoutMs = nowMs() - layoutStart;
 
     const renderStart = nowMs();
-    renderScore(ctx, score, layoutPlan, options);
+    const itemsLayout = renderScore(ctx, score, layoutPlan, options);
     const renderMs = nowMs() - renderStart;
 
     const finishStart = nowMs();
@@ -86,6 +94,7 @@ export function useScoreRecording({
     return {
       commands,
       layoutPlan,
+      itemsLayout,
     };
   }, [
     colorScheme,
@@ -97,6 +106,17 @@ export function useScoreRecording({
     score,
     viewport,
   ]);
+}
+
+function createEmptyItemsLayout(viewport: RendererRect): ScoreItemsLayout {
+  return {
+    items: {},
+    measures: [],
+    contentSize: {
+      width: viewport.width,
+      height: viewport.height,
+    },
+  };
 }
 
 function createEmptyLayoutPlan(

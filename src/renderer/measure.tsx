@@ -10,6 +10,7 @@ import type { Score, Staff } from '../state';
 import {
   buildResolvedMeasureStates,
   buildMeasurementGroups,
+  indexAttachmentsByOwner,
   makeVFVoice,
   resolveGroupStaves,
 } from './scoreParsing';
@@ -47,6 +48,7 @@ export function measureScore(
   options: ScoreOptions
 ): MeasuredScore {
   const groups = buildMeasurementGroups(score);
+  const attachmentsByOwner = indexAttachmentsByOwner(score);
   const measures: MeasuredMeasure[] = [];
   const {
     spacing: { minIntrinsicSizeMultiplier },
@@ -88,6 +90,7 @@ export function measureScore(
 
         const voiceArtifacts = measure.voices.map((voice) =>
           makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
+            attachmentsByOwner,
             resolveClef: (item) =>
               item.targetStaffId
                 ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -110,6 +113,7 @@ export function measureScore(
           resolvedState,
           showClef:
             measureIndex === 0 || Boolean(measure.leftModifiers?.showClef),
+          showMeter: measure.leftModifiers?.showMeter === true,
           voiceArtifacts,
         };
       });
@@ -169,16 +173,23 @@ function measureStaffVerticalBounds({
     measure: Staff['measures'][number];
     resolvedState: ReturnType<typeof buildResolvedMeasureStates>[number];
     showClef: boolean;
+    showMeter: boolean;
     voiceArtifacts: ReturnType<typeof makeVFVoice>[];
   }>;
 }): StaffVerticalBounds[] {
   const width = Math.max(intrinsicNoteWidth, 1);
   const renderedStaves = staffMeasurementContexts.map(
-    ({ resolvedState, showClef }) => {
+    ({ resolvedState, showClef, showMeter }) => {
       const stave = new Stave(0, 0, width);
 
       if (showClef) {
         stave.addClef(resolvedState.clef);
+      }
+
+      if (showMeter) {
+        stave.addTimeSignature(
+          `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
+        );
       }
 
       return stave;
