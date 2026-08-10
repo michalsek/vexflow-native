@@ -384,10 +384,6 @@ export function makeVFVoice(
     noteByItemId.set(item.id, notes[index]!)
   );
 
-  // Tuplets must be constructed before the notes are added to the voice:
-  // `new Tuplet(...)` applies the tick multiplier to its notes, and
-  // `Voice.addTickables` validates tick counts at add time (STRICT mode
-  // throws 'Too many ticks.' for unscaled tuplet notes otherwise).
   const tuplets = findTupletsForVoice(score, voice)
     .map((group) => {
       const tupletNotes = group.itemIds

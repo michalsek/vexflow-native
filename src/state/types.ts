@@ -40,8 +40,6 @@ export type NoteLength =
 
 export type StemDirection = 'up' | 'down' | 'auto';
 
-/** Alternate notehead glyphs for percussion/drum notation. Codes map to
- *  VexFlow's duration-aware Tables.codeNoteHead families. */
 export type Notehead =
   | 'x'
   | 'circle-x'
@@ -102,12 +100,7 @@ export interface Pitch {
   step: Step;
   octave: number;
   accidental?: Accidental;
-  /** Alternate notehead glyph; omitted = standard head. */
   notehead?: Notehead;
-  /**
-   * Render this notehead in parentheses (ghost note). Unrelated to VexFlow's
-   * `GhostNote` spacer class, which is an invisible placeholder note.
-   */
   ghost?: boolean;
 }
 
@@ -261,7 +254,6 @@ export interface AttachmentBase {
 export interface ArticulationAttachment extends AttachmentBase {
   type: 'articulation';
   articulation: Articulation;
-  /** Placement relative to the note; defaults to 'above'. */
   placement?: 'above' | 'below';
 }
 

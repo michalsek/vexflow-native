@@ -18,7 +18,6 @@ import type {
 export interface ScoreRecording {
   commands: readonly VexflowRecordingCommand[];
   layoutPlan: ScoreLayoutPlan;
-  /** Final formatted item/measure geometry from the same recording pass. */
   itemsLayout: ScoreItemsLayout;
 }
 
