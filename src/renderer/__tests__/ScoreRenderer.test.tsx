@@ -45,12 +45,58 @@ function loadScoreRendererModule() {
     }
   );
 
+  /* Deps-aware useEffect + slot-stable useRef mocks: hooks are indexed by
+   * call order per render (cursors reset by the ScoreRenderer wrapper below),
+   * effects are queued during render and flushed afterwards, and an effect
+   * only re-runs when it has no deps array or a dep changed (Object.is) —
+   * matching React closely enough to verify effect dependency contracts. */
+  const effectPrevDeps: Array<readonly unknown[] | undefined> = [];
+  let pendingEffects: Array<{
+    index: number;
+    effect: () => void;
+    deps?: readonly unknown[];
+  }> = [];
+  let effectCursor = 0;
+  const mockUseEffect = jest.fn(
+    (effect: () => void, deps?: readonly unknown[]) => {
+      pendingEffects.push({ index: effectCursor, effect, deps });
+      effectCursor += 1;
+    }
+  );
+  const refSlots: Array<{ current: unknown }> = [];
+  let refCursor = 0;
+  const mockUseRef = jest.fn((initialValue: unknown) => {
+    const index = refCursor;
+    refCursor += 1;
+    refSlots[index] ??= { current: initialValue };
+    return refSlots[index];
+  });
+  const flushEffects = () => {
+    const queue = pendingEffects;
+    pendingEffects = [];
+
+    for (const { index, effect, deps } of queue) {
+      const previousDeps = effectPrevDeps[index];
+      const shouldRun =
+        !deps ||
+        !previousDeps ||
+        deps.length !== previousDeps.length ||
+        deps.some((dep, depIndex) => !Object.is(dep, previousDeps[depIndex]));
+
+      if (shouldRun) {
+        effectPrevDeps[index] = deps;
+        effect();
+      }
+    }
+  };
+
   jest.doMock('react', () => ({
     ...React,
     memo: jest.fn((component: unknown) => component),
     useCallback: jest.fn((factory: () => unknown) => factory),
-    useEffect: jest.fn((effect: () => void) => effect()),
+    useEffect: mockUseEffect,
     useMemo: jest.fn((factory: () => unknown) => factory()),
+    useRef: mockUseRef,
     useState: jest.fn(() => [viewportState, mockSetViewportSize]),
   }));
 
@@ -114,6 +160,19 @@ function loadScoreRendererModule() {
   const module =
     require('../ScoreRenderer') as typeof import('../ScoreRenderer');
 
+  /* Renders ScoreRenderer the way the mocked hook store expects: hook cursors
+   * reset per render, queued effects flushed after the render commits. */
+  const ScoreRendererImpl = module.default as unknown as (
+    props: unknown
+  ) => unknown;
+  const renderScoreRenderer = (props: unknown) => {
+    effectCursor = 0;
+    refCursor = 0;
+    const tree = ScoreRendererImpl(props);
+    flushEffects();
+    return tree;
+  };
+
   return {
     clampOffset: module.clampOffset,
     createClampedScrollOffset: module.createClampedScrollOffset,
@@ -123,7 +182,7 @@ function loadScoreRendererModule() {
     getScrollbarMetrics: module.getScrollbarMetrics,
     getScrollOffsetFromThumbOffset: module.getScrollOffsetFromThumbOffset,
     getThumbOffsetFromScrollOffset: module.getThumbOffsetFromScrollOffset,
-    ScoreRenderer: module.default as unknown as (props: unknown) => unknown,
+    ScoreRenderer: renderScoreRenderer,
     mockBeginRecording,
     mockCanvas,
     mockFinishRecordingAsPicture,
@@ -316,21 +375,7 @@ describe('ScoreRenderer picture cache helpers', () => {
 
   it('fires onItemsLayout with the recorded geometry once the viewport has size', () => {
     const module = loadScoreRendererModule();
-    const itemsLayout = {
-      items: { 'item-1': { x: 60, width: 12, measureIndex: 0 } },
-      measures: [
-        {
-          groupId: 'staff:staff-1',
-          measureIndex: 0,
-          systemIndex: 0,
-          x: 24,
-          width: 345,
-          staveNoteStartX: 34,
-          staveNoteEndX: 369,
-        },
-      ],
-      contentSize: { width: 393, height: 116 },
-    };
+    const itemsLayout = makeItemsLayoutFixture();
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
       layoutPlan: { contentSize: { width: 393, height: 116 } },
@@ -351,8 +396,7 @@ describe('ScoreRenderer picture cache helpers', () => {
       score,
     });
 
-    // The mocked useEffect runs on every render, so the zero-size viewport
-    // guard is what keeps the callback silent here.
+    // The zero-size viewport guard keeps the callback silent before layout.
     expect(onItemsLayout).not.toHaveBeenCalled();
 
     getScoreRendererGestureSurface(initialTree).props.onLayout({
@@ -368,6 +412,62 @@ describe('ScoreRenderer picture cache helpers', () => {
 
     expect(onItemsLayout).toHaveBeenCalledTimes(1);
     expect(onItemsLayout).toHaveBeenCalledWith(itemsLayout);
+  });
+
+  it('delivers geometry once per recording pass even when the callback identity changes every render', () => {
+    const module = loadScoreRendererModule();
+    const itemsLayout = makeItemsLayoutFixture();
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [],
+      layoutPlan: { contentSize: { width: 393, height: 116 } },
+      itemsLayout,
+    });
+    const received = jest.fn();
+    const score = {
+      id: 'score-renderer-inline-callback',
+      defaults: { meter: { beats: 4, beatUnit: 4 } },
+      staves: [],
+    };
+    const fontManager = { kind: 'font-manager' };
+    // A parent passing a NEW inline callback on every render — the shape
+    // that would loop if the delivery effect depended on the callback
+    // identity (inline callback writes parent state → new callback → effect
+    // → state write → ...).
+    const renderWithInlineCallback = (tag: number) =>
+      module.ScoreRenderer({
+        defaultFont: 'Bravura',
+        fontManager,
+        onItemsLayout: (layout: unknown) => received(tag, layout),
+        score,
+      });
+
+    const initialTree = renderWithInlineCallback(1);
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 116, width: 393 } },
+    });
+    renderWithInlineCallback(2);
+
+    // One delivery for the recording pass that became visible — through the
+    // callback that was current at effect time.
+    expect(received).toHaveBeenCalledTimes(1);
+    expect(received).toHaveBeenCalledWith(2, itemsLayout);
+
+    // A render with ONLY a new callback identity (same geometry, same
+    // viewport) must not re-deliver.
+    renderWithInlineCallback(3);
+    expect(received).toHaveBeenCalledTimes(1);
+
+    // A new recording pass delivers exactly once more, via the latest
+    // callback.
+    const nextItemsLayout = makeItemsLayoutFixture();
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [],
+      layoutPlan: { contentSize: { width: 393, height: 116 } },
+      itemsLayout: nextItemsLayout,
+    });
+    renderWithInlineCallback(4);
+    expect(received).toHaveBeenCalledTimes(2);
+    expect(received).toHaveBeenLastCalledWith(4, nextItemsLayout);
   });
 
   it('updates scroll transforms without replaying recording commands', () => {
@@ -414,6 +514,96 @@ describe('ScoreRenderer picture cache helpers', () => {
       )
     ).toEqual([{ translateX: 0 }, { translateY: 0 }]);
     expect(module.mockRenderVexflowRecordingCommands).not.toHaveBeenCalled();
+  });
+
+  it('appends the render scale after the scroll translate (content scaled first)', () => {
+    const module = loadScoreRendererModule();
+
+    // contentSize here is VIEW-space (content x scale): view content 200 minus
+    // viewport 80 clamps the offset to 120; the trailing scale entry means the
+    // content-space point is scaled into view space before the view-space
+    // translate applies (react-native-skia applies the array right-to-left).
+    expect(
+      module.createPictureTransform(
+        500,
+        'document',
+        { width: 100, height: 80 },
+        { width: 100, height: 200 },
+        0.5
+      )
+    ).toEqual([{ translateX: 0 }, { translateY: -120 }, { scale: 0.5 }]);
+    expect(
+      module.createPictureTransform(
+        25,
+        'infiniteScore',
+        { width: 100, height: 80 },
+        { width: 300, height: 80 },
+        0.5
+      )
+    ).toEqual([{ translateX: -25 }, { translateY: 0 }, { scale: 0.5 }]);
+    // Scale 1 keeps the pre-scale transform shape byte-identical.
+    expect(
+      module.createPictureTransform(
+        40,
+        'document',
+        { width: 100, height: 80 },
+        { width: 300, height: 200 },
+        1
+      )
+    ).toEqual([{ translateX: 0 }, { translateY: -40 }]);
+  });
+
+  it('records the picture at content-space size while scrolling in view space', () => {
+    const module = loadScoreRendererModule();
+    // Content-space layout plan for a scaled render: at scale 0.5 the view
+    // content size is 400x700 — vertically scrollable inside a 393x612
+    // viewport, while the picture cull rect must stay the full content size.
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [],
+      layoutPlan: { contentSize: { width: 800, height: 1400 } },
+      itemsLayout: {
+        items: {},
+        measures: [],
+        contentSize: { width: 400, height: 700 },
+      } as import('../types').ScoreItemsLayout,
+    });
+    const score = {
+      id: 'score-renderer-scaled',
+      defaults: { meter: { beats: 4, beatUnit: 4 } },
+      staves: [],
+    };
+    const fontManager = { kind: 'font-manager' };
+    const props = {
+      defaultFont: 'Bravura',
+      fontManager,
+      options: { render: { scale: 0.5 } },
+      score,
+    };
+
+    const initialTree = module.ScoreRenderer(props);
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 612, width: 393 } },
+    });
+    module.ScoreRenderer(props);
+
+    // Picture recorded with the CONTENT-space cull rect.
+    expect(module.mockBeginRecording).toHaveBeenCalledWith({
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 1400,
+    });
+
+    // The picture transform derived value composes the view-space scroll
+    // translate with the render scale.
+    const transformValues = module.mockUseDerivedValue.mock.results
+      .map((result) => (result.value as { value: unknown }).value)
+      .filter((value) => Array.isArray(value));
+    expect(transformValues).toContainEqual([
+      { translateX: 0 },
+      { translateY: 0 },
+      { scale: 0.5 },
+    ]);
   });
 });
 
@@ -506,6 +696,27 @@ describe('ScoreRenderer scroll helpers', () => {
     expect(module.getScrollOffsetFromThumbOffset(45, metrics)).toBe(300);
   });
 });
+
+/** Fresh single-staff geometry fixture — a new object per call so tests can
+ * distinguish "same recording pass" (same identity) from a new pass. */
+function makeItemsLayoutFixture(): import('../types').ScoreItemsLayout {
+  return {
+    items: { 'item-1': { x: 60, width: 12, headCenterX: 65, measureIndex: 0 } },
+    measures: [
+      {
+        groupId: 'staff:staff-1',
+        staffId: 'staff-1',
+        measureIndex: 0,
+        systemIndex: 0,
+        x: 24,
+        width: 345,
+        staveNoteStartX: 34,
+        staveNoteEndX: 369,
+      },
+    ],
+    contentSize: { width: 393, height: 116 },
+  };
+}
 
 function getScoreRendererGestureSurface(element: unknown): {
   props: {

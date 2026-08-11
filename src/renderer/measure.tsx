@@ -1,5 +1,10 @@
-import { Formatter, Stave, Voice as VFVoice } from 'vexflow';
-import type { BoundingBox } from 'vexflow';
+import {
+  Articulation as VFArticulation,
+  Formatter,
+  Stave,
+  Voice as VFVoice,
+} from 'vexflow';
+import type { BoundingBox, RenderContext } from 'vexflow';
 import { Platform } from 'react-native';
 
 import {
@@ -119,11 +124,17 @@ export function measureScore(
       });
 
       try {
+        // Intrinsic width = note width + widest left-modifier block. The left
+        // modifiers (clef when shown, time signature when shown) occupy the
+        // stave BEFORE its note-start x, so a measure needs room for both —
+        // without the modifier term an empty measure with a time signature
+        // measures ~0 wide and the signature clips in the infiniteScore /
+        // documentEven layouts, which size measures from this value.
         const intrinsicNoteWidth =
-          allVoices.length > 0
+          (allVoices.length > 0
             ? formatter.preCalculateMinTotalWidth(allVoices) *
               Math.max(1, minIntrinsicSizeMultiplier)
-            : 0;
+            : 0) + measureLeftModifierWidth(staffMeasurementContexts);
         const staffBounds = measureStaffVerticalBounds({
           allVoices,
           intrinsicNoteWidth,
@@ -156,6 +167,52 @@ export function measureScore(
       0
     ),
   };
+}
+
+/** Probe stave width for left-modifier measurement — must comfortably exceed
+ * any clef + time-signature block so `Stave.format()` never clamps it. */
+const MODIFIER_PROBE_STAVE_WIDTH = 500;
+
+/**
+ * Widest per-staff left-modifier block (clef and/or time signature) of the
+ * measure, in canvas points. Measured as the note-start-x delta between a
+ * bare stave and one carrying the staff's shown modifiers, so staves without
+ * modifiers contribute exactly 0 and the measured value excludes the bare
+ * stave's own start padding.
+ */
+function measureLeftModifierWidth(
+  staffMeasurementContexts: Array<{
+    resolvedState: { clef: string; meter: { beats: number; beatUnit: number } };
+    showClef: boolean;
+    showMeter: boolean;
+  }>
+): number {
+  return staffMeasurementContexts.reduce(
+    (maxWidth, { resolvedState, showClef, showMeter }) => {
+      if (!showClef && !showMeter) {
+        return maxWidth;
+      }
+
+      const bareStave = new Stave(0, 0, MODIFIER_PROBE_STAVE_WIDTH);
+      const modifiedStave = new Stave(0, 0, MODIFIER_PROBE_STAVE_WIDTH);
+
+      if (showClef) {
+        modifiedStave.addClef(resolvedState.clef);
+      }
+
+      if (showMeter) {
+        modifiedStave.addTimeSignature(
+          `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
+        );
+      }
+
+      return Math.max(
+        maxWidth,
+        modifiedStave.getNoteStartX() - bareStave.getNoteStartX()
+      );
+    },
+    0
+  );
 }
 
 function measureStaffVerticalBounds({
@@ -256,6 +313,7 @@ function measureStaffVerticalBounds({
             staffIndexById.get(
               items[noteIndex]?.targetStaffId ?? ownerStaffId
             ) ?? staffIndex;
+          mergeArticulationBounds(bounds[ownerStaffIndex], note);
           mergeNoteBounds(bounds[ownerStaffIndex], note);
         });
 
@@ -283,6 +341,68 @@ function measureStaffVerticalBounds({
   );
 
   return bounds;
+}
+
+/**
+ * No-op VexFlow render context for measurement-time drawing. A `Proxy` that
+ * answers every method with a chainable no-op, so any context call VexFlow's
+ * modifier `draw()` implementations make (today: `setFont` + `fillText` via
+ * `Element.renderText`) is absorbed without rendering anything. Should a
+ * VexFlow upgrade start calling a context method differently, the proxy keeps
+ * absorbing it — the articulation-extent regression tests are the canary that
+ * placement itself still measures correctly.
+ */
+function createNoopRenderContext(): RenderContext {
+  const memo: Record<PropertyKey, unknown> = {};
+  const proxy: object = new Proxy(memo, {
+    get: (target, property) => {
+      if (!(property in target)) {
+        target[property] = () => proxy;
+      }
+
+      return target[property];
+    },
+  });
+
+  return proxy as RenderContext;
+}
+
+const NOOP_RENDER_CONTEXT = createNoopRenderContext();
+
+/**
+ * Merges the TRUE drawn extents of a note's articulation modifiers into the
+ * staff bounds. VexFlow only assigns an articulation's x/y (stacked text line,
+ * stem-tip offset, staff-line snapping, origin shift) inside
+ * `Articulation.draw()` — after formatting alone the modifier's bounding box
+ * still sits at the origin, which is why note bounding boxes never grew when
+ * accents were attached. Drawing against a no-op context runs exactly the
+ * placement math `render.tsx`'s real draw will run (the measurement voices are
+ * private to `measureScore`, so mutating them is contained), and afterwards
+ * `getBoundingBox()` is the actual glyph box for placement above AND below,
+ * including multi-articulation stacking.
+ */
+function mergeArticulationBounds(
+  bounds: StaffVerticalBounds | undefined,
+  note: VFVoiceNote
+) {
+  if (!bounds) {
+    return;
+  }
+
+  for (const modifier of note.getModifiers()) {
+    if (!(modifier instanceof VFArticulation)) {
+      continue;
+    }
+
+    try {
+      modifier.setContext(NOOP_RENDER_CONTEXT);
+      modifier.draw();
+      mergeBoundingBox(bounds, modifier.getBoundingBox());
+    } catch {
+      // Notes without formatted geometry (ghosts, spacers) cannot place
+      // modifiers; note bounds still provide the conservative fallback.
+    }
+  }
 }
 
 function mergeNoteBounds(

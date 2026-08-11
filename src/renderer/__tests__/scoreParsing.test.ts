@@ -8,7 +8,14 @@ import {
   jest,
 } from '@jest/globals';
 import * as VexFlow from 'vexflow';
-import { Beam, Formatter, ModifierPosition, StaveNote, Stem } from 'vexflow';
+import {
+  Beam,
+  Formatter,
+  ModifierPosition,
+  Stave,
+  StaveNote,
+  Stem,
+} from 'vexflow';
 import type { Modifier } from 'vexflow';
 
 // The `Glyphs` enum is exported by the vexflow runtime but is missing from
@@ -26,6 +33,7 @@ import type {
   Voice,
   VoiceItem,
 } from '../../state';
+import { resolveItemHeadCenterX } from '../render';
 import {
   durationToVF,
   indexAttachmentsByOwner,
@@ -556,5 +564,131 @@ describe('makeVFVoice', () => {
       expect.any(Array),
       undefined
     );
+  });
+});
+
+/* Empirical pinning of the VexFlow 5 notehead-span getters that back
+ * ScoreItemLayout.headCenterX (see resolveItemHeadCenterX in render.tsx):
+ * REAL StaveNote/GhostNote instances formatted to a real stave, no mocks.
+ * - StaveNote (notes AND visible rests — the rest glyph is a notehead):
+ *   getNoteHeadBeginX() = getAbsoluteX() + xShift and getNoteHeadEndX() =
+ *   begin + getGlyphWidth(), so the span center is a usable visual center
+ *   and the getters are safe to call on rests (no rest special-case needed).
+ * - GhostNote (hidden/spacer rests) has NO span getters — the resolver must
+ *   fall back to the block center.
+ *
+ * ENVIRONMENT CAVEAT: jest has no txtCanvas, so VexFlow's text measurement
+ * returns empty metrics and getGlyphWidth() is 0 — the span DEGENERATES to a
+ * point at the tick x here (begin === end === absX). That makes this suite
+ * pin (a) the API identities, which hold whatever the metrics are, and
+ * (b) the resolver's degenerate-span fallback. The span-derived center path
+ * (real, positive glyph widths as measured on device) is covered by the
+ * mocked geometry in render.test.ts. */
+describe('notehead span geometry (VexFlow 5, real formatting)', () => {
+  const formatItems = (items: VoiceItem[]) => {
+    const voice: Voice = {
+      id: 'head-span-voice',
+      index: 0,
+      timingMode: 'strict',
+      items,
+    };
+    const { vfVoice, notes } = makeVFVoice(
+      TEST_SCORE,
+      TEST_SCORE.defaults.meter,
+      'treble',
+      voice
+    );
+    const stave = new Stave(10, 40, 400);
+    notes.forEach((note) => note.setStave(stave));
+    new Formatter().joinVoices([vfVoice]).formatToStave([vfVoice], stave);
+    return notes;
+  };
+
+  const quarterNote = (id: string): VoiceItem => ({
+    id,
+    type: 'note',
+    voiceId: 'head-span-voice',
+    pitch: { step: 'C', octave: 5 },
+    duration: { length: 'q' },
+  });
+
+  it('exposes the span getters on notes AND visible rests with the documented identities', () => {
+    const notes = formatItems([
+      quarterNote('hs-n1'),
+      {
+        id: 'hs-r1',
+        type: 'rest',
+        voiceId: 'head-span-voice',
+        duration: { length: 'q' },
+      },
+      quarterNote('hs-n2'),
+      quarterNote('hs-n3'),
+    ]);
+
+    for (const note of notes) {
+      const staveNote = note as StaveNote;
+      const x = staveNote.getAbsoluteX();
+
+      // Both getters exist on every StaveNote — rests included (their rest
+      // glyph is a notehead), so no rest special-case is needed upstream.
+      expect(typeof staveNote.getNoteHeadBeginX).toBe('function');
+      expect(typeof staveNote.getNoteHeadEndX).toBe('function');
+
+      const begin = staveNote.getNoteHeadBeginX();
+      const end = staveNote.getNoteHeadEndX();
+
+      // The VexFlow 5 identities: begin = absoluteX + xShift (0 here),
+      // end = begin + glyph width. They hold whatever the font metrics are.
+      expect(begin).toBe(x + staveNote.getXShift());
+      expect(end).toBe(begin + staveNote.getGlyphWidth());
+      expect(Number.isFinite(begin)).toBe(true);
+      expect(Number.isFinite(end)).toBe(true);
+    }
+  });
+
+  it('falls back to the block center when the measured span degenerates (jest has no font metrics)', () => {
+    const notes = formatItems([
+      quarterNote('hs-n1'),
+      quarterNote('hs-n2'),
+      quarterNote('hs-n3'),
+      quarterNote('hs-n4'),
+    ]);
+
+    for (const note of notes) {
+      const staveNote = note as StaveNote;
+      const x = staveNote.getAbsoluteX();
+      const width = staveNote.getWidth();
+
+      // No txtCanvas in jest → empty text metrics → glyphWidth 0: the span
+      // collapses onto the tick x, i.e. center === x, which the resolver
+      // must treat as nonsensical (a center must sit strictly right of x).
+      expect(staveNote.getNoteHeadEndX()).toBe(staveNote.getNoteHeadBeginX());
+      expect(resolveItemHeadCenterX(staveNote, x, width)).toBe(x + width / 2);
+    }
+  });
+
+  it('falls back to the block center for GhostNote hidden rests', () => {
+    const notes = formatItems([
+      quarterNote('hs-n1'),
+      {
+        id: 'hs-hidden',
+        type: 'rest',
+        kind: 'hidden',
+        voiceId: 'head-span-voice',
+        duration: { length: 'q' },
+      },
+      quarterNote('hs-n2'),
+      quarterNote('hs-n3'),
+    ]);
+    const ghost = notes[1]!;
+
+    // GhostNote carries no notehead-span getters.
+    expect(
+      (ghost as { getNoteHeadBeginX?: () => number }).getNoteHeadBeginX
+    ).toBeUndefined();
+
+    const x = ghost.getAbsoluteX();
+    const width = ghost.getWidth();
+    expect(resolveItemHeadCenterX(ghost, x, width)).toBe(x + width / 2);
   });
 });

@@ -1,5 +1,5 @@
 import type React from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Canvas,
   Group,
@@ -18,11 +18,13 @@ import type { VexflowRecordingCommand } from '../../base';
 import { renderVexflowRecordingCommands } from '../../base/VexflowRecordingReplay';
 import { resolveScoreColorScheme } from '../colorScheme';
 import { insets, renderOptions, spacing } from '../constants';
+import { getRenderScale, toViewSize } from '../scale';
 import type {
   RendererSize,
   RendererType,
   ScoreItemStyleOverrides,
   ScoreOptions,
+  ScoreRendererOptions,
   ScoreRendererProps,
   Viewport,
 } from '../types';
@@ -31,7 +33,7 @@ import { createVisibleViewport } from '../viewport';
 import ScoreScrollbar from './ScoreScrollbar';
 import { getMaxScroll, useScoreScroll } from './useScoreScroll';
 
-const EMPTY_OPTIONS: Partial<ScoreOptions> = {};
+const EMPTY_OPTIONS: ScoreRendererOptions = {};
 const EMPTY_SIZE: RendererSize = { width: 0, height: 0 };
 
 const ScoreRenderer: React.FC<ScoreRendererProps> = ({
@@ -98,28 +100,49 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     score,
     viewport,
   });
+  // Content space vs view space (see src/renderer/scale.ts): the layout
+  // plan's content size is CONTENT-space — it bounds the recorded picture —
+  // while scrolling, scrollbars and overflow checks need the VIEW-space size
+  // (content x scale), or the scroll range would be wrong whenever
+  // options.render.scale !== 1.
+  const scale = getRenderScale(options);
   const contentSize = layoutPlan.contentSize;
+  const viewContentSize = useMemo(
+    () => toViewSize(contentSize, scale),
+    [contentSize, scale]
+  );
 
   // Deliver formatted item geometry to the consumer. This effect stays on the
   // plain JS side — neither `onItemsLayout` nor `itemsLayout` may be captured
   // by a worklet (see the PanGesture serialization note below): a consumer
   // callback closing over arbitrary objects would crash the worklets
   // serializer the same way the gesture capture did.
+  //
+  // The latest callback is held in a ref (updated by its own effect after
+  // every commit) so the delivery effect depends ONLY on the geometry
+  // identity + viewport readiness: it fires once per recording pass, exactly
+  // as the `onItemsLayout` contract states. Depending on the callback
+  // identity instead would re-fire for every inline-callback parent render —
+  // and an inline callback writing fresh parent state would loop.
+  const onItemsLayoutRef = useRef(onItemsLayout);
   useEffect(() => {
-    if (!onItemsLayout || !hasViewportSize) {
+    onItemsLayoutRef.current = onItemsLayout;
+  });
+  useEffect(() => {
+    if (!hasViewportSize) {
       return;
     }
 
-    onItemsLayout(itemsLayout);
-  }, [itemsLayout, onItemsLayout, hasViewportSize]);
+    onItemsLayoutRef.current?.(itemsLayout);
+  }, [itemsLayout, hasViewportSize]);
   const scrollState = useScoreScroll({
-    contentSize,
+    contentSize: viewContentSize,
     rendererType: effectiveRendererType,
     scrollEnabled,
     viewportSize,
   });
   const hasScrollableOverflow =
-    getMaxScroll(effectiveRendererType, viewportSize, contentSize) > 0;
+    getMaxScroll(effectiveRendererType, viewportSize, viewContentSize) > 0;
 
   const viewportClip = useMemo(
     () => Skia.XYWHRect(0, 0, viewportSize.width, viewportSize.height),
@@ -156,12 +179,14 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
       scrollOffset.value,
       effectiveRendererType,
       { width: viewportSize.width, height: viewportSize.height },
-      contentSize
+      viewContentSize,
+      scale
     );
   }, [
-    contentSize,
     effectiveRendererType,
+    scale,
     scrollOffset,
+    viewContentSize,
     viewportSize.height,
     viewportSize.width,
   ]);
@@ -312,11 +337,25 @@ function createScorePictureWorklet({
   return recorder.finishRecordingAsPicture();
 }
 
+/**
+ * Maps the CONTENT-space picture into the view. `contentSize` must be the
+ * VIEW-space content size (content x scale) so the scroll clamp matches the
+ * scroll range `useScoreScroll` exposes.
+ *
+ * Transform order matters: react-native-skia applies a transform array
+ * right-to-left to a point, so the trailing `{ scale }` entry scales the
+ * content-space point into view space FIRST, and the leading translate
+ * entries then shift it by the VIEW-space scroll offset:
+ * `p_view = scale * p_content - scrollOffset_view`. The scale entry is only
+ * appended when scale !== 1 so the default output is byte-identical to the
+ * pre-scale implementation.
+ */
 export function createPictureTransform(
   scrollOffset: number,
   rendererType: RendererType,
   viewport: Viewport,
-  contentSize: RendererSize
+  contentSize: RendererSize,
+  scale: number = 1
 ): Transforms3d {
   'worklet';
 
@@ -327,7 +366,7 @@ export function createPictureTransform(
     contentSize
   );
 
-  return [
+  const transform: Transforms3d = [
     {
       translateX: visibleViewport.x === 0 ? 0 : -visibleViewport.x,
     },
@@ -335,9 +374,15 @@ export function createPictureTransform(
       translateY: visibleViewport.y === 0 ? 0 : -visibleViewport.y,
     },
   ];
+
+  if (scale !== 1) {
+    transform.push({ scale });
+  }
+
+  return transform;
 }
 
-function withDefaultOptions(options: Partial<ScoreOptions>): ScoreOptions {
+function withDefaultOptions(options: ScoreRendererOptions): ScoreOptions {
   return {
     insets: { ...insets, ...(options.insets || {}) },
     spacing: { ...spacing, ...(options.spacing || {}) },

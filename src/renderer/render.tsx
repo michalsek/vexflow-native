@@ -202,13 +202,21 @@ function renderMeasure(
   });
 
   if (allVoices.length > 0) {
-    formatter.formatToStave(allVoices, renderedStaves[0]!);
+    // Format against the stave whose note area starts LAST: per-staff left
+    // modifiers (clef/meter) may differ inside a group, and `formatToStave`
+    // derives its justify width from the passed stave's note area
+    // (noteEndX - noteStartX). Each note is drawn at its OWN stave's
+    // noteStartX + tick x, so formatting to the widest note area (the
+    // smallest noteStartX) would let notes on a stave with a larger
+    // note-start offset overrun its right barline.
+    formatter.formatToStave(allVoices, getFormatReferenceStave(renderedStaves));
   }
 
   collectMeasureItemsLayout(
     itemsLayout,
     measurePlan,
-    renderedStaves[0]!,
+    group.staves,
+    renderedStaves,
     staffRenderArtifacts
   );
 
@@ -225,15 +233,32 @@ function renderMeasure(
 }
 
 /**
+ * The stave `formatToStave` should size the voices against: the one with the
+ * LARGEST note-start x, i.e. the narrowest note area when the staves of a
+ * group carry different left modifiers. Formatting to it keeps the formatted
+ * notes inside every stave of the group.
+ */
+function getFormatReferenceStave(renderedStaves: Stave[]): Stave {
+  return renderedStaves.reduce((reference, stave) =>
+    stave.getNoteStartX() > reference.getNoteStartX() ? stave : reference
+  );
+}
+
+/**
  * Records the formatted geometry of one measure. Must run after
  * `formatToStave`: `note.getAbsoluteX()` / `note.getWidth()` are only final
  * (and only legal to call) once the notes are formatted. The MEASUREMENT pass
  * uses non-final x values, so geometry is captured here in the render pass.
+ *
+ * Emits one `measures[]` entry PER RENDERED STAVE (keyed by `staffId`):
+ * per-staff left modifiers (clef/meter) can differ inside a staff group, so
+ * note bounds are only meaningful per stave.
  */
 function collectMeasureItemsLayout(
   itemsLayout: ScoreItemsLayout,
   measurePlan: MeasureLayoutPlan,
-  stave: Stave,
+  staves: GroupLayoutContext['staves'],
+  renderedStaves: Stave[],
   staffRenderArtifacts: StaffRenderArtifacts[]
 ) {
   staffRenderArtifacts.forEach(({ voiceArtifacts }) => {
@@ -245,24 +270,81 @@ function collectMeasureItemsLayout(
           return;
         }
 
+        const x = note.getAbsoluteX();
+        const width = note.getWidth();
+
         itemsLayout.items[item.id] = {
-          x: note.getAbsoluteX(),
-          width: note.getWidth(),
+          x,
+          width,
+          headCenterX: resolveItemHeadCenterX(note, x, width),
           measureIndex: measurePlan.measureIndex,
         };
       });
     });
   });
 
-  itemsLayout.measures.push({
-    groupId: measurePlan.groupId,
-    measureIndex: measurePlan.measureIndex,
-    systemIndex: measurePlan.systemIndex,
-    x: measurePlan.x,
-    width: measurePlan.width,
-    staveNoteStartX: stave.getNoteStartX(),
-    staveNoteEndX: stave.getNoteEndX(),
+  staves.forEach((staff, staffIndex) => {
+    const stave = renderedStaves[staffIndex];
+
+    if (!stave) {
+      return;
+    }
+
+    itemsLayout.measures.push({
+      groupId: measurePlan.groupId,
+      staffId: staff.id,
+      measureIndex: measurePlan.measureIndex,
+      systemIndex: measurePlan.systemIndex,
+      x: measurePlan.x,
+      width: measurePlan.width,
+      staveNoteStartX: stave.getNoteStartX(),
+      staveNoteEndX: stave.getNoteEndX(),
+    });
   });
+}
+
+/** Shape of the notehead-span getters `StaveNote` exposes (VexFlow 5:
+ * `getNoteHeadBeginX() = getAbsoluteX() + xShift`, `getNoteHeadEndX() =
+ * begin + glyphWidth`). Detected structurally because a formatted voice mixes
+ * `StaveNote`s with `GhostNote`s (hidden/spacer rests), which lack them. */
+type NoteHeadSpan = {
+  getNoteHeadBeginX?: () => number;
+  getNoteHeadEndX?: () => number;
+};
+
+/**
+ * The visual notehead-span center of a formatted note — the x external UI
+ * should align to, as opposed to the tick x (`getAbsoluteX()`, the LEFT edge
+ * of the note block, ~half a notehead left of the visual center).
+ *
+ * Rests rendered as `StaveNote` carry the same getters (the rest glyph is a
+ * notehead), so they resolve the same way. Items without the getters
+ * (`GhostNote`) or whose reported span lands outside `(x, x + width]` fall
+ * back to the block center `x + width / 2`.
+ *
+ * Exported for tests (see the empirical VexFlow-5 pinning in
+ * `__tests__/scoreParsing.test.ts`).
+ */
+export function resolveItemHeadCenterX(
+  note: VFVoiceNote,
+  x: number,
+  width: number
+): number {
+  const { getNoteHeadBeginX, getNoteHeadEndX } = note as NoteHeadSpan;
+
+  if (
+    typeof getNoteHeadBeginX === 'function' &&
+    typeof getNoteHeadEndX === 'function'
+  ) {
+    const center =
+      (getNoteHeadBeginX.call(note) + getNoteHeadEndX.call(note)) / 2;
+
+    if (Number.isFinite(center) && center > x && center <= x + width) {
+      return center;
+    }
+  }
+
+  return x + width / 2;
 }
 
 function drawVoiceItems(
