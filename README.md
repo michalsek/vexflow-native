@@ -232,6 +232,36 @@ export function PlainScore() {
 even measure widths across document systems, or `infiniteScore` for a horizontal
 single-system layout.
 
+## Drum Notation
+
+Percussion scores use the same score model: pick the `percussion` clef, set
+alternate noteheads and ghost flags on pitches, and attach articulations
+through `score.attachments`.
+
+```tsx
+import type { NoteAttachment, Pitch } from 'vexflow-native/state';
+
+const hiHat: Pitch = { step: 'G', octave: 5, notehead: 'x' };
+const ghostSnare: Pitch = { step: 'C', octave: 5, ghost: true };
+
+const accent: NoteAttachment = {
+  id: 'accent-1',
+  ownerId: 'note-1',
+  type: 'articulation',
+  articulation: 'accent',
+  placement: 'above',
+};
+```
+
+- `pitch.notehead`: `x`, `circle-x`, `diamond`, `circle`, `square`, `triangle`,
+  `triangle-down`, or `slash`.
+- `pitch.ghost`: wraps the notehead in parentheses.
+- Articulation attachments accept an optional `placement` of `above` (default)
+  or `below`.
+
+See `example/src/screens/DrumKitExample.tsx` for a full drum-kit groove with
+two voices, a triplet, and an open hi-hat accent.
+
 ## Draw Directly with VexFlow
 
 Use `VexflowCanvas` when you want direct VexFlow control instead of the typed
@@ -298,10 +328,12 @@ export function DirectVexFlow() {
   to replay-time fill/stroke color, glow, and dash overrides.
 - `rendererType`: `document`, `documentEven`, or `infiniteScore`.
 - `options`: optional renderer settings grouped by `insets`, `spacing`, and
-  `render`.
+  `render`; `render.scale` uniformly scales the notation without quality loss.
 - `scrollEnabled`: enables or disables pan scrolling. Defaults to `true`.
 - `showScrollbars`: shows scrollbars when the score overflows. Defaults to
   `true`.
+- `onItemsLayout`: optional callback fired after each recording pass with the
+  view-space geometry (at scroll offset 0) of rendered items and measures.
 
 ## Contributing
 
