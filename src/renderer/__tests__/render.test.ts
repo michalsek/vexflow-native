@@ -4,9 +4,16 @@ import type { VoiceItem } from '../../state';
 const mockFormatterJoinVoices = jest.fn();
 const mockFormatterFormatToStave = jest.fn();
 const mockStaveAddClef = jest.fn();
+const mockStaveAddTimeSignature = jest.fn();
 const mockStaveSetContext = jest.fn();
 const mockStaveDraw = jest.fn();
-const mockStaveInstances: Array<{ constructorArgs: unknown[] }> = [];
+const mockStaveInstances: Array<{
+  constructorArgs: unknown[];
+  getNoteStartX: () => number;
+}> = [];
+/** Width the mock stave charges per added time signature; clefs contribute 0
+ * so existing single-staff fixture values stay stable. */
+const MOCK_TIME_SIGNATURE_WIDTH = 20;
 const mockStaveConnectorType = {
   SINGLE_RIGHT: 0,
   SINGLE_LEFT: 1,
@@ -27,6 +34,69 @@ const mockRecordingContext = {
   beginColorGroup: mockBeginColorGroup,
   endColorGroup: mockEndColorGroup,
 };
+/** Successive notes in a voice report strictly increasing absolute x values,
+ * mimicking formatToStave's tick order. */
+const MOCK_NOTE_FIRST_X = 60;
+const MOCK_NOTE_X_STEP = 30;
+const MOCK_NOTE_WIDTH = 12;
+/** Mocked notehead span; its center (5) deliberately differs from the
+ * fallback block center (6) so tests can tell the two apart. */
+const MOCK_HEAD_BEGIN_OFFSET = 1;
+const MOCK_HEAD_END_OFFSET = 9;
+const MOCK_HEAD_CENTER_OFFSET =
+  (MOCK_HEAD_BEGIN_OFFSET + MOCK_HEAD_END_OFFSET) / 2;
+
+/** Builds the mock notes of one voice; `headSpan` overrides the notehead-span
+ * getters (`() => null` omits them entirely, like a GhostNote). */
+const makeMockNotes = (
+  itemCount: number,
+  headSpan?: (absX: number) => { begin: number; end: number } | null
+) =>
+  Array.from({ length: itemCount }, (_, index) => {
+    const absX = MOCK_NOTE_FIRST_X + index * MOCK_NOTE_X_STEP;
+    const span =
+      headSpan === undefined
+        ? {
+            begin: absX + MOCK_HEAD_BEGIN_OFFSET,
+            end: absX + MOCK_HEAD_END_OFFSET,
+          }
+        : headSpan(absX);
+
+    return {
+      drawWithStyle: mockNoteDrawWithStyle,
+      setContext: mockNoteSetContext.mockReturnThis(),
+      setStave: mockNoteSetStave,
+      getAbsoluteX: () => absX,
+      getWidth: () => MOCK_NOTE_WIDTH,
+      ...(span
+        ? {
+            getNoteHeadBeginX: () => span.begin,
+            getNoteHeadEndX: () => span.end,
+          }
+        : {}),
+    };
+  });
+
+const makeMockVoiceResult = (
+  voice: { items: unknown[] },
+  headSpan?: (absX: number) => { begin: number; end: number } | null
+) => ({
+  vfVoice: { setRendered: mockVoiceSetRendered },
+  notes: makeMockNotes(voice.items.length, headSpan),
+  beams: [
+    {
+      setContext: mockBeamSetContext.mockReturnValue({ draw: mockBeamDraw }),
+    },
+  ],
+  tuplets: [
+    {
+      setContext: mockTupletSetContext.mockReturnValue({
+        draw: mockTupletDraw,
+      }),
+    },
+  ],
+});
+
 const mockMakeVFVoice = jest.fn(
   (
     _score: unknown,
@@ -34,26 +104,7 @@ const mockMakeVFVoice = jest.fn(
     _clef: unknown,
     voice: { items: unknown[] },
     _options?: unknown
-  ) => ({
-    vfVoice: { setRendered: mockVoiceSetRendered },
-    notes: voice.items.map(() => ({
-      drawWithStyle: mockNoteDrawWithStyle,
-      setContext: mockNoteSetContext.mockReturnThis(),
-      setStave: mockNoteSetStave,
-    })),
-    beams: [
-      {
-        setContext: mockBeamSetContext.mockReturnValue({ draw: mockBeamDraw }),
-      },
-    ],
-    tuplets: [
-      {
-        setContext: mockTupletSetContext.mockReturnValue({
-          draw: mockTupletDraw,
-        }),
-      },
-    ],
-  })
+  ) => makeMockVoiceResult(voice)
 );
 
 jest.mock('vexflow', () => ({
@@ -68,9 +119,20 @@ jest.mock('vexflow', () => ({
     }
 
     constructorArgs: unknown[];
+    timeSignatureCount = 0;
     addClef = mockStaveAddClef;
+    addTimeSignature = (...args: unknown[]) => {
+      this.timeSignatureCount += 1;
+      return mockStaveAddTimeSignature(...args);
+    };
     setContext = mockStaveSetContext.mockReturnThis();
     draw = mockStaveDraw.mockReturnThis();
+    getNoteStartX = () =>
+      (this.constructorArgs[0] as number) +
+      10 +
+      this.timeSignatureCount * MOCK_TIME_SIGNATURE_WIDTH;
+    getNoteEndX = () =>
+      (this.constructorArgs[0] as number) + (this.constructorArgs[2] as number);
   },
   StaveConnector: class MockStaveConnector {
     static type: Record<string, number> = {
@@ -102,6 +164,7 @@ const mockTupletSetContext = jest.fn();
 const mockTupletDraw = jest.fn();
 
 jest.mock('../scoreParsing', () => ({
+  indexAttachmentsByOwner: jest.fn(() => new Map()),
   makeVFVoice: jest.fn(
     (
       score: unknown,
@@ -645,7 +708,503 @@ describe('renderScore', () => {
 
     expect(mockStaveConnectorDraw).not.toHaveBeenCalled();
   });
+
+  it('adds the time signature when showMeter is set on the measure', () => {
+    const { score, layoutPlan } = makeShowMeterFixture({ showMeter: true });
+
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
+
+    expect(mockStaveAddTimeSignature).toHaveBeenCalledTimes(1);
+    expect(mockStaveAddTimeSignature).toHaveBeenCalledWith('4/4');
+  });
+
+  it('does not add a time signature when showMeter is absent', () => {
+    const { score, layoutPlan } = makeShowMeterFixture(undefined);
+
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
+
+    expect(mockStaveAddTimeSignature).not.toHaveBeenCalled();
+  });
+
+  describe('items layout', () => {
+    const makeItemsLayoutFixture = () => {
+      const items = [
+        { id: 'note-1', type: 'note' },
+        { id: 'rest-1', type: 'rest' },
+        { id: 'note-2', type: 'note' },
+      ] as unknown as VoiceItem[];
+      const score: Score = {
+        id: 'items-layout-render',
+        defaults: {
+          meter: { beats: 4, beatUnit: 4 },
+        },
+        staves: [
+          {
+            id: 'staff-1',
+            order: 0,
+            defaultClef: 'percussion',
+            measures: [
+              {
+                id: 'measure-1',
+                number: 1,
+                voices: [{ id: 'voice-1', index: 0, items }],
+              },
+            ],
+          },
+        ],
+      };
+      const layoutPlan: ScoreLayoutPlan = {
+        rendererType: 'document',
+        contentSize: { width: 393, height: 116 },
+        systems: [
+          {
+            groupId: 'staff:staff-1',
+            systemIndex: 0,
+            x: 24,
+            y: 24,
+            width: 345,
+            height: 68,
+            staffCount: 1,
+            staffYOffsets: [0],
+            measureIndices: [0],
+          },
+        ],
+        measures: [
+          {
+            groupId: 'staff:staff-1',
+            measureIndex: 0,
+            x: 24,
+            y: 24,
+            width: 345,
+            height: 68,
+            staffYOffsets: [0],
+            systemIndex: 0,
+          },
+        ],
+        groups: [
+          {
+            groupId: 'staff:staff-1',
+            staffIds: ['staff-1'],
+            staves: score.staves,
+            resolvedStatesByStaff: [
+              [{ clef: 'percussion', meter: score.defaults.meter }],
+            ],
+            measures: [
+              {
+                groupId: 'staff:staff-1',
+                measureIndex: 0,
+                intrinsicWidth: 345,
+                measureNumbers: [1],
+                staffBounds: SINGLE_STAFF_BOUNDS,
+              },
+            ],
+          },
+        ],
+      };
+
+      return { score, layoutPlan };
+    };
+
+    it('collects one entry per voice item, rests included, in tick order', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      const ids = ['note-1', 'rest-1', 'note-2'];
+      expect(Object.keys(itemsLayout.items).sort()).toEqual([...ids].sort());
+
+      const xs = ids.map((id) => itemsLayout.items[id]!.x);
+      for (let index = 1; index < xs.length; index += 1) {
+        expect(xs[index]!).toBeGreaterThan(xs[index - 1]!);
+      }
+
+      for (const id of ids) {
+        expect(itemsLayout.items[id]).toEqual({
+          x: expect.any(Number),
+          width: MOCK_NOTE_WIDTH,
+          headCenterX: expect.any(Number),
+          measureIndex: 0,
+        });
+      }
+    });
+
+    it('emits headCenterX at the notehead-span center, inside (x, x + width]', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      for (const id of ['note-1', 'rest-1', 'note-2']) {
+        const item = itemsLayout.items[id]!;
+
+        expect(item.headCenterX).toBe(item.x + MOCK_HEAD_CENTER_OFFSET);
+        expect(item.headCenterX).toBeGreaterThan(item.x);
+        expect(item.headCenterX).toBeLessThanOrEqual(item.x + item.width);
+        // Span-derived, not the fallback block center.
+        expect(item.headCenterX).not.toBe(item.x + item.width / 2);
+      }
+    });
+
+    it('falls back to the block center for notes without span getters (GhostNote)', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+      mockMakeVFVoice.mockImplementationOnce((_score, _meter, _clef, voice) =>
+        makeMockVoiceResult(voice, () => null)
+      );
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      for (const item of Object.values(itemsLayout.items)) {
+        expect(item.headCenterX).toBe(item.x + MOCK_NOTE_WIDTH / 2);
+      }
+    });
+
+    it('falls back to the block center when the reported span is nonsensical', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+      // Span entirely LEFT of the note block: center <= x.
+      mockMakeVFVoice.mockImplementationOnce((_score, _meter, _clef, voice) =>
+        makeMockVoiceResult(voice, (absX) => ({
+          begin: absX - 20,
+          end: absX - 4,
+        }))
+      );
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      for (const item of Object.values(itemsLayout.items)) {
+        expect(item.headCenterX).toBe(item.x + MOCK_NOTE_WIDTH / 2);
+      }
+    });
+
+    it('reports per-measure stave note bounds that bracket the first item', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      expect(itemsLayout.measures).toEqual([
+        {
+          groupId: 'staff:staff-1',
+          staffId: 'staff-1',
+          measureIndex: 0,
+          systemIndex: 0,
+          x: 24,
+          width: 345,
+          staveNoteStartX: 34,
+          staveNoteEndX: 369,
+        },
+      ]);
+
+      const firstItemX = itemsLayout.items['note-1']!.x;
+      const measure = itemsLayout.measures[0]!;
+      expect(measure.staveNoteStartX).toBeLessThanOrEqual(firstItemX);
+      expect(firstItemX).toBeLessThan(measure.staveNoteEndX);
+    });
+
+    it('mirrors the layout plan content size', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      expect(itemsLayout.contentSize).toEqual(layoutPlan.contentSize);
+    });
+
+    it('returns empty items for a measure with no voices', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+      score.staves[0]!.measures[0]!.voices = [];
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      expect(itemsLayout.items).toEqual({});
+      expect(itemsLayout.measures).toHaveLength(1);
+    });
+  });
+
+  describe('staff groups with differing left modifiers', () => {
+    /** Two-staff group where only the bottom staff shows a time signature,
+     * so the two staves have different note-start x values. */
+    const makeUnevenModifierFixture = () => {
+      const item = { id: 'top-item-1', targetStaffId: undefined };
+      const score: Score = {
+        id: 'uneven-modifier-render',
+        defaults: {
+          meter: { beats: 4, beatUnit: 4 },
+        },
+        staffGroups: [
+          {
+            id: 'piano',
+            role: 'grandStaff',
+            staffIds: ['top', 'bottom'],
+          },
+        ],
+        staves: [
+          {
+            id: 'top',
+            order: 0,
+            defaultClef: 'treble',
+            measures: [
+              {
+                id: 'top-m1',
+                number: 1,
+                voices: [
+                  { id: 'top-v1', index: 0, items: [item as VoiceItem] },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'bottom',
+            order: 1,
+            defaultClef: 'bass',
+            measures: [
+              {
+                id: 'bottom-m1',
+                number: 1,
+                leftModifiers: { showMeter: true },
+                voices: [],
+              },
+            ],
+          },
+        ],
+      };
+      const layoutPlan: ScoreLayoutPlan = {
+        rendererType: 'documentEven',
+        contentSize: { width: 200, height: 180 },
+        systems: [
+          {
+            groupId: 'piano',
+            systemIndex: 0,
+            x: 24,
+            y: 24,
+            width: 152,
+            height: 135,
+            staffCount: 2,
+            staffYOffsets: [0, 120],
+            measureIndices: [0],
+          },
+        ],
+        measures: [
+          {
+            groupId: 'piano',
+            measureIndex: 0,
+            x: 24,
+            y: 24,
+            width: 152,
+            height: 135,
+            staffYOffsets: [0, 120],
+            systemIndex: 0,
+          },
+        ],
+        groups: [
+          {
+            groupId: 'piano',
+            staffGroup: score.staffGroups?.[0],
+            staffIds: ['top', 'bottom'],
+            staves: score.staves,
+            resolvedStatesByStaff: [
+              [{ clef: 'treble', meter: score.defaults.meter }],
+              [{ clef: 'bass', meter: score.defaults.meter }],
+            ],
+            measures: [
+              {
+                groupId: 'piano',
+                measureIndex: 0,
+                intrinsicWidth: 152,
+                measureNumbers: [1, 1],
+                staffBounds: TWO_STAFF_BOUNDS,
+              },
+            ],
+          },
+        ],
+      };
+
+      return { score, layoutPlan };
+    };
+
+    it('emits one measures entry per rendered stave with its own note bounds', () => {
+      const { score, layoutPlan } = makeUnevenModifierFixture();
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      expect(itemsLayout.measures).toEqual([
+        {
+          groupId: 'piano',
+          staffId: 'top',
+          measureIndex: 0,
+          systemIndex: 0,
+          x: 24,
+          width: 152,
+          staveNoteStartX: 34,
+          staveNoteEndX: 176,
+        },
+        {
+          groupId: 'piano',
+          staffId: 'bottom',
+          measureIndex: 0,
+          systemIndex: 0,
+          x: 24,
+          width: 152,
+          staveNoteStartX: 34 + MOCK_TIME_SIGNATURE_WIDTH,
+          staveNoteEndX: 176,
+        },
+      ]);
+    });
+
+    it('formats voices against the stave with the largest note-start x', () => {
+      const { score, layoutPlan } = makeUnevenModifierFixture();
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      // The bottom stave carries the time signature and thus the largest
+      // note-start x — the justify width must come from its note area.
+      const bottomStave = mockStaveInstances[1]!;
+      expect(mockFormatterFormatToStave).toHaveBeenCalledTimes(1);
+      expect(mockFormatterFormatToStave).toHaveBeenCalledWith(
+        expect.anything(),
+        bottomStave
+      );
+
+      // The formatted note starts at/after the bottom stave's note-start x.
+      expect(itemsLayout.items['top-item-1']!.x).toBeGreaterThanOrEqual(
+        bottomStave.getNoteStartX()
+      );
+    });
+
+    it('keeps formatting against the first stave when note areas are equal', () => {
+      const { score, layoutPlan } = makeShowMeterFixture(undefined);
+
+      renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      expect(mockFormatterFormatToStave).toHaveBeenCalledWith(
+        expect.anything(),
+        mockStaveInstances[0]
+      );
+    });
+  });
 });
+
+function makeShowMeterFixture(
+  leftModifiers: { showMeter?: boolean } | undefined
+): { score: Score; layoutPlan: ScoreLayoutPlan } {
+  const score: Score = {
+    id: 'show-meter-render',
+    defaults: {
+      meter: { beats: 4, beatUnit: 4 },
+    },
+    staves: [
+      {
+        id: 'staff-1',
+        order: 0,
+        defaultClef: 'treble',
+        measures: [
+          {
+            id: 'measure-1',
+            number: 1,
+            ...(leftModifiers ? { leftModifiers } : {}),
+            voices: [{ id: 'voice-1', index: 0, items: [] }],
+          },
+        ],
+      },
+    ],
+  };
+  const layoutPlan: ScoreLayoutPlan = {
+    rendererType: 'documentEven',
+    contentSize: { width: 200, height: 100 },
+    systems: [
+      {
+        groupId: 'staff:staff-1',
+        systemIndex: 0,
+        x: 24,
+        y: 24,
+        width: 152,
+        height: 135,
+        staffCount: 1,
+        staffYOffsets: [0],
+        measureIndices: [0],
+      },
+    ],
+    measures: [
+      {
+        groupId: 'staff:staff-1',
+        measureIndex: 0,
+        x: 24,
+        y: 24,
+        width: 152,
+        height: 135,
+        staffYOffsets: [0],
+        systemIndex: 0,
+      },
+    ],
+    groups: [
+      {
+        groupId: 'staff:staff-1',
+        staffIds: ['staff-1'],
+        staves: score.staves,
+        resolvedStatesByStaff: [
+          [{ clef: 'treble', meter: score.defaults.meter }],
+        ],
+        measures: [
+          {
+            groupId: 'staff:staff-1',
+            measureIndex: 0,
+            intrinsicWidth: 152,
+            measureNumbers: [1],
+            staffBounds: SINGLE_STAFF_BOUNDS,
+          },
+        ],
+      },
+    ],
+  };
+
+  return { score, layoutPlan };
+}
 
 function getConnectorTypes() {
   return mockStaveConnectorSetType.mock.calls.map(([type]) => type);

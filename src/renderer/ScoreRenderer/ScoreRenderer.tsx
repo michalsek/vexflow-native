@@ -1,5 +1,5 @@
 import type React from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Canvas,
   Group,
@@ -18,11 +18,13 @@ import type { VexflowRecordingCommand } from '../../base';
 import { renderVexflowRecordingCommands } from '../../base/VexflowRecordingReplay';
 import { resolveScoreColorScheme } from '../colorScheme';
 import { insets, renderOptions, spacing } from '../constants';
+import { getRenderScale, toViewSize } from '../scale';
 import type {
   RendererSize,
   RendererType,
   ScoreItemStyleOverrides,
   ScoreOptions,
+  ScoreRendererOptions,
   ScoreRendererProps,
   Viewport,
 } from '../types';
@@ -31,7 +33,7 @@ import { createVisibleViewport } from '../viewport';
 import ScoreScrollbar from './ScoreScrollbar';
 import { getMaxScroll, useScoreScroll } from './useScoreScroll';
 
-const EMPTY_OPTIONS: Partial<ScoreOptions> = {};
+const EMPTY_OPTIONS: ScoreRendererOptions = {};
 const EMPTY_SIZE: RendererSize = { width: 0, height: 0 };
 
 const ScoreRenderer: React.FC<ScoreRendererProps> = ({
@@ -44,6 +46,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   options: userOptions = EMPTY_OPTIONS,
   scrollEnabled = true,
   showScrollbars = true,
+  onItemsLayout,
 }) => {
   const options = useMemo(() => withDefaultOptions(userOptions), [userOptions]);
   const resolvedColorScheme = useMemo(
@@ -83,7 +86,11 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     }),
     [viewportSize.height, viewportSize.width]
   );
-  const { commands: recordedCommands, layoutPlan } = useScoreRecording({
+  const {
+    commands: recordedCommands,
+    layoutPlan,
+    itemsLayout,
+  } = useScoreRecording({
     defaultFont,
     enabled: hasViewportSize,
     fontManager,
@@ -93,15 +100,37 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     score,
     viewport,
   });
+  // Scrolling and overflow checks need the view-space content size, not the
+  // content-space size that bounds the recorded picture.
+  const scale = getRenderScale(options);
   const contentSize = layoutPlan.contentSize;
+  const viewContentSize = useMemo(
+    () => toViewSize(contentSize, scale),
+    [contentSize, scale]
+  );
+
+  // Deliver geometry once per recording pass. The callback lives in a ref so
+  // a new inline callback identity neither re-fires the effect nor loops when
+  // the callback sets parent state.
+  const onItemsLayoutRef = useRef(onItemsLayout);
+  useEffect(() => {
+    onItemsLayoutRef.current = onItemsLayout;
+  });
+  useEffect(() => {
+    if (!hasViewportSize) {
+      return;
+    }
+
+    onItemsLayoutRef.current?.(itemsLayout);
+  }, [itemsLayout, hasViewportSize]);
   const scrollState = useScoreScroll({
-    contentSize,
+    contentSize: viewContentSize,
     rendererType: effectiveRendererType,
     scrollEnabled,
     viewportSize,
   });
   const hasScrollableOverflow =
-    getMaxScroll(effectiveRendererType, viewportSize, contentSize) > 0;
+    getMaxScroll(effectiveRendererType, viewportSize, viewContentSize) > 0;
 
   const viewportClip = useMemo(
     () => Skia.XYWHRect(0, 0, viewportSize.width, viewportSize.height),
@@ -128,17 +157,22 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     recordedCommands,
   ]);
 
+  // Destructure so the worklet below doesn't capture the whole scrollState —
+  // the PanGesture inside it is not serializable and would crash the worklet.
+  const { scrollOffset } = scrollState;
   const pictureTransform = useDerivedValue(() => {
     return createPictureTransform(
-      scrollState.scrollOffset.value,
+      scrollOffset.value,
       effectiveRendererType,
       { width: viewportSize.width, height: viewportSize.height },
-      contentSize
+      viewContentSize,
+      scale
     );
   }, [
-    contentSize,
     effectiveRendererType,
-    scrollState.scrollOffset,
+    scale,
+    scrollOffset,
+    viewContentSize,
     viewportSize.height,
     viewportSize.width,
   ]);
@@ -289,11 +323,18 @@ function createScorePictureWorklet({
   return recorder.finishRecordingAsPicture();
 }
 
+/**
+ * Maps the content-space picture into the view. Skia applies the transform
+ * array right-to-left, so the trailing scale entry runs first and the
+ * translate entries then shift by the view-space scroll offset; `contentSize`
+ * must be the view-space content size.
+ */
 export function createPictureTransform(
   scrollOffset: number,
   rendererType: RendererType,
   viewport: Viewport,
-  contentSize: RendererSize
+  contentSize: RendererSize,
+  scale: number = 1
 ): Transforms3d {
   'worklet';
 
@@ -304,7 +345,7 @@ export function createPictureTransform(
     contentSize
   );
 
-  return [
+  const transform: Transforms3d = [
     {
       translateX: visibleViewport.x === 0 ? 0 : -visibleViewport.x,
     },
@@ -312,9 +353,15 @@ export function createPictureTransform(
       translateY: visibleViewport.y === 0 ? 0 : -visibleViewport.y,
     },
   ];
+
+  if (scale !== 1) {
+    transform.push({ scale });
+  }
+
+  return transform;
 }
 
-function withDefaultOptions(options: Partial<ScoreOptions>): ScoreOptions {
+function withDefaultOptions(options: ScoreRendererOptions): ScoreOptions {
   return {
     insets: { ...insets, ...(options.insets || {}) },
     spacing: { ...spacing, ...(options.spacing || {}) },

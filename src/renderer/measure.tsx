@@ -1,5 +1,10 @@
-import { Formatter, Stave, Voice as VFVoice } from 'vexflow';
-import type { BoundingBox } from 'vexflow';
+import {
+  Articulation as VFArticulation,
+  Formatter,
+  Stave,
+  Voice as VFVoice,
+} from 'vexflow';
+import type { BoundingBox, RenderContext } from 'vexflow';
 import { Platform } from 'react-native';
 
 import {
@@ -10,6 +15,7 @@ import type { Score, Staff } from '../state';
 import {
   buildResolvedMeasureStates,
   buildMeasurementGroups,
+  indexAttachmentsByOwner,
   makeVFVoice,
   resolveGroupStaves,
 } from './scoreParsing';
@@ -47,6 +53,7 @@ export function measureScore(
   options: ScoreOptions
 ): MeasuredScore {
   const groups = buildMeasurementGroups(score);
+  const attachmentsByOwner = indexAttachmentsByOwner(score);
   const measures: MeasuredMeasure[] = [];
   const {
     spacing: { minIntrinsicSizeMultiplier },
@@ -88,6 +95,7 @@ export function measureScore(
 
         const voiceArtifacts = measure.voices.map((voice) =>
           makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
+            attachmentsByOwner,
             resolveClef: (item) =>
               item.targetStaffId
                 ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -110,16 +118,20 @@ export function measureScore(
           resolvedState,
           showClef:
             measureIndex === 0 || Boolean(measure.leftModifiers?.showClef),
+          showMeter: measure.leftModifiers?.showMeter === true,
           voiceArtifacts,
         };
       });
 
       try {
+        // Clef and time signature sit before the note area, so the intrinsic
+        // width must include them or an empty measure with a time signature
+        // measures ~0 wide and the signature clips.
         const intrinsicNoteWidth =
-          allVoices.length > 0
+          (allVoices.length > 0
             ? formatter.preCalculateMinTotalWidth(allVoices) *
               Math.max(1, minIntrinsicSizeMultiplier)
-            : 0;
+            : 0) + measureLeftModifierWidth(staffMeasurementContexts);
         const staffBounds = measureStaffVerticalBounds({
           allVoices,
           intrinsicNoteWidth,
@@ -154,6 +166,48 @@ export function measureScore(
   };
 }
 
+// Wide enough that VexFlow never clamps the modifier block on the probe stave.
+const MODIFIER_PROBE_STAVE_WIDTH = 500;
+
+/**
+ * Widest clef/time-signature block of the measure, measured as the note-start
+ * delta between a bare probe stave and one carrying the shown modifiers.
+ */
+function measureLeftModifierWidth(
+  staffMeasurementContexts: Array<{
+    resolvedState: { clef: string; meter: { beats: number; beatUnit: number } };
+    showClef: boolean;
+    showMeter: boolean;
+  }>
+): number {
+  return staffMeasurementContexts.reduce(
+    (maxWidth, { resolvedState, showClef, showMeter }) => {
+      if (!showClef && !showMeter) {
+        return maxWidth;
+      }
+
+      const bareStave = new Stave(0, 0, MODIFIER_PROBE_STAVE_WIDTH);
+      const modifiedStave = new Stave(0, 0, MODIFIER_PROBE_STAVE_WIDTH);
+
+      if (showClef) {
+        modifiedStave.addClef(resolvedState.clef);
+      }
+
+      if (showMeter) {
+        modifiedStave.addTimeSignature(
+          `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
+        );
+      }
+
+      return Math.max(
+        maxWidth,
+        modifiedStave.getNoteStartX() - bareStave.getNoteStartX()
+      );
+    },
+    0
+  );
+}
+
 function measureStaffVerticalBounds({
   allVoices,
   intrinsicNoteWidth,
@@ -169,16 +223,23 @@ function measureStaffVerticalBounds({
     measure: Staff['measures'][number];
     resolvedState: ReturnType<typeof buildResolvedMeasureStates>[number];
     showClef: boolean;
+    showMeter: boolean;
     voiceArtifacts: ReturnType<typeof makeVFVoice>[];
   }>;
 }): StaffVerticalBounds[] {
   const width = Math.max(intrinsicNoteWidth, 1);
   const renderedStaves = staffMeasurementContexts.map(
-    ({ resolvedState, showClef }) => {
+    ({ resolvedState, showClef, showMeter }) => {
       const stave = new Stave(0, 0, width);
 
       if (showClef) {
         stave.addClef(resolvedState.clef);
+      }
+
+      if (showMeter) {
+        stave.addTimeSignature(
+          `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
+        );
       }
 
       return stave;
@@ -245,6 +306,7 @@ function measureStaffVerticalBounds({
             staffIndexById.get(
               items[noteIndex]?.targetStaffId ?? ownerStaffId
             ) ?? staffIndex;
+          mergeArticulationBounds(bounds[ownerStaffIndex], note);
           mergeNoteBounds(bounds[ownerStaffIndex], note);
         });
 
@@ -272,6 +334,56 @@ function measureStaffVerticalBounds({
   );
 
   return bounds;
+}
+
+/**
+ * Render context that absorbs every method call without drawing anything, so
+ * modifiers can run their `draw()` placement math during measurement.
+ */
+function createNoopRenderContext(): RenderContext {
+  const memo: Record<PropertyKey, unknown> = {};
+  const proxy: object = new Proxy(memo, {
+    get: (target, property) => {
+      if (!(property in target)) {
+        target[property] = () => proxy;
+      }
+
+      return target[property];
+    },
+  });
+
+  return proxy as RenderContext;
+}
+
+const NOOP_RENDER_CONTEXT = createNoopRenderContext();
+
+/**
+ * Merges the drawn extents of a note's articulations into the staff bounds.
+ * VexFlow only positions an articulation inside `draw()`, so each one is
+ * drawn against a no-op context first to make its bounding box real.
+ */
+function mergeArticulationBounds(
+  bounds: StaffVerticalBounds | undefined,
+  note: VFVoiceNote
+) {
+  if (!bounds) {
+    return;
+  }
+
+  for (const modifier of note.getModifiers()) {
+    if (!(modifier instanceof VFArticulation)) {
+      continue;
+    }
+
+    try {
+      modifier.setContext(NOOP_RENDER_CONTEXT);
+      modifier.draw();
+      mergeBoundingBox(bounds, modifier.getBoundingBox());
+    } catch {
+      // Ghost and spacer notes cannot place modifiers; note bounds remain
+      // the fallback.
+    }
+  }
 }
 
 function mergeNoteBounds(

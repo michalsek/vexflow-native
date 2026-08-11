@@ -7,12 +7,29 @@ import type { Score } from '../state';
 import { layoutScore, type ScoreLayoutPlan } from './layout';
 import { measureScore } from './measure';
 import { renderScore } from './render';
+import {
+  createContentViewport,
+  getRenderScale,
+  scaleItemsLayoutToViewSpace,
+} from './scale';
 import type { ResolvedScoreColorScheme } from './colorScheme';
-import type { RendererRect, RendererType, ScoreOptions } from './types';
+import type {
+  RendererRect,
+  RendererType,
+  ScoreItemsLayout,
+  ScoreOptions,
+} from './types';
 
 export interface ScoreRecording {
+  /** Recorded draw commands, content-space coordinates. */
   commands: readonly VexflowRecordingCommand[];
+  /**
+   * Layout plan in content space; multiply its `contentSize` by the render
+   * scale for the view-space size that drives scrolling.
+   */
   layoutPlan: ScoreLayoutPlan;
+  /** Emitted geometry, already converted to view space. */
+  itemsLayout: ScoreItemsLayout;
 }
 
 export function useScoreRecording({
@@ -39,8 +56,14 @@ export function useScoreRecording({
       return {
         commands: [],
         layoutPlan: createEmptyLayoutPlan(rendererType, viewport),
+        itemsLayout: createEmptyItemsLayout(viewport),
       };
     }
+
+    // Layout, measure and render run in content space against the virtual
+    // viewport; see src/renderer/scale.ts.
+    const scale = getRenderScale(options);
+    const contentViewport = createContentViewport(viewport, scale);
 
     const measureStart = nowMs();
     const ctx = new VexflowRecordingContext(
@@ -57,12 +80,15 @@ export function useScoreRecording({
       measuredScore,
       options,
       rendererType,
-      viewport
+      contentViewport
     );
     const layoutMs = nowMs() - layoutStart;
 
     const renderStart = nowMs();
-    renderScore(ctx, score, layoutPlan, options);
+    const itemsLayout = scaleItemsLayoutToViewSpace(
+      renderScore(ctx, score, layoutPlan, options),
+      scale
+    );
     const renderMs = nowMs() - renderStart;
 
     const finishStart = nowMs();
@@ -86,6 +112,7 @@ export function useScoreRecording({
     return {
       commands,
       layoutPlan,
+      itemsLayout,
     };
   }, [
     colorScheme,
@@ -97,6 +124,17 @@ export function useScoreRecording({
     score,
     viewport,
   ]);
+}
+
+function createEmptyItemsLayout(viewport: RendererRect): ScoreItemsLayout {
+  return {
+    items: {},
+    measures: [],
+    contentSize: {
+      width: viewport.width,
+      height: viewport.height,
+    },
+  };
 }
 
 function createEmptyLayoutPlan(

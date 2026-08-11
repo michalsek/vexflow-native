@@ -40,6 +40,16 @@ export type NoteLength =
 
 export type StemDirection = 'up' | 'down' | 'auto';
 
+export type Notehead =
+  | 'x'
+  | 'circle-x'
+  | 'diamond'
+  | 'circle'
+  | 'square'
+  | 'triangle'
+  | 'triangle-down'
+  | 'slash';
+
 export type Barline =
   | 'single'
   | 'double'
@@ -90,6 +100,8 @@ export interface Pitch {
   step: Step;
   octave: number;
   accidental?: Accidental;
+  notehead?: Notehead;
+  ghost?: boolean;
 }
 
 export interface DurationValue {
@@ -242,6 +254,7 @@ export interface AttachmentBase {
 export interface ArticulationAttachment extends AttachmentBase {
   type: 'articulation';
   articulation: Articulation;
+  placement?: 'above' | 'below';
 }
 
 export interface DynamicAttachment extends AttachmentBase {

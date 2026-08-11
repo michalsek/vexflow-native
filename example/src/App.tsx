@@ -11,6 +11,7 @@ import { enableScreens } from 'react-native-screens';
 import { useColorScheme } from './hooks/useColorScheme';
 import type { ExampleStackParamList } from './navigation/ExampleStackParamList';
 import DocumentRenderer from './screens/DocumentRenderer';
+import DrumKitExample from './screens/DrumKitExample';
 import EvenDocumentRenderer from './screens/EvenDocumentRenderer';
 // import InfiniteScore from './screens/InfiniteScore';
 import Main from './screens/Main';
@@ -79,6 +80,11 @@ const App: React.FC = () => {
             name="SimpleRenderer"
             component={SimpleRenderer}
             options={{ title: 'Simple Renderer' }}
+          />
+          <Stack.Screen
+            name="DrumKitExample"
+            component={DrumKitExample}
+            options={{ title: 'Drum Kit' }}
           />
           <Stack.Screen
             name="ScoreRendererStyleOverrides"
