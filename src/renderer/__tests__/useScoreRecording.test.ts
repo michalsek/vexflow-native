@@ -85,10 +85,8 @@ describe('useScoreRecording items layout', () => {
   });
 
   it('passes the exact renderScore output through at the default scale 1', () => {
-    // Regression pin: without an explicit render scale (or at scale 1) the
-    // pipeline must be byte-identical to the pre-scale implementation — the
-    // same viewport reaches layoutScore and the SAME itemsLayout object
-    // (no cloning/rounding) is returned.
+    // At scale 1 the pipeline must behave exactly as before scaling existed:
+    // same viewport, same itemsLayout object.
     const recording = useScoreRecording({ ...HOOK_ARGS, enabled: true });
 
     expect(layoutScore).toHaveBeenCalledWith(

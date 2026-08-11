@@ -385,10 +385,8 @@ describe('dotted durations', () => {
   });
 
   it('completes a strict 4/4 voice of a quarter note plus a dotted-half rest', () => {
-    // Regression: adding the first note to an empty measure produces
-    // [note q, rest h.] — the dotted rest must carry its dot into the
-    // VexFlow tick math or the strict voice is under-full and the
-    // formatter throws IncompleteVoice.
+    // Regression: a dotted rest must carry its dot into the VexFlow tick
+    // math, or the strict voice is under-full and the formatter throws.
     const voiceId = 'voice-first-note';
     const items: VoiceItem[] = [
       {
@@ -567,23 +565,11 @@ describe('makeVFVoice', () => {
   });
 });
 
-/* Empirical pinning of the VexFlow 5 notehead-span getters that back
- * ScoreItemLayout.headCenterX (see resolveItemHeadCenterX in render.tsx):
- * REAL StaveNote/GhostNote instances formatted to a real stave, no mocks.
- * - StaveNote (notes AND visible rests — the rest glyph is a notehead):
- *   getNoteHeadBeginX() = getAbsoluteX() + xShift and getNoteHeadEndX() =
- *   begin + getGlyphWidth(), so the span center is a usable visual center
- *   and the getters are safe to call on rests (no rest special-case needed).
- * - GhostNote (hidden/spacer rests) has NO span getters — the resolver must
- *   fall back to the block center.
- *
- * ENVIRONMENT CAVEAT: jest has no txtCanvas, so VexFlow's text measurement
- * returns empty metrics and getGlyphWidth() is 0 — the span DEGENERATES to a
- * point at the tick x here (begin === end === absX). That makes this suite
- * pin (a) the API identities, which hold whatever the metrics are, and
- * (b) the resolver's degenerate-span fallback. The span-derived center path
- * (real, positive glyph widths as measured on device) is covered by the
- * mocked geometry in render.test.ts. */
+/* Pins the VexFlow 5 notehead-span getters that back headCenterX, using real
+ * StaveNote/GhostNote instances. Jest has no text canvas, so glyph widths are
+ * 0 and the span degenerates to a point — this suite pins the API identities
+ * and the degenerate-span fallback; the span-derived center path is covered
+ * by the mocked geometry in render.test.ts. */
 describe('notehead span geometry (VexFlow 5, real formatting)', () => {
   const formatItems = (items: VoiceItem[]) => {
     const voice: Voice = {
@@ -629,16 +615,15 @@ describe('notehead span geometry (VexFlow 5, real formatting)', () => {
       const staveNote = note as StaveNote;
       const x = staveNote.getAbsoluteX();
 
-      // Both getters exist on every StaveNote — rests included (their rest
-      // glyph is a notehead), so no rest special-case is needed upstream.
+      // Both getters exist on every StaveNote, rests included.
       expect(typeof staveNote.getNoteHeadBeginX).toBe('function');
       expect(typeof staveNote.getNoteHeadEndX).toBe('function');
 
       const begin = staveNote.getNoteHeadBeginX();
       const end = staveNote.getNoteHeadEndX();
 
-      // The VexFlow 5 identities: begin = absoluteX + xShift (0 here),
-      // end = begin + glyph width. They hold whatever the font metrics are.
+      // The VexFlow 5 identities: begin = absoluteX + xShift,
+      // end = begin + glyph width.
       expect(begin).toBe(x + staveNote.getXShift());
       expect(end).toBe(begin + staveNote.getGlyphWidth());
       expect(Number.isFinite(begin)).toBe(true);
@@ -659,9 +644,8 @@ describe('notehead span geometry (VexFlow 5, real formatting)', () => {
       const x = staveNote.getAbsoluteX();
       const width = staveNote.getWidth();
 
-      // No txtCanvas in jest → empty text metrics → glyphWidth 0: the span
-      // collapses onto the tick x, i.e. center === x, which the resolver
-      // must treat as nonsensical (a center must sit strictly right of x).
+      // With glyph width 0 the span collapses onto the tick x, which the
+      // resolver must treat as nonsensical.
       expect(staveNote.getNoteHeadEndX()).toBe(staveNote.getNoteHeadBeginX());
       expect(resolveItemHeadCenterX(staveNote, x, width)).toBe(x + width / 2);
     }

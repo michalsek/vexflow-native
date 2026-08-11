@@ -227,12 +227,8 @@ describe('scaleItemsLayoutToViewSpace', () => {
   });
 
   /* Structural guard for the hand-maintained field list in
-   * scaleItemsLayoutToViewSpace: every NUMERIC field of an item / measure
-   * entry that is not an index must come out multiplied by the scale. A new
-   * x-ish field added to the types (which tsc forces into this fixture)
-   * fails here until scale.ts learns to multiply it. Best-effort: only
-   * catches fields present on the fixture with values that change under
-   * scaling (non-zero), which all coordinate fields here have. */
+   * scaleItemsLayoutToViewSpace: a new coordinate field added to the types
+   * fails here until scale.ts learns to multiply it. */
   it('scales every numeric non-index field of items and measures (structural guard)', () => {
     const SCALE = 0.5;
     const INDEX_FIELDS = new Set(['measureIndex', 'systemIndex']);
@@ -305,16 +301,16 @@ describe('scaled layout pipeline (document mode)', () => {
     const full = layoutAtScale(score, VIEW_VIEWPORT, 'document', 1);
     const half = layoutAtScale(score, VIEW_VIEWPORT, 'document', 0.5);
 
-    // The stretched single-measure line fills the virtual viewport width, so
-    // after scaling the notation still visually fills the view width.
+    // The stretched line fills the virtual viewport width, so after scaling
+    // the notation still fills the view width.
     expect(half.plan.contentSize.width).toBeCloseTo(
       VIEW_VIEWPORT.width / 0.5,
       5
     );
     expect(half.viewContentSize.width).toBeCloseTo(VIEW_VIEWPORT.width, 5);
 
-    // A single measure is one document line at any width, so the content
-    // height is scale-invariant — the VIEW-space height is content x scale.
+    // A single measure is one line at any width, so the content height is
+    // scale-invariant.
     expect(half.plan.contentSize.height).toBeCloseTo(
       full.plan.contentSize.height,
       5
@@ -330,8 +326,7 @@ describe('scaled layout pipeline (document mode)', () => {
     const shortViewport: RendererRect = { x: 0, y: 0, width: 320, height: 160 };
     const half = layoutAtScale(tallScore, shortViewport, 'document', 0.5);
 
-    // Content overflows the virtual viewport vertically; the view-space
-    // content height (content x scale) is what scrolling must be clamped to.
+    // Scrolling must be clamped to the view-space content height.
     expect(half.viewContentSize.height).toBeCloseTo(
       half.plan.contentSize.height * 0.5,
       5
@@ -352,8 +347,8 @@ describe('scaled layout pipeline (infiniteScore mode)', () => {
       throw new Error('Expected infinite score system');
     }
 
-    // Content height equals the virtual viewport height, so the VIEW-space
-    // height equals the view viewport height — no phantom vertical scroll.
+    // View-space height equals the view viewport height — no phantom
+    // vertical scroll.
     expect(half.plan.contentSize.height).toBeCloseTo(
       VIEW_VIEWPORT.height / 0.5,
       5
@@ -376,8 +371,8 @@ describe('scaled layout pipeline (infiniteScore mode)', () => {
       throw new Error('Expected infinite score system');
     }
 
-    // Content-space horizontal centering happens inside the virtual viewport;
-    // multiplying by the scale lands the system centered in the real view.
+    // Centering happens inside the virtual viewport; multiplying by the
+    // scale lands the system centered in the real view.
     const viewCenterX = (system.x + system.width / 2) * 0.5;
     expect(viewCenterX).toBeCloseTo(VIEW_VIEWPORT.width / 2, 5);
   });

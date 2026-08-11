@@ -52,17 +52,14 @@ export type VFVoiceNote = StemmableNote;
 export interface MakeVFVoiceOptions {
   resolveClef?: (item: VoiceItem) => Clef;
   /**
-   * Precomputed `score.attachments` index keyed by owner item id. Pass it when
-   * calling `makeVFVoice` in a loop so the index is built once per pass;
-   * omitted, the index is derived from `score.attachments` on each call.
+   * Precomputed attachment index; pass it when calling in a loop to avoid
+   * rebuilding it on every call.
    */
   attachmentsByOwner?: Map<string, NoteAttachment[]>;
 }
 
 /**
- * Maps library notehead names to VexFlow key glyph codes. VexFlow uppercases
- * the third `/`-separated key segment and resolves the duration-aware glyph
- * via `Tables.codeNoteHead` ('x' -> X0/X1/X2 family, etc.).
+ * Maps library notehead names to VexFlow key glyph codes.
  */
 export const NOTEHEAD_TO_VF_CODE: Record<Notehead, string> = {
   'x': 'x',
@@ -76,8 +73,7 @@ export const NOTEHEAD_TO_VF_CODE: Record<Notehead, string> = {
 };
 
 /**
- * Maps library articulation names to VexFlow articulation codes
- * (`Tables.articulationCodes`).
+ * Maps library articulation names to VexFlow articulation codes.
  */
 export const ARTICULATION_TO_VF_CODE: Record<Articulation, string> = {
   staccato: 'a.',
@@ -132,9 +128,8 @@ export function durationToVF(duration: DurationValue, isRest = false): string {
       ? '1/2'
       : duration.length;
 
-  // VexFlow duration tokens are `<duration><dots><type>` (e.g. 'hdr' is a
-  // dotted half rest); the dot count drives the intrinsic tick math, so it
-  // must be present for rests too or strict voices come up short.
+  // Dots drive VexFlow's tick math, so rests need them in the token too or
+  // strict voices come up short.
   const dots = 'd'.repeat(duration.dots ?? 0);
 
   return `${length}${dots}${isRest ? 'r' : ''}`;
@@ -170,9 +165,7 @@ export function addPitchAccidentals(note: StaveNote, pitches: Pitch[]) {
 }
 
 /**
- * Wraps ghost pitches in parentheses by attaching a left and right
- * `Parenthesis` modifier at each ghost pitch's key index (mirrors
- * `Parenthesis.buildAndAttach`, but per index instead of per note).
+ * Wraps each ghost pitch of a note in parentheses.
  */
 export function applyGhostParentheses(
   note: StaveNote,
@@ -188,10 +181,6 @@ export function applyGhostParentheses(
   });
 }
 
-/**
- * Attaches articulation attachments to a note; placed above by default,
- * below when the attachment requests it.
- */
 export function applyArticulations(
   note: StaveNote,
   attachments: NoteAttachment[] | undefined
@@ -217,9 +206,6 @@ export function applyArticulations(
   }
 }
 
-/**
- * Indexes score-level note attachments by their owner item id.
- */
 export function indexAttachmentsByOwner(
   score: Score
 ): Map<string, NoteAttachment[]> {

@@ -124,12 +124,9 @@ export function measureScore(
       });
 
       try {
-        // Intrinsic width = note width + widest left-modifier block. The left
-        // modifiers (clef when shown, time signature when shown) occupy the
-        // stave BEFORE its note-start x, so a measure needs room for both —
-        // without the modifier term an empty measure with a time signature
-        // measures ~0 wide and the signature clips in the infiniteScore /
-        // documentEven layouts, which size measures from this value.
+        // Clef and time signature sit before the note area, so the intrinsic
+        // width must include them or an empty measure with a time signature
+        // measures ~0 wide and the signature clips.
         const intrinsicNoteWidth =
           (allVoices.length > 0
             ? formatter.preCalculateMinTotalWidth(allVoices) *
@@ -169,16 +166,12 @@ export function measureScore(
   };
 }
 
-/** Probe stave width for left-modifier measurement — must comfortably exceed
- * any clef + time-signature block so `Stave.format()` never clamps it. */
+// Wide enough that VexFlow never clamps the modifier block on the probe stave.
 const MODIFIER_PROBE_STAVE_WIDTH = 500;
 
 /**
- * Widest per-staff left-modifier block (clef and/or time signature) of the
- * measure, in canvas points. Measured as the note-start-x delta between a
- * bare stave and one carrying the staff's shown modifiers, so staves without
- * modifiers contribute exactly 0 and the measured value excludes the bare
- * stave's own start padding.
+ * Widest clef/time-signature block of the measure, measured as the note-start
+ * delta between a bare probe stave and one carrying the shown modifiers.
  */
 function measureLeftModifierWidth(
   staffMeasurementContexts: Array<{
@@ -344,13 +337,8 @@ function measureStaffVerticalBounds({
 }
 
 /**
- * No-op VexFlow render context for measurement-time drawing. A `Proxy` that
- * answers every method with a chainable no-op, so any context call VexFlow's
- * modifier `draw()` implementations make (today: `setFont` + `fillText` via
- * `Element.renderText`) is absorbed without rendering anything. Should a
- * VexFlow upgrade start calling a context method differently, the proxy keeps
- * absorbing it — the articulation-extent regression tests are the canary that
- * placement itself still measures correctly.
+ * Render context that absorbs every method call without drawing anything, so
+ * modifiers can run their `draw()` placement math during measurement.
  */
 function createNoopRenderContext(): RenderContext {
   const memo: Record<PropertyKey, unknown> = {};
@@ -370,16 +358,9 @@ function createNoopRenderContext(): RenderContext {
 const NOOP_RENDER_CONTEXT = createNoopRenderContext();
 
 /**
- * Merges the TRUE drawn extents of a note's articulation modifiers into the
- * staff bounds. VexFlow only assigns an articulation's x/y (stacked text line,
- * stem-tip offset, staff-line snapping, origin shift) inside
- * `Articulation.draw()` — after formatting alone the modifier's bounding box
- * still sits at the origin, which is why note bounding boxes never grew when
- * accents were attached. Drawing against a no-op context runs exactly the
- * placement math `render.tsx`'s real draw will run (the measurement voices are
- * private to `measureScore`, so mutating them is contained), and afterwards
- * `getBoundingBox()` is the actual glyph box for placement above AND below,
- * including multi-articulation stacking.
+ * Merges the drawn extents of a note's articulations into the staff bounds.
+ * VexFlow only positions an articulation inside `draw()`, so each one is
+ * drawn against a no-op context first to make its bounding box real.
  */
 function mergeArticulationBounds(
   bounds: StaffVerticalBounds | undefined,
@@ -399,8 +380,8 @@ function mergeArticulationBounds(
       modifier.draw();
       mergeBoundingBox(bounds, modifier.getBoundingBox());
     } catch {
-      // Notes without formatted geometry (ghosts, spacers) cannot place
-      // modifiers; note bounds still provide the conservative fallback.
+      // Ghost and spacer notes cannot place modifiers; note bounds remain
+      // the fallback.
     }
   }
 }

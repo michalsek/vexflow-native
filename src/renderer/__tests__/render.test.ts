@@ -11,10 +11,8 @@ const mockStaveInstances: Array<{
   constructorArgs: unknown[];
   getNoteStartX: () => number;
 }> = [];
-/** Width the mock stave charges per added time signature. Clefs deliberately
- * contribute 0 in this stub so the long-standing single-staff fixture values
- * (noteStartX = x + 10) stay stable; the time signature moves noteStartX so
- * per-stave modifier differences are observable. */
+/** Width the mock stave charges per added time signature; clefs contribute 0
+ * so existing single-staff fixture values stay stable. */
 const MOCK_TIME_SIGNATURE_WIDTH = 20;
 const mockStaveConnectorType = {
   SINGLE_RIGHT: 0,
@@ -36,24 +34,20 @@ const mockRecordingContext = {
   beginColorGroup: mockBeginColorGroup,
   endColorGroup: mockEndColorGroup,
 };
-/** Formatted geometry stubs: successive notes in a voice report strictly
- * increasing absolute x values, mimicking formatToStave's tick order. */
+/** Successive notes in a voice report strictly increasing absolute x values,
+ * mimicking formatToStave's tick order. */
 const MOCK_NOTE_FIRST_X = 60;
 const MOCK_NOTE_X_STEP = 30;
 const MOCK_NOTE_WIDTH = 12;
-/** Mocked StaveNote notehead span, relative to the note's absolute x. The
- * center offset (1 + 9) / 2 = 5 is deliberately DIFFERENT from the fallback
- * block center MOCK_NOTE_WIDTH / 2 = 6, so tests can tell the span-derived
- * headCenterX apart from the fallback. */
+/** Mocked notehead span; its center (5) deliberately differs from the
+ * fallback block center (6) so tests can tell the two apart. */
 const MOCK_HEAD_BEGIN_OFFSET = 1;
 const MOCK_HEAD_END_OFFSET = 9;
 const MOCK_HEAD_CENTER_OFFSET =
   (MOCK_HEAD_BEGIN_OFFSET + MOCK_HEAD_END_OFFSET) / 2;
 
-/** Builds the mock notes of one voice. `headSpan` overrides the notehead-span
- * getters: `undefined` uses the default StaveNote-like span, `() => null`
- * omits the getters entirely (GhostNote-like), any other return provides the
- * begin/end values verbatim. */
+/** Builds the mock notes of one voice; `headSpan` overrides the notehead-span
+ * getters (`() => null` omits them entirely, like a GhostNote). */
 const makeMockNotes = (
   itemCount: number,
   headSpan?: (absX: number) => { begin: number; end: number } | null
@@ -959,10 +953,8 @@ describe('renderScore', () => {
   });
 
   describe('staff groups with differing left modifiers', () => {
-    /** Two-staff group where ONLY the bottom staff shows a time signature, so
-     * the two staves have different note-start x values (the mock charges
-     * MOCK_TIME_SIGNATURE_WIDTH per time signature). The top staff carries
-     * one voice item so formatting actually runs. */
+    /** Two-staff group where only the bottom staff shows a time signature,
+     * so the two staves have different note-start x values. */
     const makeUnevenModifierFixture = () => {
       const item = { id: 'top-item-1', targetStaffId: undefined };
       const score: Score = {
@@ -1105,10 +1097,8 @@ describe('renderScore', () => {
         TEST_OPTIONS
       );
 
-      // Two staves rendered; the bottom one (index 1) carries the time
-      // signature and therefore the largest getNoteStartX — the justify
-      // width must come from ITS note area, or the formatted notes could
-      // overrun the bottom stave's right barline.
+      // The bottom stave carries the time signature and thus the largest
+      // note-start x — the justify width must come from its note area.
       const bottomStave = mockStaveInstances[1]!;
       expect(mockFormatterFormatToStave).toHaveBeenCalledTimes(1);
       expect(mockFormatterFormatToStave).toHaveBeenCalledWith(

@@ -45,11 +45,8 @@ function loadScoreRendererModule() {
     }
   );
 
-  /* Deps-aware useEffect + slot-stable useRef mocks: hooks are indexed by
-   * call order per render (cursors reset by the ScoreRenderer wrapper below),
-   * effects are queued during render and flushed afterwards, and an effect
-   * only re-runs when it has no deps array or a dep changed (Object.is) —
-   * matching React closely enough to verify effect dependency contracts. */
+  /* Deps-aware useEffect and slot-stable useRef mocks, close enough to React
+   * to verify effect dependency contracts. */
   const effectPrevDeps: Array<readonly unknown[] | undefined> = [];
   let pendingEffects: Array<{
     index: number;
@@ -160,8 +157,8 @@ function loadScoreRendererModule() {
   const module =
     require('../ScoreRenderer') as typeof import('../ScoreRenderer');
 
-  /* Renders ScoreRenderer the way the mocked hook store expects: hook cursors
-   * reset per render, queued effects flushed after the render commits. */
+  /* Renders ScoreRenderer with hook cursors reset per render and queued
+   * effects flushed afterwards. */
   const ScoreRendererImpl = module.default as unknown as (
     props: unknown
   ) => unknown;
@@ -429,10 +426,8 @@ describe('ScoreRenderer picture cache helpers', () => {
       staves: [],
     };
     const fontManager = { kind: 'font-manager' };
-    // A parent passing a NEW inline callback on every render — the shape
-    // that would loop if the delivery effect depended on the callback
-    // identity (inline callback writes parent state → new callback → effect
-    // → state write → ...).
+    // A parent passing a new inline callback on every render — the shape that
+    // would loop if the delivery effect depended on the callback identity.
     const renderWithInlineCallback = (tag: number) =>
       module.ScoreRenderer({
         defaultFont: 'Bravura',
@@ -447,18 +442,15 @@ describe('ScoreRenderer picture cache helpers', () => {
     });
     renderWithInlineCallback(2);
 
-    // One delivery for the recording pass that became visible — through the
-    // callback that was current at effect time.
+    // One delivery per recording pass, through the latest callback.
     expect(received).toHaveBeenCalledTimes(1);
     expect(received).toHaveBeenCalledWith(2, itemsLayout);
 
-    // A render with ONLY a new callback identity (same geometry, same
-    // viewport) must not re-deliver.
+    // A new callback identity alone must not re-deliver.
     renderWithInlineCallback(3);
     expect(received).toHaveBeenCalledTimes(1);
 
-    // A new recording pass delivers exactly once more, via the latest
-    // callback.
+    // A new recording pass delivers exactly once more.
     const nextItemsLayout = makeItemsLayoutFixture();
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
@@ -519,10 +511,8 @@ describe('ScoreRenderer picture cache helpers', () => {
   it('appends the render scale after the scroll translate (content scaled first)', () => {
     const module = loadScoreRendererModule();
 
-    // contentSize here is VIEW-space (content x scale): view content 200 minus
-    // viewport 80 clamps the offset to 120; the trailing scale entry means the
-    // content-space point is scaled into view space before the view-space
-    // translate applies (react-native-skia applies the array right-to-left).
+    // View content 200 minus viewport 80 clamps the offset to 120; the
+    // trailing scale entry applies before the translate.
     expect(
       module.createPictureTransform(
         500,
@@ -555,9 +545,8 @@ describe('ScoreRenderer picture cache helpers', () => {
 
   it('records the picture at content-space size while scrolling in view space', () => {
     const module = loadScoreRendererModule();
-    // Content-space layout plan for a scaled render: at scale 0.5 the view
-    // content size is 400x700 — vertically scrollable inside a 393x612
-    // viewport, while the picture cull rect must stay the full content size.
+    // At scale 0.5 the view content size is 400x700 — vertically scrollable
+    // inside a 393x612 viewport.
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
       layoutPlan: { contentSize: { width: 800, height: 1400 } },

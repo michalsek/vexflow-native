@@ -178,11 +178,9 @@ describe('measureScore', () => {
   });
 
   describe('intrinsic width of shown left modifiers', () => {
-    /* Glyph widths (clef, time signature digits) come from VexFlow's text
-     * measurement canvas. In production the Skia-backed TextMeasureContext is
-     * installed before measureScore runs; under jest only the lib's empty
-     * fallback exists and every glyph measures 0 — which would silently turn
-     * these tests into no-ops. Install a proportional stub for this block. */
+    /* Under jest VexFlow has no text measurement canvas and every glyph
+     * measures 0, which would silently turn these tests into no-ops — install
+     * a proportional stub for this block. */
     const measurementCanvasStub = {
       getContext: (type: string) =>
         type === '2d'
@@ -238,11 +236,8 @@ describe('measureScore', () => {
     });
 
     describe('articulation vertical extents', () => {
-      /* VexFlow assigns an articulation's x/y only inside its `draw()` call —
-       * note bounding boxes taken after formatting alone carry the modifier
-       * box at the origin, so accents used to add ZERO measured height (the
-       * blind spot this block guards). `measureStaffVerticalBounds` now draws
-       * articulations against a no-op context to obtain the true glyph box. */
+      /* VexFlow positions an articulation only inside `draw()`, so accents
+       * used to add zero measured height — the blind spot this block guards. */
 
       it('measures taller bounds when a note carries an accent above', () => {
         const withAccent = measureScore(
@@ -290,19 +285,16 @@ describe('measureScore', () => {
           TEST_OPTIONS
         );
 
-        // No articulation is ever placed, so the measurement-time draw path
-        // contributes nothing — output is identical with or without the
-        // (empty) attachments array.
+        // No articulation is placed, so output is identical with or without
+        // the empty attachments array.
         expect(drawSpy).not.toHaveBeenCalled();
         expect(withEmptyAttachments).toEqual(withoutAttachments);
       });
 
       it('places the measured accent box fully above the stems-up note box', () => {
-        // Canary tying the measurement path to VexFlow's placement math: if a
-        // VexFlow upgrade changes `Articulation.draw()` (e.g. starts needing
-        // context state our no-op proxy cannot satisfy) and placement stops
-        // resolving, the accent extent collapses back into the note bounds
-        // and this delta disappears.
+        // Canary: if a VexFlow upgrade breaks measurement-time placement,
+        // the accent extent collapses back into the note bounds and this
+        // delta disappears.
         const withAccent = measureScore(
           makeStemsUpScore(accentAttachments()),
           TEST_OPTIONS
@@ -313,9 +305,8 @@ describe('measureScore', () => {
           withoutAccent.measures[0]!.staffBounds[0]!.top -
           withAccent.measures[0]!.staffBounds[0]!.top;
 
-        // The accent glyph (stub canvas: ascent 10 + descent 2 = 12) plus its
-        // half-space offset above the stem tip must contribute at least one
-        // glyph height of extra headroom.
+        // The accent glyph (stub canvas: ascent 10 + descent 2 = 12) must
+        // contribute at least one glyph height of extra headroom.
         expect(topDelta).toBeGreaterThanOrEqual(12);
       });
     });
@@ -336,9 +327,8 @@ describe('measureScore', () => {
   });
 });
 
-/** Two measures on one staff; the SECOND measure is empty (no voices) and
- * optionally shows the meter — past measure 0 no clef is added, so the
- * second measure's intrinsic width isolates the time-signature term. */
+/** Two measures on one staff; the second is empty and optionally shows the
+ * meter, so its intrinsic width isolates the time-signature term. */
 function makeTwoMeasureScore(
   secondMeasureLeftModifiers?: Measure['leftModifiers']
 ): Score {
@@ -378,10 +368,8 @@ function accentAttachments(placement?: 'above' | 'below'): NoteAttachment[] {
   }));
 }
 
-/** Single treble staff, one measure of four stems-up quarter notes — the drum
- * editor's "all stems up" shape, where accents land above the stem tips. Drop
- * the octave to push noteheads low enough that a below-placed articulation
- * must extend past the stave's bottom line. */
+/** One measure of four stems-up quarter notes, pitched low enough that a
+ * below-placed articulation must extend past the stave's bottom line. */
 function makeStemsUpScore(
   attachments?: NoteAttachment[],
   octave: number = 5

@@ -21,16 +21,14 @@ import type {
 } from './types';
 
 export interface ScoreRecording {
-  /** Recorded draw commands, CONTENT-space coordinates. */
+  /** Recorded draw commands, content-space coordinates. */
   commands: readonly VexflowRecordingCommand[];
   /**
-   * Layout plan in CONTENT space — laid out against the virtual viewport
-   * `viewport / options.render.scale` (see `src/renderer/scale.ts`). Its
-   * `contentSize` is the picture/cull extent; multiply by the render scale
-   * for the view-space size that drives scrolling.
+   * Layout plan in content space; multiply its `contentSize` by the render
+   * scale for the view-space size that drives scrolling.
    */
   layoutPlan: ScoreLayoutPlan;
-  /** Emitted geometry, already converted to VIEW space. */
+  /** Emitted geometry, already converted to view space. */
   itemsLayout: ScoreItemsLayout;
 }
 
@@ -62,9 +60,8 @@ export function useScoreRecording({
       };
     }
 
-    // Layout/measure/render run in CONTENT space against the virtual viewport
-    // (view viewport / scale); the emitted items layout is converted back to
-    // VIEW space. See src/renderer/scale.ts for the full rule.
+    // Layout, measure and render run in content space against the virtual
+    // viewport; see src/renderer/scale.ts.
     const scale = getRenderScale(options);
     const contentViewport = createContentViewport(viewport, scale);
 

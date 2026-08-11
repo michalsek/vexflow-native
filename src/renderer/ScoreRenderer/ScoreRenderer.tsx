@@ -100,11 +100,8 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     score,
     viewport,
   });
-  // Content space vs view space (see src/renderer/scale.ts): the layout
-  // plan's content size is CONTENT-space — it bounds the recorded picture —
-  // while scrolling, scrollbars and overflow checks need the VIEW-space size
-  // (content x scale), or the scroll range would be wrong whenever
-  // options.render.scale !== 1.
+  // Scrolling and overflow checks need the view-space content size, not the
+  // content-space size that bounds the recorded picture.
   const scale = getRenderScale(options);
   const contentSize = layoutPlan.contentSize;
   const viewContentSize = useMemo(
@@ -112,18 +109,9 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     [contentSize, scale]
   );
 
-  // Deliver formatted item geometry to the consumer. This effect stays on the
-  // plain JS side — neither `onItemsLayout` nor `itemsLayout` may be captured
-  // by a worklet (see the PanGesture serialization note below): a consumer
-  // callback closing over arbitrary objects would crash the worklets
-  // serializer the same way the gesture capture did.
-  //
-  // The latest callback is held in a ref (updated by its own effect after
-  // every commit) so the delivery effect depends ONLY on the geometry
-  // identity + viewport readiness: it fires once per recording pass, exactly
-  // as the `onItemsLayout` contract states. Depending on the callback
-  // identity instead would re-fire for every inline-callback parent render —
-  // and an inline callback writing fresh parent state would loop.
+  // Deliver geometry once per recording pass. The callback lives in a ref so
+  // a new inline callback identity neither re-fires the effect nor loops when
+  // the callback sets parent state.
   const onItemsLayoutRef = useRef(onItemsLayout);
   useEffect(() => {
     onItemsLayoutRef.current = onItemsLayout;
@@ -169,10 +157,8 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     recordedCommands,
   ]);
 
-  // Destructure the shared value before the worklet below. Referencing
-  // `scrollState.scrollOffset.value` inside the worklet would capture the
-  // whole `scrollState` object — including the non-serializable PanGesture —
-  // and crash the worklets serializer ("Cannot copy value of type `PanGesture`").
+  // Destructure so the worklet below doesn't capture the whole scrollState —
+  // the PanGesture inside it is not serializable and would crash the worklet.
   const { scrollOffset } = scrollState;
   const pictureTransform = useDerivedValue(() => {
     return createPictureTransform(
@@ -338,17 +324,10 @@ function createScorePictureWorklet({
 }
 
 /**
- * Maps the CONTENT-space picture into the view. `contentSize` must be the
- * VIEW-space content size (content x scale) so the scroll clamp matches the
- * scroll range `useScoreScroll` exposes.
- *
- * Transform order matters: react-native-skia applies a transform array
- * right-to-left to a point, so the trailing `{ scale }` entry scales the
- * content-space point into view space FIRST, and the leading translate
- * entries then shift it by the VIEW-space scroll offset:
- * `p_view = scale * p_content - scrollOffset_view`. The scale entry is only
- * appended when scale !== 1 so the default output is byte-identical to the
- * pre-scale implementation.
+ * Maps the content-space picture into the view. Skia applies the transform
+ * array right-to-left, so the trailing scale entry runs first and the
+ * translate entries then shift by the view-space scroll offset; `contentSize`
+ * must be the view-space content size.
  */
 export function createPictureTransform(
   scrollOffset: number,
