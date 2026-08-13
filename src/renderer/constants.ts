@@ -16,4 +16,5 @@ export const renderOptions: RenderOptions = {
   pixelRatio: 1,
   scale: 1,
   debug: false,
+  fixedNoteSpacing: false,
 };

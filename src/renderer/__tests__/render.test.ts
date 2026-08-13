@@ -163,8 +163,11 @@ const mockBeamDraw = jest.fn();
 const mockTupletSetContext = jest.fn();
 const mockTupletDraw = jest.fn();
 
+const MOCK_NOTEHEAD_WIDTH = 8;
+
 jest.mock('../scoreParsing', () => ({
   indexAttachmentsByOwner: jest.fn(() => new Map()),
+  noteheadWidth: jest.fn(() => MOCK_NOTEHEAD_WIDTH),
   makeVFVoice: jest.fn(
     (
       score: unknown,
@@ -854,7 +857,7 @@ describe('renderScore', () => {
       }
     });
 
-    it('falls back to the block center for notes without span getters (GhostNote)', () => {
+    it('falls back to the notional notehead center for notes without span getters (GhostNote)', () => {
       const { score, layoutPlan } = makeItemsLayoutFixture();
       mockMakeVFVoice.mockImplementationOnce((_score, _meter, _clef, voice) =>
         makeMockVoiceResult(voice, () => null)
@@ -868,11 +871,13 @@ describe('renderScore', () => {
       );
 
       for (const item of Object.values(itemsLayout.items)) {
-        expect(item.headCenterX).toBe(item.x + MOCK_NOTE_WIDTH / 2);
+        expect(item.headCenterX).toBe(
+          item.x + Math.min(MOCK_NOTE_WIDTH, MOCK_NOTEHEAD_WIDTH) / 2
+        );
       }
     });
 
-    it('falls back to the block center when the reported span is nonsensical', () => {
+    it('falls back to the notional notehead center when the reported span is nonsensical', () => {
       const { score, layoutPlan } = makeItemsLayoutFixture();
       // Span entirely LEFT of the note block: center <= x.
       mockMakeVFVoice.mockImplementationOnce((_score, _meter, _clef, voice) =>
@@ -890,7 +895,9 @@ describe('renderScore', () => {
       );
 
       for (const item of Object.values(itemsLayout.items)) {
-        expect(item.headCenterX).toBe(item.x + MOCK_NOTE_WIDTH / 2);
+        expect(item.headCenterX).toBe(
+          item.x + Math.min(MOCK_NOTE_WIDTH, MOCK_NOTEHEAD_WIDTH) / 2
+        );
       }
     });
 
