@@ -58,6 +58,14 @@ export interface RenderOptions {
    */
   scale: number;
   debug: boolean;
+  /**
+   * Position every tick context at its time-proportional x inside the note
+   * area instead of VexFlow's duration-weighted spacing. With a `spacer`
+   * voice covering each lattice tick, engraved x positions become a pure
+   * function of time — content edits cannot reflow them. Meant for
+   * step-editor previews; default false (classic engraving spacing).
+   */
+  fixedNoteSpacing: boolean;
 }
 
 export interface ScoreOptions {
@@ -88,7 +96,8 @@ export interface ScoreItemLayout {
   /**
    * Center of the item's notehead span — the coordinate external UI should
    * align to. Items without a notehead (hidden and spacer rests) fall back to
-   * the block center.
+   * the center of a notional notehead at the block's left edge, so they agree
+   * with a real note on the same tick.
    */
   headCenterX: number;
   measureIndex: number;

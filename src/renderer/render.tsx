@@ -13,7 +13,11 @@ import type {
   MeasureLayoutPlan,
   ScoreLayoutPlan,
 } from './layout';
-import { indexAttachmentsByOwner, makeVFVoice } from './scoreParsing';
+import {
+  indexAttachmentsByOwner,
+  makeVFVoice,
+  noteheadWidth,
+} from './scoreParsing';
 import type { ScoreItemsLayout, ScoreOptions } from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
@@ -25,7 +29,7 @@ export function renderScore(
   ctx: VexflowRecordingContext,
   score: Score,
   layoutPlan: ScoreLayoutPlan,
-  _options: ScoreOptions
+  options: ScoreOptions
 ): ScoreItemsLayout {
   const groupsById = new Map(
     layoutPlan.groups.map((group) => [group.groupId, group])
@@ -61,6 +65,7 @@ export function renderScore(
         {
           isFirstMeasureInSystem: measureIndex === 0,
           isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
+          fixedNoteSpacing: options.render.fixedNoteSpacing,
         },
         itemsLayout
       );
@@ -88,6 +93,65 @@ type StaffRenderArtifacts = {
 interface RenderMeasureOptions {
   isFirstMeasureInSystem: boolean;
   isLastMeasureInSystem: boolean;
+  fixedNoteSpacing: boolean;
+}
+
+/**
+ * Re-positions every tick context at its time-proportional x inside the note
+ * area, overriding the formatter's duration-weighted spacing. Runs after
+ * `formatToStave` (the same post-format `setX` mechanism the formatter's own
+ * tuning uses), so beams, tuplets and modifiers pick the final positions up
+ * at draw time. The proportional span is clamped only by the LAST context's
+ * width — with a spacer voice on the lattice that width is constant, so the
+ * mapping stays a pure function of time.
+ */
+export function applyFixedNoteSpacing(
+  formatter: Formatter,
+  voices: VFVoice[],
+  stave: Stave
+) {
+  const contexts = formatter.getTickContexts();
+  const lastTick = contexts?.list[contexts.list.length - 1];
+
+  if (
+    !contexts ||
+    voices.length === 0 ||
+    lastTick === undefined ||
+    lastTick <= 0
+  ) {
+    return;
+  }
+
+  const totalTicks = voices[0]?.getTotalTicks().value() ?? 0;
+
+  if (!(totalTicks > 0)) {
+    return;
+  }
+
+  // Tick context x is relative to noteStartX + the stave's left note padding
+  // (see Tickable.getAbsoluteX), so the usable span ends at noteEndX. The
+  // padding is derived from Stave statics because the `Metrics` module is not
+  // re-exported by every vexflow build.
+  const stavePadding = Stave.defaultPadding - Stave.rightPadding;
+  const noteAreaWidth =
+    stave.getNoteEndX() - stave.getNoteStartX() - stavePadding;
+  let span = noteAreaWidth;
+
+  const lastContext = contexts.map[lastTick]!;
+  const lastOverflow =
+    (lastTick / totalTicks) * span + lastContext.getWidth() - noteAreaWidth;
+
+  if (lastOverflow > 0) {
+    span -= (lastOverflow * totalTicks) / lastTick;
+  }
+
+  if (!(span > 0)) {
+    return;
+  }
+
+  for (const tick of contexts.list) {
+    contexts.map[tick]!.setX((tick / totalTicks) * span);
+  }
 }
 
 function renderMeasure(
@@ -202,7 +266,12 @@ function renderMeasure(
     // Format against the stave with the narrowest note area, so notes never
     // overrun a stave whose clef or time signature pushes its note start
     // further right.
-    formatter.formatToStave(allVoices, getFormatReferenceStave(renderedStaves));
+    const referenceStave = getFormatReferenceStave(renderedStaves);
+    formatter.formatToStave(allVoices, referenceStave);
+
+    if (options.fixedNoteSpacing && referenceStave) {
+      applyFixedNoteSpacing(formatter, allVoices, referenceStave);
+    }
   }
 
   collectMeasureItemsLayout(
@@ -296,9 +365,12 @@ type NoteHeadSpan = {
 };
 
 /**
- * Center of a formatted note's visual notehead span. Falls back to the block
- * center when the getters are missing or the reported span lands outside the
- * note block.
+ * Center of a formatted note's visual notehead span. When the getters are
+ * missing (GhostNotes) the fallback is the center of a NOTIONAL notehead at
+ * the block's left edge, capped by the block width — so a `spacer` rest
+ * anchors where a real note's head would sit on the same tick, and external
+ * UI aligned to it does not hop when the note appears. Zero-width `hidden`
+ * rests keep anchoring at their tick x.
  */
 export function resolveItemHeadCenterX(
   note: VFVoiceNote,
@@ -319,7 +391,7 @@ export function resolveItemHeadCenterX(
     }
   }
 
-  return x + width / 2;
+  return x + Math.min(width, noteheadWidth()) / 2;
 }
 
 function drawVoiceItems(

@@ -3,6 +3,7 @@ import {
   Articulation as VFArticulation,
   Beam,
   Dot,
+  Element,
   Fraction as VFFraction,
   GhostNote,
   ModifierPosition,
@@ -224,6 +225,27 @@ export function indexAttachmentsByOwner(
   return attachmentsByOwner;
 }
 
+// SMuFL noteheadBlack — vexflow 5's entry point does not re-export `Glyphs`.
+const NOTEHEAD_BLACK = '\uE0A4';
+
+/**
+ * Width a `spacer` rest reserves on its tick: an up-stem flagged note
+ * (2 × notehead + padding), the widest ordinary tickable. A TickContext takes
+ * the MAX of its members' widths, so reserving the worst case keeps a tick's
+ * width constant whether or not a real note shares it — a voice of spacers
+ * therefore holds engraved spacing still while notes toggle on and off its
+ * lattice. `hidden` rests stay zero-width (pure timing placeholders).
+ * Measured live because the value depends on the active music font.
+ */
+/** Measured width of the black notehead under the active music font. */
+export function noteheadWidth(): number {
+  return Element.measureWidth(NOTEHEAD_BLACK, 'NoteHead');
+}
+
+function spacerTickWidth(): number {
+  return 2 * noteheadWidth() + StaveNote.minNoteheadPadding;
+}
+
 /**
  * Builds a VexFlow stave note from a score voice item and clef.
  */
@@ -234,7 +256,11 @@ export function voiceItemToStaveNote(
 ): VFVoiceNote {
   if (item.type === 'rest') {
     if (item.kind === 'hidden' || item.kind === 'spacer') {
-      return new GhostNote(durationToVF(item.duration));
+      const note = new GhostNote(durationToVF(item.duration));
+      if (item.kind === 'spacer') {
+        note.setWidth(spacerTickWidth());
+      }
+      return note;
     }
 
     const note = new StaveNote({

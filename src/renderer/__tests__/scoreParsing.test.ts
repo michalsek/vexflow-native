@@ -38,6 +38,7 @@ import {
   durationToVF,
   indexAttachmentsByOwner,
   makeVFVoice,
+  noteheadWidth,
   pitchToVFKey,
   voiceItemToStaveNote,
 } from '../scoreParsing';
@@ -631,7 +632,7 @@ describe('notehead span geometry (VexFlow 5, real formatting)', () => {
     }
   });
 
-  it('falls back to the block center when the measured span degenerates (jest has no font metrics)', () => {
+  it('falls back to the notional notehead center when the measured span degenerates (jest has no font metrics)', () => {
     const notes = formatItems([
       quarterNote('hs-n1'),
       quarterNote('hs-n2'),
@@ -647,7 +648,11 @@ describe('notehead span geometry (VexFlow 5, real formatting)', () => {
       // With glyph width 0 the span collapses onto the tick x, which the
       // resolver must treat as nonsensical.
       expect(staveNote.getNoteHeadEndX()).toBe(staveNote.getNoteHeadBeginX());
-      expect(resolveItemHeadCenterX(staveNote, x, width)).toBe(x + width / 2);
+      // The fallback centers a NOTIONAL notehead at the block's left edge —
+      // under jest the measured notehead width is 0, so it collapses to x.
+      expect(resolveItemHeadCenterX(staveNote, x, width)).toBe(
+        x + Math.min(width, noteheadWidth()) / 2
+      );
     }
   });
 
