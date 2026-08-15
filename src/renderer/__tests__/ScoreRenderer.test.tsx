@@ -20,6 +20,13 @@ function loadScoreRendererModule() {
       height,
     })
   );
+  const mockRRectXY = jest.fn(
+    (rect: Record<string, number>, rx: number, ry: number) => ({
+      rect,
+      rx,
+      ry,
+    })
+  );
   const mockRenderVexflowRecordingCommands = jest.fn();
   const mockUseDerivedValue = jest.fn((factory: () => unknown) => ({
     value: factory(),
@@ -101,8 +108,10 @@ function loadScoreRendererModule() {
     Canvas: 'Canvas',
     Group: 'Group',
     Picture: 'Picture',
+    RoundedRect: 'RoundedRect',
     Skia: {
       PictureRecorder: mockPictureRecorder,
+      RRectXY: mockRRectXY,
       XYWHRect: mockXYWHRect,
     },
     useCanvasRef: jest.fn(() => ({ current: null })),
@@ -174,7 +183,9 @@ function loadScoreRendererModule() {
     clampOffset: module.clampOffset,
     createClampedScrollOffset: module.createClampedScrollOffset,
     createPictureTransform: module.createPictureTransform,
+    createPlayheadRect: module.createPlayheadRect,
     createScorePicture: module.createScorePicture,
+    resolvePlayheadStyle: module.resolvePlayheadStyle,
     getMaxScroll: module.getMaxScroll,
     getScrollbarMetrics: module.getScrollbarMetrics,
     getScrollOffsetFromThumbOffset: module.getScrollOffsetFromThumbOffset,
@@ -186,6 +197,7 @@ function loadScoreRendererModule() {
     mockPicture,
     mockPictureRecorder,
     mockRenderVexflowRecordingCommands,
+    mockRRectXY,
     mockSetViewportSize,
     mockUseDerivedValue,
     mockUseScoreRecording,
@@ -686,6 +698,191 @@ describe('ScoreRenderer scroll helpers', () => {
   });
 });
 
+describe('ScoreRenderer controlled scroll and scroll geometry', () => {
+  const score = {
+    id: 'score-renderer-controlled-scroll',
+    defaults: { meter: { beats: 4, beatUnit: 4 } },
+    staves: [],
+  };
+  const fontManager = { kind: 'font-manager' };
+
+  it('drives the picture transform from an external scroll offset value', () => {
+    const module = loadScoreRendererModule();
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [],
+      layoutPlan: { contentSize: { width: 900, height: 116 } },
+      itemsLayout: makeItemsLayoutFixture(),
+    });
+    const scrollOffset = { value: 25 };
+
+    const initialTree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      rendererType: 'infiniteScore',
+      score,
+      scrollOffset,
+    });
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 116, width: 393 } },
+    });
+    const tree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      rendererType: 'infiniteScore',
+      score,
+      scrollOffset,
+    });
+
+    const clipGroup = (
+      tree as { props: { children: unknown[] } }
+    ).props.children.find(Boolean) as never;
+    const transformGroup = findElementByProp(clipGroup, 'transform');
+    expect(
+      (transformGroup?.props.transform as { value: unknown }).value
+    ).toEqual([{ translateX: -25 }, { translateY: 0 }]);
+  });
+
+  it('fires onScrollGeometry with the scroll envelope and re-fires only when it changes', () => {
+    const module = loadScoreRendererModule();
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [],
+      layoutPlan: { contentSize: { width: 900, height: 116 } },
+      itemsLayout: makeItemsLayoutFixture(),
+    });
+    const onScrollGeometry = jest.fn();
+    const render = () =>
+      module.ScoreRenderer({
+        defaultFont: 'Bravura',
+        fontManager,
+        onScrollGeometry,
+        rendererType: 'infiniteScore',
+        score,
+      });
+
+    const initialTree = render();
+    // Zero-size viewport keeps the callback silent, like onItemsLayout.
+    expect(onScrollGeometry).not.toHaveBeenCalled();
+
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 116, width: 393 } },
+    });
+    render();
+
+    expect(onScrollGeometry).toHaveBeenCalledTimes(1);
+    expect(onScrollGeometry).toHaveBeenCalledWith({
+      axis: 'horizontal',
+      viewportSize: { width: 393, height: 116 },
+      contentSize: { width: 900, height: 116 },
+      maxScroll: 900 - 393,
+    });
+
+    // Unchanged geometry does not re-fire.
+    render();
+    expect(onScrollGeometry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ScorePlayhead', () => {
+  const score = {
+    id: 'score-renderer-playhead',
+    defaults: { meter: { beats: 4, beatUnit: 4 } },
+    staves: [],
+  };
+  const fontManager = { kind: 'font-manager' };
+
+  it('renders the playhead overlay only when the prop is provided', () => {
+    const module = loadScoreRendererModule();
+
+    const bareTree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      score,
+    });
+    expect(findElementByTypeName(bareTree, 'ScorePlayhead')).toBeUndefined();
+
+    const playhead = { value: { x: 120, y: 20, height: 80 } };
+    const tree = module.ScoreRenderer({
+      defaultFont: 'Bravura',
+      fontManager,
+      playhead,
+      score,
+    });
+    const overlay = findElementByTypeName(tree, 'ScorePlayhead');
+    expect(overlay?.props.playhead).toBe(playhead);
+  });
+
+  it('resolves style defaults from the color scheme foreground', () => {
+    const module = loadScoreRendererModule();
+
+    expect(module.resolvePlayheadStyle(undefined, '#123456')).toEqual({
+      color: '#123456',
+      width: 2,
+      borderRadius: 1,
+      opacity: 0.9,
+    });
+    expect(
+      module.resolvePlayheadStyle(
+        { color: '#FF0000', width: 4, opacity: 0.5 },
+        '#123456'
+      )
+    ).toEqual({ color: '#FF0000', width: 4, borderRadius: 2, opacity: 0.5 });
+  });
+
+  it('maps a playhead state to an on-screen rect per scroll axis', () => {
+    const module = loadScoreRendererModule();
+    const viewport = { width: 393, height: 116 };
+    const content = { width: 900, height: 400 };
+    const state = { x: 120, y: 20, height: 80 };
+
+    // Horizontal: the scroll offset shifts x, the width centers on state.x.
+    expect(
+      module.createPlayheadRect(
+        state,
+        30,
+        'infiniteScore',
+        viewport,
+        content,
+        2,
+        1
+      )
+    ).toEqual({
+      rect: { x: 120 - 1 - 30, y: 20, width: 2, height: 80 },
+      rx: 1,
+      ry: 1,
+    });
+
+    // Vertical: the scroll offset shifts y instead.
+    expect(
+      module.createPlayheadRect(
+        state,
+        30,
+        'documentEven',
+        viewport,
+        content,
+        2,
+        1
+      )
+    ).toEqual({
+      rect: { x: 120 - 1, y: 20 - 30, width: 2, height: 80 },
+      rx: 1,
+      ry: 1,
+    });
+
+    // Null hides by collapsing to a zero rect.
+    expect(
+      module.createPlayheadRect(
+        null,
+        30,
+        'infiniteScore',
+        viewport,
+        content,
+        2,
+        1
+      )
+    ).toEqual({ rect: { x: 0, y: 0, width: 0, height: 0 }, rx: 0, ry: 0 });
+  });
+});
+
 /** Fresh single-staff geometry fixture — a new object per call so tests can
  * distinguish "same recording pass" (same identity) from a new pass. */
 function makeItemsLayoutFixture(): import('../types').ScoreItemsLayout {
@@ -701,6 +898,10 @@ function makeItemsLayoutFixture(): import('../types').ScoreItemsLayout {
         width: 345,
         staveNoteStartX: 34,
         staveNoteEndX: 369,
+        y: 18,
+        height: 92,
+        staveLineTopY: 30,
+        staveLineBottomY: 70,
       },
     ],
     contentSize: { width: 393, height: 116 },
@@ -733,6 +934,33 @@ function getScoreRendererGestureSurface(element: unknown): {
   };
 
   return root.props.children[0].props.children;
+}
+
+function findElementByProp(
+  element: unknown,
+  propName: string
+): { props: Record<string, unknown> } | undefined {
+  if (!element || typeof element !== 'object') {
+    return undefined;
+  }
+
+  const reactElement = element as { props?: Record<string, unknown> };
+
+  if (reactElement.props && reactElement.props[propName] !== undefined) {
+    return reactElement as { props: Record<string, unknown> };
+  }
+
+  const children = reactElement.props?.children;
+
+  for (const child of Array.isArray(children) ? children : [children]) {
+    const match = findElementByProp(child, propName);
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return undefined;
 }
 
 function findElementByTypeName(

@@ -30,8 +30,9 @@ import type {
 } from '../types';
 import { useScoreRecording } from '../useScoreRecording';
 import { createVisibleViewport } from '../viewport';
+import ScorePlayhead, { resolvePlayheadStyle } from './ScorePlayhead';
 import ScoreScrollbar from './ScoreScrollbar';
-import { getMaxScroll, useScoreScroll } from './useScoreScroll';
+import { getMaxScroll, getScrollAxis, useScoreScroll } from './useScoreScroll';
 
 const EMPTY_OPTIONS: ScoreRendererOptions = {};
 const EMPTY_SIZE: RendererSize = { width: 0, height: 0 };
@@ -46,6 +47,10 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   options: userOptions = EMPTY_OPTIONS,
   scrollEnabled = true,
   showScrollbars = true,
+  scrollOffset: externalScrollOffset,
+  playhead,
+  playheadStyle,
+  onScrollGeometry,
   onItemsLayout,
 }) => {
   const options = useMemo(() => withDefaultOptions(userOptions), [userOptions]);
@@ -125,12 +130,41 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   }, [itemsLayout, hasViewportSize]);
   const scrollState = useScoreScroll({
     contentSize: viewContentSize,
+    externalScrollOffset,
     rendererType: effectiveRendererType,
     scrollEnabled,
     viewportSize,
   });
   const hasScrollableOverflow =
     getMaxScroll(effectiveRendererType, viewportSize, viewContentSize) > 0;
+
+  // Announce the scroll envelope like onItemsLayout: latest callback in a
+  // ref, effect keyed only on the geometry it reports.
+  const onScrollGeometryRef = useRef(onScrollGeometry);
+  useEffect(() => {
+    onScrollGeometryRef.current = onScrollGeometry;
+  });
+  useEffect(() => {
+    if (!hasViewportSize) {
+      return;
+    }
+
+    onScrollGeometryRef.current?.({
+      axis: getScrollAxis(effectiveRendererType),
+      viewportSize,
+      contentSize: viewContentSize,
+      maxScroll: getMaxScroll(
+        effectiveRendererType,
+        viewportSize,
+        viewContentSize
+      ),
+    });
+  }, [effectiveRendererType, hasViewportSize, viewContentSize, viewportSize]);
+
+  const resolvedPlayheadStyle = useMemo(
+    () => resolvePlayheadStyle(playheadStyle, resolvedColorScheme.foreground),
+    [playheadStyle, resolvedColorScheme.foreground]
+  );
 
   const viewportClip = useMemo(
     () => Skia.XYWHRect(0, 0, viewportSize.width, viewportSize.height),
@@ -199,6 +233,16 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
                   <Picture picture={picture} />
                 ) : null}
               </Group>
+              {playhead ? (
+                <ScorePlayhead
+                  playhead={playhead}
+                  scrollOffset={scrollState.scrollOffset}
+                  rendererType={effectiveRendererType}
+                  viewportSize={scrollState.viewportSize}
+                  contentSize={scrollState.contentSize}
+                  style={resolvedPlayheadStyle}
+                />
+              ) : null}
             </Group>
           </Canvas>
         </View>

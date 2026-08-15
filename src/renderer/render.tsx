@@ -354,6 +354,10 @@ function collectMeasureItemsLayout(
       width: measurePlan.width,
       staveNoteStartX: stave.getNoteStartX(),
       staveNoteEndX: stave.getNoteEndX(),
+      y: measurePlan.y,
+      height: measurePlan.height,
+      staveLineTopY: stave.getTopLineTopY(),
+      staveLineBottomY: stave.getBottomLineBottomY(),
     });
   });
 }

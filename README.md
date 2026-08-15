@@ -332,8 +332,23 @@ export function DirectVexFlow() {
 - `scrollEnabled`: enables or disables pan scrolling. Defaults to `true`.
 - `showScrollbars`: shows scrollbars when the score overflows. Defaults to
   `true`.
+- `scrollOffset`: optional controlled Reanimated shared value for the scroll
+  position along the renderer's axis. The renderer reads and writes it (pan
+  gesture, clamping), and external writes move the content — the seam for
+  playback auto-scroll. Must stay the same shared value for the component's
+  lifetime.
+- `playhead`: optional Reanimated shared value positioning a playhead overlay
+  (`{ x, y, height }` in `onItemsLayout` coordinates, `null` hides it). The
+  overlay tracks scrolling on the UI thread without re-recording the score.
+- `playheadStyle`: optional playhead appearance (`color`, `width`,
+  `borderRadius`, `opacity`); defaults derive from the color scheme
+  foreground.
+- `onScrollGeometry`: optional callback fired when the scroll envelope
+  changes (`axis`, `viewportSize`, `contentSize`, `maxScroll`) — everything a
+  consumer needs to compute follow-scroll targets.
 - `onItemsLayout`: optional callback fired after each recording pass with the
-  view-space geometry (at scroll offset 0) of rendered items and measures.
+  view-space geometry (at scroll offset 0) of rendered items and measures,
+  including each measure's system band `y`/`height`.
 
 ## Contributing
 

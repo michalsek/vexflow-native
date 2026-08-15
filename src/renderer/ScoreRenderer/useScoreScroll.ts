@@ -6,6 +6,7 @@ import {
   useDerivedValue,
   useSharedValue,
   withDecay,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 import type { RendererSize, RendererType } from '../types';
@@ -15,16 +16,21 @@ const EMPTY_SIZE: RendererSize = { width: 0, height: 0 };
 
 export function useScoreScroll({
   contentSize,
+  externalScrollOffset,
   rendererType,
   scrollEnabled,
   viewportSize,
 }: {
   contentSize: RendererSize;
+  /** Controlled offset — pan/clamping write it instead of the internal one.
+   * Must be the same SharedValue for the hook's lifetime. */
+  externalScrollOffset?: SharedValue<number>;
   rendererType: RendererType;
   scrollEnabled: boolean;
   viewportSize: RendererSize;
 }): ScoreScrollState {
-  const scrollOffset = useSharedValue(0);
+  const internalScrollOffset = useSharedValue(0);
+  const scrollOffset = externalScrollOffset ?? internalScrollOffset;
   const viewportSizeValue = useSharedValue<RendererSize>(EMPTY_SIZE);
   const contentSizeValue = useSharedValue<RendererSize>(EMPTY_SIZE);
   const panStartOffset = useSharedValue(0);
