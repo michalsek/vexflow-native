@@ -9,6 +9,44 @@ export type RendererType = 'infiniteScore' | 'document' | 'documentEven';
 export type ScoreItemStyleOverride = VexflowStyleOverride;
 export type ScoreItemStyleOverrides = Record<string, ScoreItemStyleOverride>;
 
+/** Scroll direction of a renderer type: `infiniteScore` pans horizontally,
+ * the document types scroll vertically. */
+export type ScrollAxis = 'horizontal' | 'vertical';
+
+/**
+ * Position of the playhead overlay, in the same view-space coordinates as
+ * {@link ScoreItemsLayout} (scroll offset 0). `x` is the playhead's center
+ * line; `y`/`height` bound the system band it should span. `null` hides it.
+ */
+export interface ScorePlayheadState {
+  x: number;
+  y: number;
+  height: number;
+}
+
+/** Appearance of the playhead overlay; unset fields use renderer defaults. */
+export interface ScorePlayheadStyle {
+  /** Defaults to the resolved color scheme's foreground. */
+  color?: string;
+  /** Line width in view-space points, default 2. */
+  width?: number;
+  /** Corner radius, default half the width. */
+  borderRadius?: number;
+  /** Opacity while visible, default 0.9. */
+  opacity?: number;
+}
+
+/**
+ * Scroll envelope of the current recording pass, in view space. `maxScroll`
+ * is the largest valid scroll offset along `axis` (0 when content fits).
+ */
+export interface ScoreScrollGeometry {
+  axis: ScrollAxis;
+  viewportSize: RendererSize;
+  contentSize: RendererSize;
+  maxScroll: number;
+}
+
 export interface ScoreRendererProps {
   score: Score;
   defaultFont: string;
@@ -20,11 +58,29 @@ export interface ScoreRendererProps {
   scrollEnabled?: boolean;
   showScrollbars?: boolean;
   /**
+   * Controlled scroll offset along the renderer's {@link ScrollAxis}. When
+   * provided, the renderer reads AND writes this value (pan gesture, decay,
+   * re-clamping) instead of an internal one, and external writes move the
+   * content. Must be the same SharedValue for the component's lifetime.
+   */
+  scrollOffset?: SharedValue<number>;
+  /**
+   * Playhead overlay position in {@link ScoreItemsLayout} view-space
+   * coordinates (scroll offset 0); `null` hides the overlay. Drivable from
+   * the UI thread — the overlay follows scrolling and clipping on its own.
+   */
+  playhead?: SharedValue<ScorePlayheadState | null>;
+  playheadStyle?: ScorePlayheadStyle;
+  /**
+   * Fired whenever the scroll envelope changes: the axis, the viewport size,
+   * or the view-space content size (and with it `maxScroll`).
+   */
+  onScrollGeometry?: (geometry: ScoreScrollGeometry) => void;
+  /**
    * Fired after every recording pass with the final geometry of the rendered
    * score. Coordinates are view-space points at scroll offset 0 and do not
-   * track scrolling. For the `document` and `documentEven` renderer types they
-   * map 1:1 to view-local coordinates; for `infiniteScore` they cannot be
-   * mapped to on-screen positions.
+   * track scrolling; subtract the current scroll offset along the scroll
+   * axis to obtain on-screen positions.
    *
    * @param layout Geometry of all rendered items and measures.
    */
@@ -121,6 +177,14 @@ export interface ScoreMeasureItemsLayout {
   staveNoteStartX: number;
   /** X where the note area of this stave ends. */
   staveNoteEndX: number;
+  /** Top of the measure's system block (all staves of the group). */
+  y: number;
+  /** Height of the measure's system block. */
+  height: number;
+  /** Top edge of this stave's top staff line. */
+  staveLineTopY: number;
+  /** Bottom edge of this stave's bottom staff line. */
+  staveLineBottomY: number;
 }
 
 /**

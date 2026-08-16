@@ -1,9 +1,9 @@
 import type { GestureType } from 'react-native-gesture-handler';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type { RendererSize } from '../types';
+import type { RendererSize, ScrollAxis } from '../types';
 
-export type ScrollAxis = 'horizontal' | 'vertical';
+export type { ScrollAxis } from '../types';
 
 export type ScoreScrollState = {
   axis: ScrollAxis;

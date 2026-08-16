@@ -14,6 +14,9 @@ const mockStaveInstances: Array<{
 /** Width the mock stave charges per added time signature; clefs contribute 0
  * so existing single-staff fixture values stay stable. */
 const MOCK_TIME_SIGNATURE_WIDTH = 20;
+/** Mock staff-line band: top line 10 below the stave origin, 40 tall. */
+const MOCK_STAVE_LINE_TOP_OFFSET = 10;
+const MOCK_STAVE_LINE_SPAN = 40;
 const mockStaveConnectorType = {
   SINGLE_RIGHT: 0,
   SINGLE_LEFT: 1,
@@ -133,6 +136,9 @@ jest.mock('vexflow', () => ({
       this.timeSignatureCount * MOCK_TIME_SIGNATURE_WIDTH;
     getNoteEndX = () =>
       (this.constructorArgs[0] as number) + (this.constructorArgs[2] as number);
+    getTopLineTopY = () =>
+      (this.constructorArgs[1] as number) + MOCK_STAVE_LINE_TOP_OFFSET;
+    getBottomLineBottomY = () => this.getTopLineTopY() + MOCK_STAVE_LINE_SPAN;
   },
   StaveConnector: class MockStaveConnector {
     static type: Record<string, number> = {
@@ -921,6 +927,10 @@ describe('renderScore', () => {
           width: 345,
           staveNoteStartX: 34,
           staveNoteEndX: 369,
+          y: 24,
+          height: 68,
+          staveLineTopY: 34,
+          staveLineBottomY: 74,
         },
       ]);
 
@@ -1080,6 +1090,10 @@ describe('renderScore', () => {
           width: 152,
           staveNoteStartX: 34,
           staveNoteEndX: 176,
+          y: 24,
+          height: 135,
+          staveLineTopY: 34,
+          staveLineBottomY: 74,
         },
         {
           groupId: 'piano',
@@ -1090,6 +1104,12 @@ describe('renderScore', () => {
           width: 152,
           staveNoteStartX: 34 + MOCK_TIME_SIGNATURE_WIDTH,
           staveNoteEndX: 176,
+          y: 24,
+          height: 135,
+          // bottom stave origin = system y 24 + its staffYOffset 120
+          staveLineTopY: 24 + 120 + MOCK_STAVE_LINE_TOP_OFFSET,
+          staveLineBottomY:
+            24 + 120 + MOCK_STAVE_LINE_TOP_OFFSET + MOCK_STAVE_LINE_SPAN,
         },
       ]);
     });

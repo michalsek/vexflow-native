@@ -87,6 +87,10 @@ export function scaleItemsLayoutToViewSpace(
       width: measure.width * scale,
       staveNoteStartX: measure.staveNoteStartX * scale,
       staveNoteEndX: measure.staveNoteEndX * scale,
+      y: measure.y * scale,
+      height: measure.height * scale,
+      staveLineTopY: measure.staveLineTopY * scale,
+      staveLineBottomY: measure.staveLineBottomY * scale,
     })),
     contentSize: toViewSize(itemsLayout.contentSize, scale),
   };
