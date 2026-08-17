@@ -5,6 +5,7 @@ import {
   Skia,
   StrokeCap,
   type SkCanvas,
+  type SkColor,
   type SkPaint,
   type SkPathBuilder,
   type SkTypefaceFontProvider,
@@ -34,12 +35,28 @@ function shadowBlurToSigma(shadowBlur: number): number {
 }
 
 /**
+ * Per-replay `css color -> SkColor` cache: a recording uses a handful of
+ * distinct colors but references them thousands of times.
+ */
+type SkColorCache = Record<string, SkColor>;
+
+function getCachedColor(color: string, cache: SkColorCache): SkColor {
+  'worklet';
+
+  return (cache[color] ??= Skia.Color(color));
+}
+
+/**
  * Apply the recorded glow (CSS shadow) to a Skia paint as a drop-shadow image
  * filter. `dx = dy = 0` turns the drop shadow into a symmetric glow centred on
  * the ink; `MakeDropShadow` (not `…Only`) keeps the source content, so the note
  * still draws on top of its halo. No-op unless a `shadowColor` resolved.
  */
-function applyGlow(skPaint: SkPaint, paint: VexflowRecordingPaint) {
+function applyGlow(
+  skPaint: SkPaint,
+  paint: VexflowRecordingPaint,
+  colorCache: SkColorCache
+) {
   'worklet';
 
   if (paint.shadowColor == null) {
@@ -54,7 +71,7 @@ function applyGlow(skPaint: SkPaint, paint: VexflowRecordingPaint) {
       0,
       sigma,
       sigma,
-      Skia.Color(paint.shadowColor)
+      getCachedColor(paint.shadowColor, colorCache)
     )
   );
 }
@@ -79,28 +96,34 @@ function mapRecordingLineCap(cap: VexflowRecordingLineCap): StrokeCap {
   }
 }
 
-function createFillPaint(paint: VexflowRecordingPaint): SkPaint {
+function createFillPaint(
+  paint: VexflowRecordingPaint,
+  colorCache: SkColorCache
+): SkPaint {
   'worklet';
 
   const skPaint = Skia.Paint();
   skPaint.setStyle(PaintStyle.Fill);
   skPaint.setAntiAlias(true);
-  skPaint.setColor(Skia.Color(paint.color));
-  applyGlow(skPaint, paint);
+  skPaint.setColor(getCachedColor(paint.color, colorCache));
+  applyGlow(skPaint, paint, colorCache);
 
   return skPaint;
 }
 
-function createStrokePaint(paint: VexflowRecordingPaint): SkPaint {
+function createStrokePaint(
+  paint: VexflowRecordingPaint,
+  colorCache: SkColorCache
+): SkPaint {
   'worklet';
 
   const skPaint = Skia.Paint();
   skPaint.setStyle(PaintStyle.Stroke);
   skPaint.setAntiAlias(true);
-  skPaint.setColor(Skia.Color(paint.color));
+  skPaint.setColor(getCachedColor(paint.color, colorCache));
   skPaint.setStrokeWidth(paint.strokeWidth ?? 1);
   skPaint.setStrokeCap(mapRecordingLineCap(paint.strokeCap ?? 'butt'));
-  applyGlow(skPaint, paint);
+  applyGlow(skPaint, paint, colorCache);
 
   if (paint.lineDash != null && paint.lineDash.length > 0) {
     skPaint.setPathEffect(Skia.PathEffect.MakeDash(paint.lineDash));
@@ -251,16 +274,24 @@ export function renderVexflowRecordingCommands(
    * colours, a glow (shadow), and a stroke dash are all expressible. Omit for a
    * byte-identical replay of the recorded style.
    */
-  styleOverrides?: Record<string, VexflowStyleOverride>
+  styleOverrides?: Record<string, VexflowStyleOverride>,
+  /**
+   * Optional pre-built FontManager to reuse across replays so its SkFont /
+   * family caches survive between calls (e.g. one overlay replay per note).
+   * Omitted, one is constructed per call — the original behavior.
+   */
+  replayFontManager?: FontManager
 ) {
   'worklet';
 
-  const fontManager = new FontManager(fontProvider, defaultFont);
+  const fontManager =
+    replayFontManager ?? new FontManager(fontProvider, defaultFont);
+  const colorCache: SkColorCache = {};
 
   for (const command of commands) {
     switch (command.type) {
       case 'clear':
-        canvas.clear(Skia.Color(command.color));
+        canvas.clear(getCachedColor(command.color, colorCache));
         break;
       case 'save':
         canvas.save();
@@ -281,7 +312,13 @@ export function renderVexflowRecordingCommands(
         canvas.drawRect(
           toSkiaRect(command.rect),
           createFillPaint(
-            resolveStyle(command.paint, command.groupId, 'fill', styleOverrides)
+            resolveStyle(
+              command.paint,
+              command.groupId,
+              'fill',
+              styleOverrides
+            ),
+            colorCache
           )
         );
         break;
@@ -292,7 +329,13 @@ export function renderVexflowRecordingCommands(
         canvas.drawPath(
           buildPath(command.path),
           createFillPaint(
-            resolveStyle(command.paint, command.groupId, 'fill', styleOverrides)
+            resolveStyle(
+              command.paint,
+              command.groupId,
+              'fill',
+              styleOverrides
+            ),
+            colorCache
           )
         );
         break;
@@ -305,7 +348,8 @@ export function renderVexflowRecordingCommands(
               command.groupId,
               'stroke',
               styleOverrides
-            )
+            ),
+            colorCache
           )
         );
         break;
@@ -315,7 +359,13 @@ export function renderVexflowRecordingCommands(
           command.x,
           command.y,
           createFillPaint(
-            resolveStyle(command.paint, command.groupId, 'fill', styleOverrides)
+            resolveStyle(
+              command.paint,
+              command.groupId,
+              'fill',
+              styleOverrides
+            ),
+            colorCache
           ),
           createFont(fontManager, command.font)
         );

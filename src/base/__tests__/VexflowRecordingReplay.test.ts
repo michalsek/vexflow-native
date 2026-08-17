@@ -130,6 +130,7 @@ function loadReplayModule() {
     kind: 'font',
     args,
   }));
+  const SkiaColor = jest.fn((color: string) => `color:${color}`);
   const FontManagerMock = jest.fn().mockImplementation(() => ({
     createSkFont,
   }));
@@ -139,7 +140,7 @@ function loadReplayModule() {
     ClipOp,
     PaintStyle,
     Skia: {
-      Color: (color: string) => `color:${color}`,
+      Color: SkiaColor,
       Paint: jest.fn(() => {
         const paint = createPaint();
         paints.push(paint);
@@ -172,7 +173,8 @@ function loadReplayModule() {
     commands: any[],
     fontProvider: unknown,
     defaultFont: string,
-    styleOverrides?: Record<string, Record<string, unknown>>
+    styleOverrides?: Record<string, Record<string, unknown>>,
+    replayFontManager?: unknown
   ) => void;
 
   jest.isolateModules(() => {
@@ -184,6 +186,8 @@ function loadReplayModule() {
     BlendMode,
     ClipOp,
     createSkFont,
+    FontManagerMock,
+    SkiaColor,
     MakeDash,
     MakeDropShadow,
     PaintStyle,
@@ -515,6 +519,70 @@ describe('renderVexflowRecordingCommands', () => {
     );
     expect(module.paints[0]!.setImageFilter).toHaveBeenCalledTimes(1);
     expect(module.paints[1]!.setImageFilter).toHaveBeenCalledTimes(1);
+  });
+
+  it('parses each distinct color once per replay', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+    const paint = { color: '#111111' };
+    const commands = [
+      { type: 'fillRect', rect: { x: 0, y: 0, width: 1, height: 1 }, paint },
+      { type: 'fillRect', rect: { x: 1, y: 0, width: 1, height: 1 }, paint },
+      {
+        type: 'fillRect',
+        rect: { x: 2, y: 0, width: 1, height: 1 },
+        paint: { color: '#222222' },
+      },
+    ];
+
+    module.renderVexflowRecordingCommands(
+      canvas as never,
+      commands as never,
+      { kind: 'provider' },
+      'Bravura'
+    );
+
+    expect(module.SkiaColor).toHaveBeenCalledTimes(2);
+    expect(module.SkiaColor).toHaveBeenCalledWith('#111111');
+    expect(module.SkiaColor).toHaveBeenCalledWith('#222222');
+  });
+
+  it('reuses a supplied FontManager instead of constructing one per replay', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+    const suppliedCreateSkFont = jest.fn(() => ({ kind: 'supplied-font' }));
+    const supplied = { createSkFont: suppliedCreateSkFont };
+    const commands = [
+      {
+        type: 'fillText',
+        text: 'x',
+        x: 0,
+        y: 0,
+        paint: { color: '#111111' },
+        font: { font: 'Bravura' },
+      },
+    ];
+
+    module.renderVexflowRecordingCommands(
+      canvas as never,
+      commands as never,
+      { kind: 'provider' },
+      'Bravura',
+      undefined,
+      supplied
+    );
+
+    expect(module.FontManagerMock).not.toHaveBeenCalled();
+    expect(suppliedCreateSkFont).toHaveBeenCalledTimes(1);
+
+    module.renderVexflowRecordingCommands(
+      canvas as never,
+      commands as never,
+      { kind: 'provider' },
+      'Bravura'
+    );
+
+    expect(module.FontManagerMock).toHaveBeenCalledTimes(1);
   });
 
   it('never restyles an untagged command even when overrides are supplied', () => {

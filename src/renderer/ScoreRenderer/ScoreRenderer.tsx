@@ -20,6 +20,7 @@ import {
 } from 'react-native-reanimated';
 
 import type { VexflowRecordingCommand } from '../../base';
+import FontManager from '../../base/FontManager';
 import type { VexflowRecordingGroupIndex } from '../../base/VexflowRecordingIndex';
 import { renderVexflowRecordingCommands } from '../../base/VexflowRecordingReplay';
 import { resolveScoreColorScheme } from '../colorScheme';
@@ -178,6 +179,14 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     [viewportSize.height, viewportSize.width]
   );
 
+  // One FontManager reused by the base record and every overlay replay so its
+  // SkFont / family caches persist across calls (and across onsets on the UI
+  // runtime's clone).
+  const replayFontManager = useMemo(
+    () => new FontManager(fontManager, defaultFont),
+    [defaultFont, fontManager]
+  );
+
   // The unstyled base picture is recorded once per recording pass, even when
   // itemStyleOverrides is provided: overridden items are drawn OVER their
   // base-colored twins by ScoreOverlayPicture, so override writes never
@@ -192,6 +201,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
       defaultFont,
       fontManager,
       recordedCommands,
+      replayFontManager,
     });
   }, [
     contentSize,
@@ -199,6 +209,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     fontManager,
     hasViewportSize,
     recordedCommands,
+    replayFontManager,
   ]);
   useEffect(() => {
     if (!picture) {
@@ -249,6 +260,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
                     fontManager={fontManager}
                     groupIndex={groupIndex}
                     itemStyleOverrides={itemStyleOverrides}
+                    replayFontManager={replayFontManager}
                   />
                 ) : null}
               </Group>
@@ -320,12 +332,14 @@ function ScoreOverlayPicture({
   fontManager,
   groupIndex,
   itemStyleOverrides,
+  replayFontManager,
 }: {
   contentSize: RendererSize;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
   groupIndex: VexflowRecordingGroupIndex;
   itemStyleOverrides: NonNullable<ScoreRendererProps['itemStyleOverrides']>;
+  replayFontManager: FontManager;
 }) {
   const emptyPicture = useMemo(getEmptyOverlayPicture, []);
   const disposal = useSharedValue<OverlayDisposalState>({
@@ -363,6 +377,7 @@ function ScoreOverlayPicture({
       defaultFont,
       fontManager,
       recordedCommands: commands,
+      replayFontManager,
       styleOverrides: overrides,
     });
 
@@ -382,6 +397,7 @@ function ScoreOverlayPicture({
     groupIndex,
     itemStyleOverrides,
     profile,
+    replayFontManager,
   ]);
 
   useEffect(() => {
@@ -493,12 +509,14 @@ export function createScorePicture({
   defaultFont,
   fontManager,
   recordedCommands,
+  replayFontManager,
   styleOverrides,
 }: {
   contentSize: RendererSize;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
   recordedCommands: readonly VexflowRecordingCommand[];
+  replayFontManager?: FontManager;
   styleOverrides?: ScoreItemStyleOverrides;
 }) {
   try {
@@ -508,6 +526,7 @@ export function createScorePicture({
       defaultFont,
       fontManager,
       recordedCommands,
+      replayFontManager,
       styleOverrides,
     });
 
@@ -529,12 +548,14 @@ function createScorePictureWorklet({
   defaultFont,
   fontManager,
   recordedCommands,
+  replayFontManager,
   styleOverrides,
 }: {
   contentSize: RendererSize;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
   recordedCommands: readonly VexflowRecordingCommand[];
+  replayFontManager?: FontManager;
   styleOverrides?: ScoreItemStyleOverrides;
 }): SkPicture {
   'worklet';
@@ -549,7 +570,8 @@ function createScorePictureWorklet({
     recordedCommands,
     fontManager,
     defaultFont,
-    styleOverrides
+    styleOverrides,
+    replayFontManager
   );
 
   return recorder.finishRecordingAsPicture();

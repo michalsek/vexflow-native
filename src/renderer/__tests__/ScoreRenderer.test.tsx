@@ -160,6 +160,13 @@ function loadScoreRendererModule() {
     renderVexflowRecordingCommands: mockRenderVexflowRecordingCommands,
   }));
 
+  const mockReplayFontManagerInstance = { kind: 'replay-font-manager' };
+  const mockFontManagerClass = jest.fn(() => mockReplayFontManagerInstance);
+  jest.doMock('../../base/FontManager', () => ({
+    __esModule: true,
+    default: mockFontManagerClass,
+  }));
+
   jest.doMock('../useScoreRecording', () => ({
     useScoreRecording: mockUseScoreRecording,
   }));
@@ -198,6 +205,7 @@ function loadScoreRendererModule() {
     mockPicture,
     mockPictureRecorder,
     mockRenderVexflowRecordingCommands,
+    mockReplayFontManagerInstance,
     mockRRectXY,
     mockSetViewportSize,
     mockUseDerivedValue,
@@ -314,6 +322,7 @@ describe('ScoreRenderer picture cache helpers', () => {
       commands,
       fontManager,
       'Bravura',
+      undefined,
       undefined
     );
     expect(module.mockFinishRecordingAsPicture).toHaveBeenCalledTimes(1);
@@ -340,7 +349,8 @@ describe('ScoreRenderer picture cache helpers', () => {
       commands,
       fontManager,
       'Bravura',
-      styleOverrides
+      styleOverrides,
+      undefined
     );
   });
 
