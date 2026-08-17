@@ -260,7 +260,6 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
                     fontManager={fontManager}
                     groupIndex={groupIndex}
                     itemStyleOverrides={itemStyleOverrides}
-                    replayFontManager={replayFontManager}
                   />
                 ) : null}
               </Group>
@@ -312,6 +311,28 @@ interface OverlayDisposalState {
   pending: SkPicture[];
 }
 
+interface OverlayFontManagerSlot {
+  manager: FontManager | null;
+}
+
+/**
+ * Runtime-local lazy FontManager: worklets cannot copy a class instance into
+ * a closure, so each runtime constructs its own on first use and keeps it in
+ * the slot (slot contents never cross runtimes; only the initial `null` is
+ * serialized).
+ */
+function getOverlayFontManager(
+  slot: SharedValue<OverlayFontManagerSlot>,
+  fontProvider: SkTypefaceFontProvider,
+  defaultFont: string
+): FontManager {
+  'worklet';
+
+  const state = slot.value;
+
+  return (state.manager ??= new FontManager(fontProvider, defaultFont));
+}
+
 interface OverlayProfileState {
   windowStartMs: number;
   maxMs: number;
@@ -332,16 +353,20 @@ function ScoreOverlayPicture({
   fontManager,
   groupIndex,
   itemStyleOverrides,
-  replayFontManager,
 }: {
   contentSize: RendererSize;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
   groupIndex: VexflowRecordingGroupIndex;
   itemStyleOverrides: NonNullable<ScoreRendererProps['itemStyleOverrides']>;
-  replayFontManager: FontManager;
 }) {
   const emptyPicture = useMemo(getEmptyOverlayPicture, []);
+  // A FontManager instance cannot be serialized into a worklet closure, so
+  // each runtime lazily constructs its own in this slot (never crossing
+  // runtimes) — its SkFont caches still persist across onsets.
+  const fontManagerSlot = useSharedValue<OverlayFontManagerSlot>({
+    manager: null,
+  });
   const disposal = useSharedValue<OverlayDisposalState>({
     prev: null,
     pending: [],
@@ -377,7 +402,11 @@ function ScoreOverlayPicture({
       defaultFont,
       fontManager,
       recordedCommands: commands,
-      replayFontManager,
+      replayFontManager: getOverlayFontManager(
+        fontManagerSlot,
+        fontManager,
+        defaultFont
+      ),
       styleOverrides: overrides,
     });
 
@@ -394,10 +423,10 @@ function ScoreOverlayPicture({
     emptyPicture,
     enableProfiling,
     fontManager,
+    fontManagerSlot,
     groupIndex,
     itemStyleOverrides,
     profile,
-    replayFontManager,
   ]);
 
   useEffect(() => {
