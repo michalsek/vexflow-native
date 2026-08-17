@@ -517,6 +517,7 @@ describe('ScoreRenderer picture cache helpers', () => {
     const itemsLayout = makeItemsLayoutFixture();
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
+      groupIndex: {},
       layoutPlan: { contentSize: { width: 393, height: 116 } },
       itemsLayout,
     });
@@ -558,6 +559,7 @@ describe('ScoreRenderer picture cache helpers', () => {
     const itemsLayout = makeItemsLayoutFixture();
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
+      groupIndex: {},
       layoutPlan: { contentSize: { width: 393, height: 116 } },
       itemsLayout,
     });
@@ -596,6 +598,7 @@ describe('ScoreRenderer picture cache helpers', () => {
     const nextItemsLayout = makeItemsLayoutFixture();
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
+      groupIndex: {},
       layoutPlan: { contentSize: { width: 393, height: 116 } },
       itemsLayout: nextItemsLayout,
     });
@@ -691,6 +694,7 @@ describe('ScoreRenderer picture cache helpers', () => {
     // inside a 393x612 viewport.
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
+      groupIndex: {},
       layoutPlan: { contentSize: { width: 800, height: 1400 } },
       itemsLayout: {
         items: {},
@@ -840,6 +844,7 @@ describe('ScoreRenderer controlled scroll and scroll geometry', () => {
     const module = loadScoreRendererModule();
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
+      groupIndex: {},
       layoutPlan: { contentSize: { width: 900, height: 116 } },
       itemsLayout: makeItemsLayoutFixture(),
     });
@@ -876,6 +881,7 @@ describe('ScoreRenderer controlled scroll and scroll geometry', () => {
     const module = loadScoreRendererModule();
     module.mockUseScoreRecording.mockReturnValue({
       commands: [],
+      groupIndex: {},
       layoutPlan: { contentSize: { width: 900, height: 116 } },
       itemsLayout: makeItemsLayoutFixture(),
     });
