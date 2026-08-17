@@ -3,6 +3,10 @@ import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
 
 import type { VexflowRecordingCommand } from '../base';
 import VexflowRecordingContext from '../base/VexflowRecordingContext';
+import {
+  buildVexflowGroupIndex,
+  type VexflowRecordingGroupIndex,
+} from '../base/VexflowRecordingIndex';
 import type { Score } from '../state';
 import { layoutScore, type ScoreLayoutPlan } from './layout';
 import { measureScore } from './measure';
@@ -23,6 +27,11 @@ import type {
 export interface ScoreRecording {
   /** Recorded draw commands, content-space coordinates. */
   commands: readonly VexflowRecordingCommand[];
+  /**
+   * `commands` bucketed by `groupId` so a style-override replay can redraw
+   * just the overridden items instead of the whole recording.
+   */
+  groupIndex: VexflowRecordingGroupIndex;
   /**
    * Layout plan in content space; multiply its `contentSize` by the render
    * scale for the view-space size that drives scrolling.
@@ -55,6 +64,7 @@ export function useScoreRecording({
     if (!enabled) {
       return {
         commands: [],
+        groupIndex: {},
         layoutPlan: createEmptyLayoutPlan(rendererType, viewport),
         itemsLayout: createEmptyItemsLayout(viewport),
       };
@@ -93,10 +103,12 @@ export function useScoreRecording({
 
     const finishStart = nowMs();
     const commands = ctx.finish();
+    const groupIndex = buildVexflowGroupIndex(commands);
     const finishMs = nowMs() - finishStart;
 
     logScoreRecordingProfile({
       commandCount: commands.length,
+      groupCount: Object.keys(groupIndex).length,
       contentSize: layoutPlan.contentSize,
       finishMs,
       layoutMs,
@@ -111,6 +123,7 @@ export function useScoreRecording({
 
     return {
       commands,
+      groupIndex,
       layoutPlan,
       itemsLayout,
     };
@@ -155,6 +168,7 @@ function createEmptyLayoutPlan(
 
 function logScoreRecordingProfile({
   commandCount,
+  groupCount,
   contentSize,
   finishMs,
   layoutMs,
@@ -167,6 +181,7 @@ function logScoreRecordingProfile({
   viewport,
 }: {
   commandCount: number;
+  groupCount: number;
   contentSize: { height: number; width: number };
   finishMs: number;
   layoutMs: number;
@@ -190,6 +205,7 @@ function logScoreRecordingProfile({
     measureCount,
     systemCount,
     commandCount,
+    groupCount,
     measureMs: roundMs(measureMs),
     layoutMs: roundMs(layoutMs),
     renderMs: roundMs(renderMs),
