@@ -60,6 +60,9 @@ function applyGlow(
   'worklet';
 
   if (paint.shadowColor == null) {
+    // Pooled paints carry state between commands — explicitly clear a filter
+    // a previous command may have set.
+    skPaint.setImageFilter(null);
     return;
   }
 
@@ -96,30 +99,53 @@ function mapRecordingLineCap(cap: VexflowRecordingLineCap): StrokeCap {
   }
 }
 
-function createFillPaint(
-  paint: VexflowRecordingPaint,
-  colorCache: SkColorCache
-): SkPaint {
+/**
+ * One fill and one stroke paint are pooled per replay call and reconfigured
+ * per command — Skia snapshots paint state into the canvas/display list at
+ * each draw call, so mutating the pooled paint afterwards is safe. Optional
+ * state (glow filter, dash effect) is explicitly reset on every configure so
+ * nothing bleeds between commands.
+ */
+function createPooledFillPaint(): SkPaint {
   'worklet';
 
   const skPaint = Skia.Paint();
   skPaint.setStyle(PaintStyle.Fill);
   skPaint.setAntiAlias(true);
+
+  return skPaint;
+}
+
+function createPooledStrokePaint(): SkPaint {
+  'worklet';
+
+  const skPaint = Skia.Paint();
+  skPaint.setStyle(PaintStyle.Stroke);
+  skPaint.setAntiAlias(true);
+
+  return skPaint;
+}
+
+function configureFillPaint(
+  skPaint: SkPaint,
+  paint: VexflowRecordingPaint,
+  colorCache: SkColorCache
+): SkPaint {
+  'worklet';
+
   skPaint.setColor(getCachedColor(paint.color, colorCache));
   applyGlow(skPaint, paint, colorCache);
 
   return skPaint;
 }
 
-function createStrokePaint(
+function configureStrokePaint(
+  skPaint: SkPaint,
   paint: VexflowRecordingPaint,
   colorCache: SkColorCache
 ): SkPaint {
   'worklet';
 
-  const skPaint = Skia.Paint();
-  skPaint.setStyle(PaintStyle.Stroke);
-  skPaint.setAntiAlias(true);
   skPaint.setColor(getCachedColor(paint.color, colorCache));
   skPaint.setStrokeWidth(paint.strokeWidth ?? 1);
   skPaint.setStrokeCap(mapRecordingLineCap(paint.strokeCap ?? 'butt'));
@@ -127,6 +153,8 @@ function createStrokePaint(
 
   if (paint.lineDash != null && paint.lineDash.length > 0) {
     skPaint.setPathEffect(Skia.PathEffect.MakeDash(paint.lineDash));
+  } else {
+    skPaint.setPathEffect(null);
   }
 
   return skPaint;
@@ -287,6 +315,8 @@ export function renderVexflowRecordingCommands(
   const fontManager =
     replayFontManager ?? new FontManager(fontProvider, defaultFont);
   const colorCache: SkColorCache = {};
+  const fillPaint = createPooledFillPaint();
+  const strokePaint = createPooledStrokePaint();
 
   for (const command of commands) {
     switch (command.type) {
@@ -311,7 +341,8 @@ export function renderVexflowRecordingCommands(
       case 'fillRect':
         canvas.drawRect(
           toSkiaRect(command.rect),
-          createFillPaint(
+          configureFillPaint(
+            fillPaint,
             resolveStyle(
               command.paint,
               command.groupId,
@@ -328,7 +359,8 @@ export function renderVexflowRecordingCommands(
       case 'fillPath':
         canvas.drawPath(
           buildPath(command.path),
-          createFillPaint(
+          configureFillPaint(
+            fillPaint,
             resolveStyle(
               command.paint,
               command.groupId,
@@ -342,7 +374,8 @@ export function renderVexflowRecordingCommands(
       case 'strokePath':
         canvas.drawPath(
           buildPath(command.path),
-          createStrokePaint(
+          configureStrokePaint(
+            strokePaint,
             resolveStyle(
               command.paint,
               command.groupId,
@@ -358,7 +391,8 @@ export function renderVexflowRecordingCommands(
           command.text,
           command.x,
           command.y,
-          createFillPaint(
+          configureFillPaint(
+            fillPaint,
             resolveStyle(
               command.paint,
               command.groupId,

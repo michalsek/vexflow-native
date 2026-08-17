@@ -295,9 +295,9 @@ describe('renderVexflowRecordingCommands', () => {
     expect(canvas.drawRect).toHaveBeenNthCalledWith(
       2,
       { x: 9, y: 10, width: 11, height: 12 },
-      module.paints[1]
+      module.paints[2]
     );
-    expect(module.paints[1]!.setBlendMode).toHaveBeenCalledWith(
+    expect(module.paints[2]!.setBlendMode).toHaveBeenCalledWith(
       module.BlendMode.Clear
     );
 
@@ -321,26 +321,26 @@ describe('renderVexflowRecordingCommands', () => {
     expect(canvas.drawPath).toHaveBeenNthCalledWith(
       1,
       fillPathBuilder.builtPath,
-      module.paints[2]
+      module.paints[0]
     );
 
     expect(canvas.drawPath).toHaveBeenNthCalledWith(
       2,
       module.pathBuilders[1]!.builtPath,
-      module.paints[3]
+      module.paints[1]
     );
-    expect(module.paints[3]!.setStyle).toHaveBeenCalledWith(
+    expect(module.paints[1]!.setStyle).toHaveBeenCalledWith(
       module.PaintStyle.Stroke
     );
-    expect(module.paints[3]!.setStrokeCap).toHaveBeenCalledWith(
+    expect(module.paints[1]!.setStrokeCap).toHaveBeenCalledWith(
       module.StrokeCap.Round
     );
-    expect(module.paints[3]!.setStrokeWidth).toHaveBeenCalledWith(3);
+    expect(module.paints[1]!.setStrokeWidth).toHaveBeenCalledWith(3);
     expect(canvas.drawText).toHaveBeenCalledWith(
       'abc',
       32,
       33,
-      module.paints[4],
+      module.paints[0],
       {
         kind: 'font',
         args: ['Academico', 12, 700, 'italic'],
@@ -354,10 +354,15 @@ describe('renderVexflowRecordingCommands', () => {
     );
     expect(canvas.restore).toHaveBeenCalledTimes(1);
 
-    // Faithful replay (no overrides, no recorded shadow/dash): no glow or dash.
+    // Faithful replay (no overrides, no recorded shadow/dash): pooled paints
+    // only ever reset the optional state, never set a real glow or dash.
     for (const paint of module.paints) {
-      expect(paint.setImageFilter).not.toHaveBeenCalled();
-      expect(paint.setPathEffect).not.toHaveBeenCalled();
+      for (const call of paint.setImageFilter.mock.calls) {
+        expect(call[0]).toBeNull();
+      }
+      for (const call of paint.setPathEffect.mock.calls) {
+        expect(call[0]).toBeNull();
+      }
     }
     expect(module.MakeDropShadow).not.toHaveBeenCalled();
     expect(module.MakeDash).not.toHaveBeenCalled();
@@ -416,7 +421,8 @@ describe('renderVexflowRecordingCommands', () => {
     );
 
     expect(module.MakeDash).toHaveBeenCalledWith([4, 2]);
-    expect(module.paints[0]!.setPathEffect).toHaveBeenCalledWith({
+    // paints[1] is the pooled stroke paint; dash is stroke-only.
+    expect(module.paints[1]!.setPathEffect).toHaveBeenCalledWith({
       kind: 'dash',
       intervals: [4, 2],
       phase: undefined,
@@ -521,6 +527,50 @@ describe('renderVexflowRecordingCommands', () => {
     expect(module.paints[1]!.setImageFilter).toHaveBeenCalledTimes(1);
   });
 
+  it('resets pooled-paint glow and color between commands (state at draw time)', () => {
+    const module = loadReplayModule();
+    type DrawSnapshot = { color: unknown; imageFilter: unknown };
+    const snapshots: DrawSnapshot[] = [];
+    const canvas = createCanvas();
+    canvas.drawPath = jest.fn((_path: unknown, paint: MockPaint) => {
+      snapshots.push({
+        color: paint.setColor.mock.calls.at(-1)?.[0],
+        imageFilter: paint.setImageFilter.mock.calls.at(-1)?.[0],
+      });
+    }) as never;
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'fillPath',
+          groupId: 'note-glow',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#111111', shadowColor: '#00FF00', shadowBlur: 6 },
+        },
+        {
+          type: 'fillPath',
+          path: [{ type: 'moveTo', x: 1, y: 1 }],
+          paint: { color: '#222222' },
+        },
+      ],
+      {},
+      'Bravura'
+    );
+
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[0]).toEqual({
+      color: 'color:#111111',
+      imageFilter: expect.objectContaining({ kind: 'drop-shadow' }),
+    });
+    // The second draw sees its own color and a cleared filter — nothing
+    // bleeds from the glowing command before it.
+    expect(snapshots[1]).toEqual({
+      color: 'color:#222222',
+      imageFilter: null,
+    });
+  });
+
   it('parses each distinct color once per replay', () => {
     const module = loadReplayModule();
     const canvas = createCanvas();
@@ -605,7 +655,10 @@ describe('renderVexflowRecordingCommands', () => {
     );
 
     expect(module.paints[0]!.setColor).toHaveBeenCalledWith('color:#000000');
-    expect(module.paints[0]!.setImageFilter).not.toHaveBeenCalled();
+    // The pooled paint only resets the filter; no glow is ever constructed.
+    for (const call of module.paints[0]!.setImageFilter.mock.calls) {
+      expect(call[0]).toBeNull();
+    }
     expect(module.MakeDropShadow).not.toHaveBeenCalled();
   });
 });
