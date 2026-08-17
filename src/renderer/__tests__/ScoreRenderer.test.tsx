@@ -33,6 +33,7 @@ function loadScoreRendererModule() {
   }));
   const mockUseScoreRecording = jest.fn(() => ({
     commands: [],
+    groupIndex: {},
     layoutPlan: { contentSize: { height: 0, width: 0 } },
     itemsLayout: {
       items: {},
@@ -343,10 +344,10 @@ describe('ScoreRenderer picture cache helpers', () => {
     );
   });
 
-  it('uses the animated picture branch when item style overrides are provided', () => {
+  it('records the base picture and mounts the overlay when item style overrides are provided', () => {
     const module = loadScoreRendererModule();
     const score = {
-      id: 'score-renderer-animated-overrides',
+      id: 'score-renderer-overlay-overrides',
       defaults: { meter: { beats: 4, beatUnit: 4 } },
       staves: [],
     };
@@ -363,7 +364,7 @@ describe('ScoreRenderer picture cache helpers', () => {
     });
 
     expect(
-      findElementByTypeName(initialTree, 'AnimatedScorePicture')
+      findElementByTypeName(initialTree, 'ScoreOverlayPicture')
     ).toBeUndefined();
     expect(module.mockPictureRecorder).not.toHaveBeenCalled();
 
@@ -377,9 +378,138 @@ describe('ScoreRenderer picture cache helpers', () => {
       itemStyleOverrides,
       score,
     });
-    const animatedPicture = findElementByTypeName(tree, 'AnimatedScorePicture');
-    expect(animatedPicture?.props.itemStyleOverrides).toBe(itemStyleOverrides);
-    expect(module.mockPictureRecorder).not.toHaveBeenCalled();
+    // Overrides no longer disable the static base picture: the base is
+    // recorded once on JS and the overlay draws on top of it.
+    expect(module.mockPictureRecorder).toHaveBeenCalledTimes(1);
+    const overlay = findElementByTypeName(tree, 'ScoreOverlayPicture');
+    expect(overlay?.props.itemStyleOverrides).toBe(itemStyleOverrides);
+  });
+
+  it('re-records only the overridden groups on override writes', () => {
+    const module = loadScoreRendererModule();
+    const cmdA = { type: 'fillPath', groupId: 'item-1' };
+    const cmdB = { type: 'strokePath', groupId: 'item-1' };
+    const cmdC = { type: 'fillPath', groupId: 'item-2' };
+    const commands = [{ type: 'save' }, cmdA, cmdB, cmdC];
+    module.mockUseScoreRecording.mockReturnValue({
+      commands,
+      groupIndex: { 'item-1': [cmdA, cmdB], 'item-2': [cmdC] },
+      layoutPlan: { contentSize: { width: 393, height: 612 } },
+      itemsLayout: makeItemsLayoutFixture(),
+    } as never);
+    const itemStyleOverrides = {
+      value: { 'item-1': { fillColor: '#22C55E' } } as Record<string, unknown>,
+    };
+    const overlay = renderToMountedOverlay(module, itemStyleOverrides);
+
+    invokeComponent(overlay);
+    const overlayFactory = lastDerivedValueFactory(module);
+
+    const overlayReplayCalls = () =>
+      module.mockRenderVexflowRecordingCommands.mock.calls.filter(
+        (call) => call[1] !== commands
+      );
+
+    expect(overlayReplayCalls()).toHaveLength(1);
+    expect(overlayReplayCalls()[0]?.[1]).toEqual([cmdA, cmdB]);
+    expect(overlayReplayCalls()[0]?.[4]).toBe(itemStyleOverrides.value);
+
+    const baseReplayCallCount =
+      module.mockRenderVexflowRecordingCommands.mock.calls.length -
+      overlayReplayCalls().length;
+
+    itemStyleOverrides.value = { 'item-2': { fillColor: '#22C55E' } };
+    overlayFactory();
+
+    expect(overlayReplayCalls()).toHaveLength(2);
+    expect(overlayReplayCalls()[1]?.[1]).toEqual([cmdC]);
+    // Override writes never replay the full command array again.
+    expect(
+      module.mockRenderVexflowRecordingCommands.mock.calls.length -
+        overlayReplayCalls().length
+    ).toBe(baseReplayCallCount);
+  });
+
+  it('returns the shared empty picture without replaying when no override matches', () => {
+    const module = loadScoreRendererModule();
+    const cmdA = { type: 'fillPath', groupId: 'item-1' };
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [cmdA],
+      groupIndex: { 'item-1': [cmdA] },
+      layoutPlan: { contentSize: { width: 393, height: 612 } },
+      itemsLayout: makeItemsLayoutFixture(),
+    } as never);
+    const itemStyleOverrides = {
+      value: {} as Record<string, unknown>,
+    };
+    const overlay = renderToMountedOverlay(module, itemStyleOverrides);
+
+    invokeComponent(overlay);
+    const overlayFactory = lastDerivedValueFactory(module);
+    const replayCallCount =
+      module.mockRenderVexflowRecordingCommands.mock.calls.length;
+
+    const emptyResult = overlayFactory();
+
+    // An id absent from the index is skipped like an empty map.
+    itemStyleOverrides.value = { 'item-unknown': { fillColor: '#22C55E' } };
+    const unknownResult = overlayFactory();
+
+    expect(unknownResult).toBe(emptyResult);
+    expect(module.mockRenderVexflowRecordingCommands.mock.calls).toHaveLength(
+      replayCallCount
+    );
+  });
+
+  it('disposes overlay pictures two generations after supersession', () => {
+    const module = loadScoreRendererModule();
+    type DisposablePicture = { kind: string; dispose: jest.Mock };
+    module.mockFinishRecordingAsPicture.mockImplementation(
+      () => ({ kind: 'picture', dispose: jest.fn() } as never)
+    );
+    const cmdA = { type: 'fillPath', groupId: 'item-1' };
+    const cmdB = { type: 'fillPath', groupId: 'item-2' };
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [cmdA, cmdB],
+      groupIndex: { 'item-1': [cmdA], 'item-2': [cmdB] },
+      layoutPlan: { contentSize: { width: 393, height: 612 } },
+      itemsLayout: makeItemsLayoutFixture(),
+    } as never);
+    const itemStyleOverrides = {
+      value: { 'item-1': { fillColor: '#22C55E' } } as Record<string, unknown>,
+    };
+    const overlay = renderToMountedOverlay(module, itemStyleOverrides);
+
+    // The retirement ring only tracks on the UI runtime.
+    (globalThis as Record<string, unknown>)._WORKLET = true;
+
+    try {
+      const overlayPictures: DisposablePicture[] = [];
+      const captureNewPictures = () => {
+        const results = module.mockFinishRecordingAsPicture.mock.results;
+        overlayPictures.push(results[results.length - 1]?.value as never);
+      };
+
+      invokeComponent(overlay);
+      captureNewPictures();
+      const overlayFactory = lastDerivedValueFactory(module);
+
+      for (const groupId of ['item-2', 'item-1', 'item-2']) {
+        itemStyleOverrides.value = { [groupId]: { fillColor: '#22C55E' } };
+        overlayFactory();
+        captureNewPictures();
+      }
+
+      expect(overlayPictures).toHaveLength(4);
+      // Oldest picture left the two-generation ring and was disposed; the
+      // newer three (ring + current) are still alive.
+      expect(overlayPictures[0]?.dispose).toHaveBeenCalledTimes(1);
+      expect(overlayPictures[1]?.dispose).not.toHaveBeenCalled();
+      expect(overlayPictures[2]?.dispose).not.toHaveBeenCalled();
+      expect(overlayPictures[3]?.dispose).not.toHaveBeenCalled();
+    } finally {
+      delete (globalThis as Record<string, unknown>)._WORKLET;
+    }
   });
 
   it('fires onItemsLayout with the recorded geometry once the viewport has size', () => {
@@ -882,6 +1012,59 @@ describe('ScorePlayhead', () => {
     ).toEqual({ rect: { x: 0, y: 0, width: 0, height: 0 }, rx: 0, ry: 0 });
   });
 });
+
+/** Renders ScoreRenderer through the layout dance until the viewport has
+ * size, then returns the mounted ScoreOverlayPicture element. */
+function renderToMountedOverlay(
+  module: ReturnType<typeof loadScoreRendererModule>,
+  itemStyleOverrides: { value: Record<string, unknown> }
+): { props: Record<string, unknown>; type?: unknown } {
+  const score = {
+    id: 'score-renderer-overlay',
+    defaults: { meter: { beats: 4, beatUnit: 4 } },
+    staves: [],
+  };
+  const props = {
+    defaultFont: 'Bravura',
+    fontManager: { kind: 'font-manager' },
+    itemStyleOverrides,
+    score,
+  };
+
+  const initialTree = module.ScoreRenderer(props);
+  getScoreRendererGestureSurface(initialTree).props.onLayout({
+    nativeEvent: { layout: { height: 612, width: 393 } },
+  });
+  const tree = module.ScoreRenderer(props);
+
+  const overlay = findElementByTypeName(tree, 'ScoreOverlayPicture');
+
+  if (!overlay) {
+    throw new Error('ScoreOverlayPicture element not found');
+  }
+
+  return overlay;
+}
+
+/** Invokes a function-component element with its props, like the harness
+ * does for ScoreRenderer itself (children are elements, never auto-run). */
+function invokeComponent(element: {
+  props: Record<string, unknown>;
+  type?: unknown;
+}): unknown {
+  return (element.type as (props: Record<string, unknown>) => unknown)(
+    element.props
+  );
+}
+
+/** The most recently registered useDerivedValue factory — after invoking the
+ * overlay component, that is its picture mapper. */
+function lastDerivedValueFactory(
+  module: ReturnType<typeof loadScoreRendererModule>
+): () => unknown {
+  const calls = module.mockUseDerivedValue.mock.calls;
+  return calls[calls.length - 1]?.[0] as () => unknown;
+}
 
 /** Fresh single-staff geometry fixture — a new object per call so tests can
  * distinguish "same recording pass" (same identity) from a new pass. */

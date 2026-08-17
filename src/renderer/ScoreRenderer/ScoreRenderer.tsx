@@ -12,9 +12,15 @@ import {
 } from '@shopify/react-native-skia';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
-import { useDerivedValue } from 'react-native-reanimated';
+import {
+  runOnUI,
+  useDerivedValue,
+  useSharedValue,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import type { VexflowRecordingCommand } from '../../base';
+import type { VexflowRecordingGroupIndex } from '../../base/VexflowRecordingIndex';
 import { renderVexflowRecordingCommands } from '../../base/VexflowRecordingReplay';
 import { resolveScoreColorScheme } from '../colorScheme';
 import { insets, renderOptions, spacing } from '../constants';
@@ -93,6 +99,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   );
   const {
     commands: recordedCommands,
+    groupIndex,
     layoutPlan,
     itemsLayout,
   } = useScoreRecording({
@@ -171,8 +178,12 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     [viewportSize.height, viewportSize.width]
   );
 
+  // The unstyled base picture is recorded once per recording pass, even when
+  // itemStyleOverrides is provided: overridden items are drawn OVER their
+  // base-colored twins by ScoreOverlayPicture, so override writes never
+  // re-record the full score.
   const picture = useMemo(() => {
-    if (!hasViewportSize || itemStyleOverrides) {
+    if (!hasViewportSize) {
       return undefined;
     }
 
@@ -187,9 +198,18 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     defaultFont,
     fontManager,
     hasViewportSize,
-    itemStyleOverrides,
     recordedCommands,
   ]);
+  useEffect(() => {
+    if (!picture) {
+      return;
+    }
+
+    // Cleanup runs after the commit that swapped in the successor picture (or
+    // on unmount); the render thread holds its own ref while a frame is in
+    // flight, so releasing the JS ref here is safe.
+    return () => picture.dispose();
+  }, [picture]);
 
   // Destructure so the worklet below doesn't capture the whole scrollState —
   // the PanGesture inside it is not serializable and would crash the worklet.
@@ -221,16 +241,15 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
           <Canvas style={canvasStyle} ref={canvasRef}>
             <Group clip={viewportClip}>
               <Group transform={pictureTransform}>
+                {picture ? <Picture picture={picture} /> : null}
                 {itemStyleOverrides && hasViewportSize ? (
-                  <AnimatedScorePicture
+                  <ScoreOverlayPicture
                     contentSize={contentSize}
                     defaultFont={defaultFont}
                     fontManager={fontManager}
+                    groupIndex={groupIndex}
                     itemStyleOverrides={itemStyleOverrides}
-                    recordedCommands={recordedCommands}
                   />
-                ) : picture ? (
-                  <Picture picture={picture} />
                 ) : null}
               </Group>
               {playhead ? (
@@ -268,36 +287,205 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
 
 export default memo(ScoreRenderer);
 
-function AnimatedScorePicture({
+function nowMsWorklet(): number {
+  'worklet';
+
+  return globalThis.performance?.now?.() ?? 0;
+}
+
+interface OverlayDisposalState {
+  /** The last real (non-empty) overlay picture the mapper returned. */
+  prev: SkPicture | null;
+  /** Superseded pictures awaiting disposal, oldest first. */
+  pending: SkPicture[];
+}
+
+interface OverlayProfileState {
+  windowStartMs: number;
+  maxMs: number;
+  count: number;
+}
+
+/**
+ * Draws the style-overridden items on top of the static base picture. Only
+ * the overridden groups' commands are re-recorded per override write — the
+ * full command array never reaches the UI runtime. Overridden items are drawn
+ * opaque over their base-colored twins at identical coordinates; with an
+ * opaque override color the result matches an in-place recolor up to a ≤1px
+ * anti-aliasing fringe of base ink at glyph edges.
+ */
+function ScoreOverlayPicture({
   contentSize,
   defaultFont,
   fontManager,
+  groupIndex,
   itemStyleOverrides,
-  recordedCommands,
 }: {
   contentSize: RendererSize;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;
+  groupIndex: VexflowRecordingGroupIndex;
   itemStyleOverrides: NonNullable<ScoreRendererProps['itemStyleOverrides']>;
-  recordedCommands: readonly VexflowRecordingCommand[];
 }) {
+  const emptyPicture = useMemo(getEmptyOverlayPicture, []);
+  const disposal = useSharedValue<OverlayDisposalState>({
+    prev: null,
+    pending: [],
+  });
+  const profile = useSharedValue<OverlayProfileState>({
+    windowStartMs: 0,
+    maxMs: 0,
+    count: 0,
+  });
+  // Computed on JS and captured: __DEV__ is not guaranteed to exist on the
+  // worklet runtime.
+  const enableProfiling = isDevBuild();
+
   const picture = useDerivedValue<SkPicture>(() => {
-    return createScorePictureWorklet({
+    const overrides = itemStyleOverrides.value;
+
+    let commands: VexflowRecordingCommand[] | null = null;
+    for (const groupId in overrides) {
+      const group = groupIndex[groupId];
+      if (group != null) {
+        (commands ??= []).push(...group);
+      }
+    }
+
+    if (commands == null) {
+      retireOverlayPicture(disposal, null);
+      return emptyPicture;
+    }
+
+    const start = enableProfiling ? nowMsWorklet() : 0;
+    const next = createScorePictureWorklet({
       contentSize,
       defaultFont,
       fontManager,
-      recordedCommands,
-      styleOverrides: itemStyleOverrides.value,
+      recordedCommands: commands,
+      styleOverrides: overrides,
     });
+
+    if (enableProfiling) {
+      logOverlayProfile(profile, commands.length, nowMsWorklet() - start);
+    }
+
+    retireOverlayPicture(disposal, next);
+    return next;
   }, [
     contentSize,
     defaultFont,
+    disposal,
+    emptyPicture,
+    enableProfiling,
     fontManager,
+    groupIndex,
     itemStyleOverrides,
-    recordedCommands,
+    profile,
   ]);
 
+  useEffect(() => {
+    return () => {
+      runOnUI(disposeOverlayPictures)(disposal);
+    };
+  }, [disposal]);
+
   return <Picture picture={picture} />;
+}
+
+let emptyOverlayPicture: SkPicture | null = null;
+
+/**
+ * Shared blank picture returned while no override matches. One per app,
+ * never disposed — PictureProps.picture is non-nullable and declarative Skia
+ * can't unmount from the UI thread, so an "empty" frame needs a real picture.
+ */
+function getEmptyOverlayPicture(): SkPicture {
+  if (emptyOverlayPicture == null) {
+    const recorder = Skia.PictureRecorder();
+    recorder.beginRecording(Skia.XYWHRect(0, 0, 1, 1));
+    emptyOverlayPicture = recorder.finishRecordingAsPicture();
+  }
+
+  return emptyOverlayPicture;
+}
+
+/**
+ * Two-generation deferred disposal: the retiring picture may still be
+ * referenced by the committed Picture node or a frame in flight, so only
+ * pictures two supersessions old are disposed. The shared blank picture never
+ * enters the ring (`next === null` marks an empty frame).
+ */
+function retireOverlayPicture(
+  disposal: SharedValue<OverlayDisposalState>,
+  next: SkPicture | null
+) {
+  'worklet';
+
+  if (typeof _WORKLET === 'undefined' || !_WORKLET) {
+    // The mapper's seed run happens on JS against a copy of the state; writes
+    // here would never be seen by the UI runtime, so skip tracking entirely
+    // (leaks at most one picture per mapper re-creation).
+    return;
+  }
+
+  const state = disposal.value;
+
+  if (state.prev != null) {
+    state.pending.push(state.prev);
+
+    while (state.pending.length > 2) {
+      state.pending.shift()?.dispose();
+    }
+  }
+
+  state.prev = next;
+}
+
+function disposeOverlayPictures(disposal: SharedValue<OverlayDisposalState>) {
+  'worklet';
+
+  const state = disposal.value;
+
+  for (const pending of state.pending) {
+    pending.dispose();
+  }
+  state.pending.length = 0;
+
+  state.prev?.dispose();
+  state.prev = null;
+}
+
+/** Throttled (≤1/s) UI-thread record timing; dev builds only. */
+function logOverlayProfile(
+  profile: SharedValue<OverlayProfileState>,
+  commandCount: number,
+  durationMs: number
+) {
+  'worklet';
+
+  const stats = profile.value;
+  stats.count += 1;
+
+  if (durationMs > stats.maxMs) {
+    stats.maxMs = durationMs;
+  }
+
+  const now = nowMsWorklet();
+
+  if (now - stats.windowStartMs < 1000) {
+    return;
+  }
+
+  console.info('[ScoreRenderer] overlay profile', {
+    commandCount,
+    maxMs: Math.round(stats.maxMs * 10) / 10,
+    count: stats.count,
+  });
+
+  stats.windowStartMs = now;
+  stats.maxMs = 0;
+  stats.count = 0;
 }
 
 export function createScorePicture({
