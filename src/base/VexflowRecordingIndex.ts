@@ -1,12 +1,5 @@
 import type { VexflowRecordingCommand } from './VexflowRecordingTypes';
 
-/**
- * Commands of a recording grouped by `groupId`, in recording order. Only
- * commands stamped by `beginColorGroup`/`endColorGroup` appear here — untagged
- * chrome (staff lines, clefs, …) can never be style-overridden, so a replay of
- * `index[groupId]` slices is sufficient to redraw everything an
- * `styleOverrides` map can affect.
- */
 export type VexflowRecordingGroupIndex = Readonly<
   Record<string, readonly VexflowRecordingCommand[]>
 >;

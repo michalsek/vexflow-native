@@ -8,6 +8,7 @@ import {
   type VexflowRecordingGroupIndex,
 } from '../base/VexflowRecordingIndex';
 import type { Score } from '../state';
+import { isVexflowNativeDebugEnabled } from '../shared/debug';
 import { layoutScore, type ScoreLayoutPlan } from './layout';
 import { measureScore } from './measure';
 import { renderScore } from './render';
@@ -193,7 +194,7 @@ function logScoreRecordingProfile({
   systemCount: number;
   viewport: RendererRect;
 }) {
-  if (!isDevBuild()) {
+  if (!isVexflowNativeDebugEnabled()) {
     return;
   }
 
@@ -220,12 +221,4 @@ function nowMs(): number {
 
 function roundMs(value: number): number {
   return Math.round(value * 10) / 10;
-}
-
-function isDevBuild(): boolean {
-  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
-    return false;
-  }
-
-  return typeof __DEV__ === 'undefined' ? false : __DEV__;
 }

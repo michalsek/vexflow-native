@@ -1,5 +1,6 @@
 export { default } from './ScoreRenderer';
-export { createPictureTransform, createScorePicture } from './ScoreRenderer';
+export { default as ScoreOverlayPicture } from './ScoreOverlayPicture';
+export { createPictureTransform, createScorePicture } from './utils';
 export { createPlayheadRect, resolvePlayheadStyle } from './ScorePlayhead';
 export {
   clampOffset,

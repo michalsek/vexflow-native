@@ -9,3 +9,8 @@ export {
 export * from './VexflowColorScheme';
 export * from './VexflowRecordingTypes';
 export * from './types';
+
+export {
+  isVexflowNativeDebugEnabled,
+  setVexflowNativeDebugEnabled,
+} from '../shared/debug';
