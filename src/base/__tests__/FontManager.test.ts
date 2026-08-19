@@ -143,4 +143,47 @@ describe('FontManager', () => {
       'Failed to create SkFont. No matching typeface found for family "DefaultFamily" with weight "Bold" and slant "Italic".'
     );
   });
+
+  it('returns the identical SkFont for a repeated descriptor', () => {
+    const fontProvider = createFontProvider(['DefaultFamily', 'Academico']);
+    const manager = new FontManager(fontProvider as never, 'DefaultFamily');
+
+    fontProvider.matchFamilyStyle.mockReturnValue({ name: 'Academico' });
+    mockSkiaFont.mockImplementation(() => ({ kind: 'sk-font' }));
+
+    const first = manager.createSkFont('Academico', 16, 'bold');
+    const again = manager.createSkFont('Academico', 16, 'bold');
+
+    expect(again).toBe(first);
+    expect(fontProvider.matchFamilyStyle).toHaveBeenCalledTimes(1);
+    expect(mockSkiaFont).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates distinct SkFonts for distinct descriptors', () => {
+    const fontProvider = createFontProvider(['DefaultFamily', 'Academico']);
+    const manager = new FontManager(fontProvider as never, 'DefaultFamily');
+
+    fontProvider.matchFamilyStyle.mockReturnValue({ name: 'Academico' });
+    mockSkiaFont.mockImplementation(() => ({ kind: 'sk-font' }));
+
+    const small = manager.createSkFont('Academico', 16);
+    const large = manager.createSkFont('Academico', 24);
+
+    expect(large).not.toBe(small);
+    expect(mockSkiaFont).toHaveBeenCalledTimes(2);
+  });
+
+  it('matches families case-insensitively without re-scanning the provider', () => {
+    const fontProvider = createFontProvider(['DefaultFamily', 'Academico']);
+    const manager = new FontManager(fontProvider as never, 'DefaultFamily');
+    const scansAfterConstruction = fontProvider.countFamilies.mock.calls.length;
+
+    expect(manager.resolveFontDescriptor('academico', 16).family).toBe(
+      'academico'
+    );
+    // Family availability now reads the precomputed list, not the provider.
+    expect(fontProvider.countFamilies.mock.calls.length).toBe(
+      scansAfterConstruction
+    );
+  });
 });

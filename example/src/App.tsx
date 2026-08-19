@@ -7,6 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { enableScreens } from 'react-native-screens';
+import { setVexflowNativeDebugEnabled } from 'vexflow-native';
 
 import { useColorScheme } from './hooks/useColorScheme';
 import type { ExampleStackParamList } from './navigation/ExampleStackParamList';
@@ -22,6 +23,10 @@ import SimpleRenderer from './screens/SimpleRenderer';
 // import VexflowTestSuite from './screens/VexflowTestSuite';
 
 enableScreens();
+
+// The library's profiling logs are off by default; keep them on in the
+// example app's dev builds.
+setVexflowNativeDebugEnabled(__DEV__);
 
 const Stack = createNativeStackNavigator<ExampleStackParamList>();
 
