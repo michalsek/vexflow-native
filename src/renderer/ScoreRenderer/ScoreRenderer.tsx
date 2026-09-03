@@ -48,6 +48,7 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
   playheadStyle,
   onScrollGeometry,
   onItemsLayout,
+  onReady,
 }) => {
   const options = useMemo(() => withDefaultOptions(userOptions), [userOptions]);
 
@@ -209,6 +210,23 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
 
     return () => picture.dispose();
   }, [picture]);
+
+  const onReadyRef = useRef(onReady);
+
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  });
+
+  const hasFiredReadyRef = useRef(false);
+
+  useEffect(() => {
+    if (hasFiredReadyRef.current || !hasViewportSize || !picture) {
+      return;
+    }
+
+    hasFiredReadyRef.current = true;
+    onReadyRef.current?.();
+  }, [hasViewportSize, picture]);
 
   const { scrollOffset } = scrollState;
 

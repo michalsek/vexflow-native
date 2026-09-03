@@ -85,6 +85,7 @@ export interface ScoreRendererProps {
    * @param layout Geometry of all rendered items and measures.
    */
   onItemsLayout?: (layout: ScoreItemsLayout) => void;
+  onReady?: () => void;
 }
 
 export interface Viewport {

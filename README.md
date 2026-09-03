@@ -349,6 +349,10 @@ export function DirectVexFlow() {
 - `onItemsLayout`: optional callback fired after each recording pass with the
   view-space geometry (at scroll offset 0) of rendered items and measures,
   including each measure's system band `y`/`height`.
+- `onReady`: optional callback fired once per mount, when the first score
+  picture has been rasterized for a non-empty viewport. Later re-records
+  (resize, option changes) do not re-fire it — the seam for hiding a loading
+  indicator once the score is actually on screen.
 
 ## Contributing
 

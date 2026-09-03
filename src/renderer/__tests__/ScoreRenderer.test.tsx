@@ -617,6 +617,46 @@ describe('ScoreRenderer picture cache helpers', () => {
     expect(received).toHaveBeenLastCalledWith(4, nextItemsLayout);
   });
 
+  it('fires onReady exactly once, after the first picture for a sized viewport', () => {
+    const module = loadScoreRendererModule();
+    const onReady = jest.fn();
+    const score = {
+      id: 'score-renderer-on-ready',
+      defaults: { meter: { beats: 4, beatUnit: 4 } },
+      staves: [],
+    };
+    const fontManager = { kind: 'font-manager' };
+    const render = () =>
+      module.ScoreRenderer({
+        defaultFont: 'Bravura',
+        fontManager,
+        onReady,
+        score,
+      });
+
+    const initialTree = render();
+    expect(onReady).not.toHaveBeenCalled();
+
+    getScoreRendererGestureSurface(initialTree).props.onLayout({
+      nativeEvent: { layout: { height: 612, width: 393 } },
+    });
+    render();
+
+    expect(onReady).toHaveBeenCalledTimes(1);
+
+    render();
+    expect(onReady).toHaveBeenCalledTimes(1);
+
+    module.mockUseScoreRecording.mockReturnValue({
+      commands: [{ type: 'save' }],
+      groupIndex: {},
+      layoutPlan: { contentSize: { width: 393, height: 240 } },
+      itemsLayout: makeItemsLayoutFixture(),
+    } as never);
+    render();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+
   it('updates scroll transforms without replaying recording commands', () => {
     const module = loadScoreRendererModule();
 
