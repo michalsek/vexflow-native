@@ -111,13 +111,13 @@ export function applyFixedNoteSpacing(
   stave: Stave
 ) {
   const contexts = formatter.getTickContexts();
-  const lastTick = contexts?.list[contexts.list.length - 1];
+  const lastTickKey = contexts?.list[contexts.list.length - 1];
 
   if (
     !contexts ||
     voices.length === 0 ||
-    lastTick === undefined ||
-    lastTick <= 0
+    lastTickKey === undefined ||
+    lastTickKey <= 0
   ) {
     return;
   }
@@ -128,6 +128,14 @@ export function applyFixedNoteSpacing(
     return;
   }
 
+  // Tick context keys are ticks × the formatter's resolution multiplier (the
+  // lcm that keeps tuplet ticks integral: 3 with triplets, 5 with
+  // quintuplets…), while getTotalTicks() is in plain ticks. Compare in plain
+  // ticks, or every position scales by the multiplier and the overflow
+  // correction below crushes the last tick flush against the note end.
+  const multiplier = contexts.resolutionMultiplier || 1;
+  const lastTick = lastTickKey / multiplier;
+
   // Tick context x is relative to noteStartX + the stave's left note padding
   // (see Tickable.getAbsoluteX), so the usable span ends at noteEndX. The
   // padding is derived from Stave statics because the `Metrics` module is not
@@ -137,7 +145,7 @@ export function applyFixedNoteSpacing(
     stave.getNoteEndX() - stave.getNoteStartX() - stavePadding;
   let span = noteAreaWidth;
 
-  const lastContext = contexts.map[lastTick]!;
+  const lastContext = contexts.map[lastTickKey]!;
   const lastOverflow =
     (lastTick / totalTicks) * span + lastContext.getWidth() - noteAreaWidth;
 
@@ -149,8 +157,8 @@ export function applyFixedNoteSpacing(
     return;
   }
 
-  for (const tick of contexts.list) {
-    contexts.map[tick]!.setX((tick / totalTicks) * span);
+  for (const tickKey of contexts.list) {
+    contexts.map[tickKey]!.setX((tickKey / multiplier / totalTicks) * span);
   }
 }
 
