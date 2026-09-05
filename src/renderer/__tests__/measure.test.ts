@@ -311,6 +311,39 @@ describe('measureScore', () => {
       });
     });
 
+    describe('grace note extents', () => {
+      it('widens the intrinsic width by the grace group on the left', () => {
+        const withGrace = measureScore(
+          makeStemsUpScore(graceAttachments()),
+          TEST_OPTIONS
+        );
+        const withoutGrace = measureScore(makeStemsUpScore(), TEST_OPTIONS);
+
+        expect(withGrace.measures[0]!.intrinsicNoteWidth).toBeGreaterThan(
+          withoutGrace.measures[0]!.intrinsicNoteWidth
+        );
+      });
+
+      it('grows the top bound for grace notes above a low owner', () => {
+        // Octave 4 owners with stems up stay inside the staff; octave 6
+        // grace notes with their own up stems must push the top bound up.
+        const withGrace = measureScore(
+          makeStemsUpScore(graceAttachments(6), 4),
+          TEST_OPTIONS
+        );
+        const withoutGrace = measureScore(
+          makeStemsUpScore(undefined, 4),
+          TEST_OPTIONS
+        );
+
+        const graceBounds = withGrace.measures[0]!.staffBounds[0]!;
+        const plainBounds = withoutGrace.measures[0]!.staffBounds[0]!;
+
+        expect(graceBounds.top).toBeLessThan(plainBounds.top);
+        expect(graceBounds.bottom).toBeGreaterThanOrEqual(plainBounds.bottom);
+      });
+    });
+
     it('adds the modifier block on top of the note width', () => {
       const withMeter = measureScore(
         makeSingleStaffScore({ showMeter: true }),
@@ -365,6 +398,27 @@ function accentAttachments(placement?: 'above' | 'below'): NoteAttachment[] {
     type: 'articulation' as const,
     articulation: 'accent' as const,
     ...(placement ? { placement } : {}),
+  }));
+}
+
+/** A two-note slashed grace group on every note of `makeStemsUpScore`'s
+ * single voice, pitched at `octave`. */
+function graceAttachments(octave: number = 5): NoteAttachment[] {
+  return [1, 2, 3, 4].map((index) => ({
+    id: `grace-${index}`,
+    ownerId: `stems-up-m1-v1-n${index}`,
+    type: 'grace' as const,
+    slash: true,
+    notes: [
+      {
+        pitch: { step: 'C' as Step, octave },
+        duration: { length: '16' as const },
+      },
+      {
+        pitch: { step: 'D' as Step, octave },
+        duration: { length: '16' as const },
+      },
+    ],
   }));
 }
 

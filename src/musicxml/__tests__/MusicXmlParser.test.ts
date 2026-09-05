@@ -122,6 +122,85 @@ const BEAMED_STEMS_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
   </part>
 </score-partwise>`;
 
+const GRACE_NOTES_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Drums</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>480</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>percussion</sign></clef>
+      </attributes>
+      <note>
+        <grace slash="yes"/>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <voice>1</voice>
+        <type>16th</type>
+        <stem>up</stem>
+        <staff>1</staff>
+      </note>
+      <note>
+        <grace slash="yes"/>
+        <pitch><step>D</step><alter>1</alter><octave>5</octave></pitch>
+        <voice>1</voice>
+        <type>16th</type>
+        <stem>up</stem>
+        <staff>1</staff>
+      </note>
+      <note>
+        <grace slash="yes"/>
+        <chord/>
+        <pitch><step>F</step><octave>5</octave></pitch>
+        <voice>1</voice>
+        <type>16th</type>
+        <staff>1</staff>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>480</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <staff>1</staff>
+      </note>
+      <note>
+        <chord/>
+        <pitch><step>G</step><octave>5</octave></pitch>
+        <duration>480</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <staff>1</staff>
+      </note>
+      <note>
+        <grace/>
+        <pitch><step>E</step><octave>5</octave></pitch>
+        <voice>1</voice>
+        <type>eighth</type>
+        <staff>1</staff>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>480</duration>
+        <voice>1</voice>
+        <type>quarter</type>
+        <stem>up</stem>
+        <staff>1</staff>
+      </note>
+      <note>
+        <rest/>
+        <duration>960</duration>
+        <voice>1</voice>
+        <type>half</type>
+        <staff>1</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
 describe('parseMusicXmlToScore', () => {
   it('maps partwise MusicXML into Score state', () => {
     const score = parseMusicXmlToScore(SIMPLE_PARTWISE, {
@@ -198,6 +277,85 @@ describe('parseMusicXmlToScore', () => {
         stemDirection: 'down',
       }),
     ]);
+  });
+
+  it('collects grace notes into a grace attachment on the next note', () => {
+    const score = parseMusicXmlToScore(GRACE_NOTES_PARTWISE, {
+      scoreId: 'grace-notes',
+    });
+    const items = score.staves[0]?.measures[0]?.voices[0]?.items ?? [];
+
+    // Grace notes carry no <duration>, so they must not occupy the voice.
+    expect(items.map((item) => item.type)).toEqual(['chord', 'note', 'rest']);
+    expect(items[0]).toMatchObject({
+      type: 'chord',
+      duration: { length: 'q' },
+      pitches: [
+        { step: 'C', octave: 5 },
+        { step: 'G', octave: 5 },
+      ],
+    });
+
+    const graceAttachments = (score.attachments ?? []).filter(
+      (attachment) => attachment.type === 'grace'
+    );
+    expect(graceAttachments).toEqual([
+      {
+        id: `${items[0]!.id}-grace`,
+        ownerId: items[0]!.id,
+        type: 'grace',
+        slash: true,
+        notes: [
+          { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
+          {
+            pitch: { step: 'D', octave: 5, accidental: '#' },
+            duration: { length: '16' },
+          },
+        ],
+      },
+      {
+        id: `${items[1]!.id}-grace`,
+        ownerId: items[1]!.id,
+        type: 'grace',
+        notes: [{ pitch: { step: 'E', octave: 5 }, duration: { length: '8' } }],
+      },
+    ]);
+  });
+
+  it('skips a grace note that carries no <voice>', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Drums</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>percussion</sign></clef>
+      </attributes>
+      <note>
+        <grace/>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <type>eighth</type>
+        <staff>1</staff>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration>
+        <voice>1</voice>
+        <type>whole</type>
+        <staff>1</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const score = parseMusicXmlToScore(xml, { scoreId: 'voiceless-grace' });
+
+    expect(score.staves[0]?.measures[0]?.voices[0]?.items).toHaveLength(1);
+    expect(score.attachments).toBeUndefined();
   });
 
   it('parses the bundled MusicXML fixture', () => {

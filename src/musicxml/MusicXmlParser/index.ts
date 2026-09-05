@@ -43,6 +43,7 @@ export function parseMusicXmlToScore(
     slurs: [],
     tuplets: [],
     pendingDynamics: new Map(),
+    pendingGraceNotes: new Map(),
     activeTies: new Map(),
     activeSlurs: new Map(),
     activeTuplets: new Map(),

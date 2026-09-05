@@ -1,6 +1,7 @@
 import {
   Articulation as VFArticulation,
   Formatter,
+  GraceNoteGroup,
   Stave,
   Voice as VFVoice,
 } from 'vexflow';
@@ -105,10 +106,7 @@ export function measureScore(
         );
         const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
-        if (vfVoices.length > 1) {
-          formatter.joinVoices(vfVoices);
-        }
-
+        formatter.joinVoices(vfVoices);
         allVoices.push(...vfVoices);
 
         return {
@@ -261,9 +259,7 @@ function measureStaffVerticalBounds({
     ({ measure, ownerStaffId, staffIndex, voiceArtifacts }) => {
       const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
-      if (vfVoices.length > 1) {
-        formatter.joinVoices(vfVoices);
-      }
+      formatter.joinVoices(vfVoices);
 
       voiceArtifacts.forEach(({ notes }, voiceIndex) => {
         const items = measure.voices[voiceIndex]?.items ?? [];
@@ -306,7 +302,7 @@ function measureStaffVerticalBounds({
             staffIndexById.get(
               items[noteIndex]?.targetStaffId ?? ownerStaffId
             ) ?? staffIndex;
-          mergeArticulationBounds(bounds[ownerStaffIndex], note);
+          mergeModifierBounds(bounds[ownerStaffIndex], note);
           mergeNoteBounds(bounds[ownerStaffIndex], note);
         });
 
@@ -358,11 +354,12 @@ function createNoopRenderContext(): RenderContext {
 const NOOP_RENDER_CONTEXT = createNoopRenderContext();
 
 /**
- * Merges the drawn extents of a note's articulations into the staff bounds.
- * VexFlow only positions an articulation inside `draw()`, so each one is
- * drawn against a no-op context first to make its bounding box real.
+ * Merges the drawn extents of a note's articulations and grace-note groups
+ * into the staff bounds. VexFlow only positions these modifiers inside
+ * `draw()`, so each one is drawn against a no-op context first to make its
+ * bounding boxes real.
  */
-function mergeArticulationBounds(
+function mergeModifierBounds(
   bounds: StaffVerticalBounds | undefined,
   note: VFVoiceNote
 ) {
@@ -371,14 +368,24 @@ function mergeArticulationBounds(
   }
 
   for (const modifier of note.getModifiers()) {
-    if (!(modifier instanceof VFArticulation)) {
+    const isArticulation = modifier instanceof VFArticulation;
+    const isGraceNoteGroup = modifier instanceof GraceNoteGroup;
+
+    if (!isArticulation && !isGraceNoteGroup) {
       continue;
     }
 
     try {
       modifier.setContext(NOOP_RENDER_CONTEXT);
       modifier.draw();
-      mergeBoundingBox(bounds, modifier.getBoundingBox());
+
+      if (isGraceNoteGroup) {
+        modifier.getGraceNotes().forEach((graceNote) => {
+          mergeBoundingBox(bounds, graceNote.getBoundingBox());
+        });
+      } else {
+        mergeBoundingBox(bounds, modifier.getBoundingBox());
+      }
     } catch {
       // Ghost and spacer notes cannot place modifiers; note bounds remain
       // the fallback.

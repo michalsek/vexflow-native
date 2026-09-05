@@ -271,10 +271,24 @@ export interface LyricAttachment extends AttachmentBase {
   verse?: number;
 }
 
+export interface GraceNote {
+  pitch: Pitch;
+  duration: DurationValue;
+}
+
+export interface GraceNoteAttachment extends AttachmentBase {
+  type: 'grace';
+  /** Played before the owner, in order. */
+  notes: GraceNote[];
+  /** Acciaccatura slash through the (first) stem. */
+  slash?: boolean;
+}
+
 export type NoteAttachment =
   | ArticulationAttachment
   | DynamicAttachment
-  | LyricAttachment;
+  | LyricAttachment
+  | GraceNoteAttachment;
 
 export interface Tie {
   id: Id;
