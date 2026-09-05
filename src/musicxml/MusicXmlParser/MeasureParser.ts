@@ -206,13 +206,17 @@ function parseNote(
     );
   }
 
-  const voiceName = requiredChildText(note, 'voice');
-
   if (hasChild(note, 'grace')) {
-    collectGraceNote(note, voiceName, state);
+    const graceVoiceName = childText(note, 'voice');
+
+    if (graceVoiceName) {
+      collectGraceNote(note, graceVoiceName, state);
+    }
+
     return currentPosition;
   }
 
+  const voiceName = requiredChildText(note, 'voice');
   const cursor = getVoiceCursor(
     voiceName,
     staffIndex,

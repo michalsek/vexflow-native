@@ -1,8 +1,9 @@
 import { beforeAll, describe, expect, it } from '@jest/globals';
-import { Formatter, Stave } from 'vexflow';
+import { Formatter, GraceNoteGroup, Stave } from 'vexflow';
+import type { StaveNote } from 'vexflow';
 
 import { installVexflowReactNativeFallbacks } from '../../base/setupVexflowReactNative';
-import type { Score, VoiceItem } from '../../state';
+import type { GraceNoteAttachment, Score, VoiceItem } from '../../state';
 import { applyFixedNoteSpacing } from '../render';
 import { makeVFVoice } from '../scoreParsing';
 
@@ -10,13 +11,29 @@ import { makeVFVoice } from '../scoreParsing';
  * engraved tick positions are a pure function of TIME — swapping the real
  * voice's content (which changes its durations and thus VexFlow's
  * duration-weighted spacing) must not move any tick context. This is what
- * keeps a step editor's grid columns still while notes toggle. */
+ * keeps a step editor's grid columns still while notes toggle. The one input
+ * besides time is what hangs LEFT of beat 1: like VexFlow's own formatter, the
+ * lattice starts at the first tick's left-modifier width, so a beat-1 grace
+ * group sits inside the note area instead of over the clef. */
 
 const TEST_SCORE: Score = {
   id: 'fixed-spacing-score',
   defaults: { meter: { beats: 4, beatUnit: 4 } },
   staves: [],
 };
+
+/** Tick context x is relative to noteStartX + this padding (Note.getAbsoluteX). */
+const STAVE_PADDING = Stave.defaultPadding - Stave.rightPadding;
+
+const drag = (ownerId: string): GraceNoteAttachment => ({
+  id: `${ownerId}-drag`,
+  ownerId,
+  type: 'grace',
+  notes: [
+    { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
+    { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
+  ],
+});
 
 const note = (id: string, length: '8' | '16' | 'q'): VoiceItem => ({
   id,
@@ -43,12 +60,8 @@ const spacerItems = (): VoiceItem[] =>
     voiceId: 'spacer',
   }));
 
-/** Formats real + spacer voices to a stave with fixed spacing applied and
- * returns each spacer note's absolute x, keyed by item id. */
-const formatWithLattice = (
-  realItems: VoiceItem[],
-  score: Score = TEST_SCORE
-): Map<string, number> => {
+/** Formats real + spacer voices to a stave with fixed spacing applied. */
+const formatLattice = (realItems: VoiceItem[], score: Score = TEST_SCORE) => {
   const stave = new Stave(10, 40, 700);
   const real = makeVFVoice(score, score.defaults.meter, 'treble', {
     id: 'real',
@@ -69,10 +82,21 @@ const formatWithLattice = (
   formatter.formatToStave(voices, stave);
   applyFixedNoteSpacing(formatter, voices, stave);
 
+  return { stave, real, spacer, spacerVoiceItems };
+};
+
+/** Each spacer note's absolute x after `formatLattice`, keyed by item id. */
+const formatWithLattice = (
+  realItems: VoiceItem[],
+  score: Score = TEST_SCORE
+): Map<string, number> => {
+  const { spacer, spacerVoiceItems } = formatLattice(realItems, score);
   const positions = new Map<string, number>();
+
   spacerVoiceItems.forEach((item, index) => {
     positions.set(item.id, spacer.notes[index]!.getAbsoluteX());
   });
+
   return positions;
 };
 
@@ -160,5 +184,42 @@ describe('applyFixedNoteSpacing', () => {
     for (const [id, x] of plain) {
       expect(withTriplet.get(id)).toBeCloseTo(x, 6);
     }
+  });
+
+  it('anchors the first tick at the note start when nothing hangs left of it', () => {
+    const { stave, spacer } = formatLattice([
+      rest('r0', 'q'),
+      rest('r1', 'q'),
+      rest('r2', 'q'),
+      rest('r3', 'q'),
+    ]);
+
+    expect(spacer.notes[0]!.getAbsoluteX()).toBeCloseTo(
+      stave.getNoteStartX() + STAVE_PADDING,
+      6
+    );
+  });
+
+  it('insets the lattice so a beat-1 grace group stays inside the note area', () => {
+    /* GraceNoteGroup places its notes entirely LEFT of the owner's tick x
+     * (the placement step draw() runs first). A lattice starting at x = 0
+     * hung a beat-1 drag over the clef. */
+    const { stave, real } = formatLattice(
+      [note('a', 'q'), rest('r1', 'q'), rest('r2', 'q'), rest('r3', 'q')],
+      { ...TEST_SCORE, attachments: [drag('a')] }
+    );
+    const owner = real.notes[0] as StaveNote;
+    const group = owner.getModifiersByType(
+      'GraceNoteGroup'
+    )[0] as GraceNoteGroup;
+
+    group.alignSubNotesWithNote(group.getGraceNotes(), owner);
+
+    const noteAreaStartX = stave.getNoteStartX() + STAVE_PADDING;
+
+    for (const graceNote of group.getGraceNotes()) {
+      expect(graceNote.getAbsoluteX()).toBeGreaterThanOrEqual(noteAreaStartX);
+    }
+    expect(owner.getAbsoluteX()).toBeGreaterThan(noteAreaStartX);
   });
 });

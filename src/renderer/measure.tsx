@@ -106,12 +106,7 @@ export function measureScore(
         );
         const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
-        // joinVoices creates the modifier contexts that give accidentals,
-        // dots and grace groups their width; a lone voice needs them too.
-        if (vfVoices.length > 0) {
-          formatter.joinVoices(vfVoices);
-        }
-
+        formatter.joinVoices(vfVoices);
         allVoices.push(...vfVoices);
 
         return {
@@ -264,9 +259,7 @@ function measureStaffVerticalBounds({
     ({ measure, ownerStaffId, staffIndex, voiceArtifacts }) => {
       const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
-      if (vfVoices.length > 0) {
-        formatter.joinVoices(vfVoices);
-      }
+      formatter.joinVoices(vfVoices);
 
       voiceArtifacts.forEach(({ notes }, voiceIndex) => {
         const items = measure.voices[voiceIndex]?.items ?? [];

@@ -101,9 +101,13 @@ interface RenderMeasureOptions {
  * area, overriding the formatter's duration-weighted spacing. Runs after
  * `formatToStave` (the same post-format `setX` mechanism the formatter's own
  * tuning uses), so beams, tuplets and modifiers pick the final positions up
- * at draw time. The proportional span is clamped only by the LAST context's
- * width — with a spacer voice on the lattice that width is constant, so the
- * mapping stays a pure function of time.
+ * at draw time. The lattice follows VexFlow's own convention for its first
+ * tick: it starts at that context's left-modifier width (`totalLeftPx`), so a
+ * grace group or accidental on beat 1 hangs inside the note area instead of
+ * over the clef. The proportional span is clamped only by that inset and the
+ * LAST context's width — with a spacer voice on the lattice the latter is
+ * constant, so the mapping stays a pure function of time and of what hangs
+ * left of beat 1.
  */
 export function applyFixedNoteSpacing(
   formatter: Formatter,
@@ -143,11 +147,15 @@ export function applyFixedNoteSpacing(
   const stavePadding = Stave.defaultPadding - Stave.rightPadding;
   const noteAreaWidth =
     stave.getNoteEndX() - stave.getNoteStartX() - stavePadding;
-  let span = noteAreaWidth;
+  const firstLeft = contexts.map[contexts.list[0]!]!.getMetrics().totalLeftPx;
+  let span = noteAreaWidth - firstLeft;
 
   const lastContext = contexts.map[lastTickKey]!;
   const lastOverflow =
-    (lastTick / totalTicks) * span + lastContext.getWidth() - noteAreaWidth;
+    firstLeft +
+    (lastTick / totalTicks) * span +
+    lastContext.getWidth() -
+    noteAreaWidth;
 
   if (lastOverflow > 0) {
     span -= (lastOverflow * totalTicks) / lastTick;
@@ -158,7 +166,9 @@ export function applyFixedNoteSpacing(
   }
 
   for (const tickKey of contexts.list) {
-    contexts.map[tickKey]!.setX((tickKey / multiplier / totalTicks) * span);
+    contexts.map[tickKey]!.setX(
+      firstLeft + (tickKey / multiplier / totalTicks) * span
+    );
   }
 }
 
@@ -203,9 +213,7 @@ function renderMeasure(
       }));
       const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
-      if (vfVoices.length > 0) {
-        formatter.joinVoices(vfVoices);
-      }
+      formatter.joinVoices(vfVoices);
 
       return {
         vfVoices,

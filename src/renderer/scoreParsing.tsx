@@ -153,7 +153,10 @@ export function applyDots(note: StaveNote, dots?: 0 | 1 | 2 | 3) {
 /**
  * Adds pitch accidentals to the matching keys in a VexFlow note.
  */
-export function addPitchAccidentals(note: StaveNote, pitches: Pitch[]) {
+export function addPitchAccidentals(
+  note: StaveNote,
+  pitches: readonly Pitch[]
+) {
   pitches.forEach((pitch, index) => {
     if (!pitch.accidental) {
       return;
@@ -191,8 +194,9 @@ export function applyGhostParentheses(
  * Attaches the owner's articulation and grace-note modifiers to a VexFlow
  * note; dynamics and lyrics are drawn elsewhere.
  */
-export function applyNoteAttachments(
+export function applyNoteModifiers(
   note: StaveNote,
+  clef: Clef,
   attachments: NoteAttachment[] | undefined
 ) {
   if (!attachments) {
@@ -211,7 +215,7 @@ export function applyNoteAttachments(
 
       note.addModifier(articulation, 0);
     } else if (attachment.type === 'grace') {
-      applyGraceNoteGroup(note, attachment);
+      applyGraceNoteGroup(note, clef, attachment);
     }
   }
 }
@@ -219,25 +223,28 @@ export function applyNoteAttachments(
 /**
  * Grace notes stem up unless the owner was built stem-down (auto stems that
  * flip later in `Beam.generateBeams` are not followed); two or more are
- * beamed together.
+ * beamed together, with the acciaccatura slash on the first stem only.
  */
-function applyGraceNoteGroup(note: StaveNote, attachment: GraceNoteAttachment) {
+function applyGraceNoteGroup(
+  note: StaveNote,
+  clef: Clef,
+  attachment: GraceNoteAttachment
+) {
   if (attachment.notes.length === 0) {
     return;
   }
 
   const stemDirection =
     note.getStemDirection() === Stem.DOWN ? Stem.DOWN : Stem.UP;
-  const graceNotes = attachment.notes.map((graceNote) => {
+  const graceNotes = attachment.notes.map((graceNote, index) => {
     const vfGraceNote = new VFGraceNote({
+      clef,
       keys: [pitchToVFKey(graceNote.pitch)],
       duration: durationToVF(graceNote.duration),
-      slash: attachment.slash,
+      slash: index === 0 && attachment.slash === true,
       stemDirection,
     });
-    addPitchAccidentals(vfGraceNote, [graceNote.pitch]);
-    applyGhostParentheses(vfGraceNote, [graceNote.pitch]);
-    applyDots(vfGraceNote, graceNote.duration.dots);
+    decorateStaveNote(vfGraceNote, [graceNote.pitch], graceNote.duration);
     return vfGraceNote;
   });
   const group = new GraceNoteGroup(graceNotes);
@@ -247,6 +254,16 @@ function applyGraceNoteGroup(note: StaveNote, attachment: GraceNoteAttachment) {
   }
 
   note.addModifier(group, 0);
+}
+
+function decorateStaveNote(
+  note: StaveNote,
+  pitches: readonly Pitch[],
+  duration: DurationValue
+) {
+  addPitchAccidentals(note, pitches);
+  applyGhostParentheses(note, pitches);
+  applyDots(note, duration.dots);
 }
 
 export function indexAttachmentsByOwner(
@@ -321,10 +338,8 @@ export function voiceItemToStaveNote(
       duration: durationToVF(item.duration),
       stemDirection: toVFStemDirection(item.stemDirection),
     });
-    addPitchAccidentals(note, [item.pitch]);
-    applyGhostParentheses(note, [item.pitch]);
-    applyNoteAttachments(note, attachments);
-    applyDots(note, item.duration.dots);
+    decorateStaveNote(note, [item.pitch], item.duration);
+    applyNoteModifiers(note, clef, attachments);
     return note;
   }
 
@@ -334,10 +349,8 @@ export function voiceItemToStaveNote(
     duration: durationToVF(item.duration),
     stemDirection: toVFStemDirection(item.stemDirection),
   });
-  addPitchAccidentals(note, item.pitches);
-  applyGhostParentheses(note, item.pitches);
-  applyNoteAttachments(note, attachments);
-  applyDots(note, item.duration.dots);
+  decorateStaveNote(note, item.pitches, item.duration);
+  applyNoteModifiers(note, clef, attachments);
   return note;
 }
 

@@ -453,7 +453,7 @@ describe('grace note attachments', () => {
     expect(groupBeams(groups[0]!)).toHaveLength(0);
   });
 
-  it('beams a two-note grace group and keeps it unslashed on request', () => {
+  it('beams a two-note grace group and slashes only its first note', () => {
     const item: Note = {
       id: 'drag-owner',
       type: 'note',
@@ -462,23 +462,46 @@ describe('grace note attachments', () => {
       duration: { length: 'q' },
     };
 
-    const note = voiceItemToStaveNote(item, 'percussion', [
-      graceAttachment(item.id, 2, false),
+    const slashesOf = (slash: boolean) => {
+      const note = voiceItemToStaveNote(item, 'percussion', [
+        graceAttachment(item.id, 2, slash),
+      ]) as StaveNote;
+      const groups = getGraceNoteGroups(note);
+
+      expect(groups).toHaveLength(1);
+
+      const graceNotes = groups[0]!.getGraceNotes();
+      expect(graceNotes).toHaveLength(2);
+      expect(graceNotes.map((graceNote) => graceNote.getKeys()[0])).toEqual([
+        'c/5',
+        'd/5',
+      ]);
+      expect(groupBeams(groups[0]!)).toHaveLength(1);
+
+      return graceNotes.map((graceNote) => graceNoteInternals(graceNote).slash);
+    };
+
+    expect(slashesOf(true)).toEqual([true, false]);
+    expect(slashesOf(false)).toEqual([false, false]);
+  });
+
+  it('places grace notes with the owner clef', () => {
+    const item: Note = {
+      id: 'bass-flam-owner',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'bass', [
+      graceAttachment(item.id, 1),
     ]) as StaveNote;
-    const groups = getGraceNoteGroups(note);
+    const graceNote = getGraceNoteGroups(note)[0]!.getGraceNotes()[0]!;
 
-    expect(groups).toHaveLength(1);
-
-    const graceNotes = groups[0]!.getGraceNotes();
-    expect(graceNotes).toHaveLength(2);
-    expect(graceNotes.map((graceNote) => graceNote.getKeys()[0])).toEqual([
-      'c/5',
-      'd/5',
-    ]);
-    expect(
-      graceNotes.every((graceNote) => !graceNoteInternals(graceNote).slash)
-    ).toBe(true);
-    expect(groupBeams(groups[0]!)).toHaveLength(1);
+    expect((graceNote as StaveNote).getKeyProps()[0]?.line).toBe(
+      note.getKeyProps()[0]?.line
+    );
   });
 
   it('attaches grace notes to chord owners', () => {

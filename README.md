@@ -257,7 +257,17 @@ const flam: NoteAttachment = {
   ownerId: 'note-1',
   type: 'grace',
   slash: true,
-  notes: [{ pitch: { step: 'C', octave: 5 }, duration: { length: '16' } }],
+  notes: [{ pitch: { step: 'C', octave: 5 }, duration: { length: '8' } }],
+};
+
+const drag: NoteAttachment = {
+  id: 'drag-1',
+  ownerId: 'note-2',
+  type: 'grace',
+  notes: [
+    { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
+    { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
+  ],
 };
 ```
 
@@ -266,12 +276,13 @@ const flam: NoteAttachment = {
 - `pitch.ghost`: wraps the notehead in parentheses.
 - Articulation attachments accept an optional `placement` of `above` (default)
   or `below`.
-- Grace attachments draw their `notes` before the owner (a flam with one, a
-  drag with two, beamed); `slash` adds the acciaccatura slash. Grace notes stem
-  up unless the owner's `stemDirection` is `down`.
+- Grace attachments draw their `notes` before the owner (a flam is one slashed
+  grace 8th, a drag two beamed grace 16ths); `slash` adds the acciaccatura
+  slash through the first stem. Grace notes stem up unless the owner's
+  `stemDirection` is `down`.
 
 See `example/src/screens/DrumKitExample.tsx` for a full drum-kit groove with
-two voices, a triplet, and an open hi-hat accent.
+two voices, a triplet, an open hi-hat accent, a flam and a drag.
 
 ## Draw Directly with VexFlow
 

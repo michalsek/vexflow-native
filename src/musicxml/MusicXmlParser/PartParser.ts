@@ -35,6 +35,8 @@ export function parsePart(
       parseMeasure(measure, measureIndex, builds, state);
     });
 
+  state.pendingGraceNotes.clear();
+
   const staves = builds.map(
     (staff): Staff => ({
       id: staff.id,

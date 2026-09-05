@@ -30,6 +30,7 @@ const SNARE: Pitch = { step: 'C', octave: 5 };
 const GHOST_SNARE: Pitch = { step: 'C', octave: 5, ghost: true };
 const KICK: Pitch = { step: 'F', octave: 4 };
 
+const SIXTEENTH: DurationValue = { length: '16' };
 const EIGHTH: DurationValue = { length: '8' };
 const QUARTER: DurationValue = { length: 'q' };
 
@@ -70,10 +71,10 @@ function feetVoice(id: string, measure: number): Voice {
   };
 }
 
-// One-bar rock groove: hi-hat 8ths (one open-hat accent), snare backbeat with
-// a ghost note, kick quarters, and a hi-hat triplet on beat three. Voices use
-// the default strict timing mode, so the 3:2 triplet exercises strict-mode
-// tick scaling.
+// Two-bar rock groove: hi-hat 8ths (one open-hat accent), snare backbeat with
+// a ghost note, a flam and a drag, kick quarters, and a hi-hat triplet on beat
+// three. Voices use the default strict timing mode, so the 3:2 triplet
+// exercises strict-mode tick scaling.
 export function createDrumKitScore(): Score {
   const measureOne = {
     id: 'drums-m1',
@@ -120,6 +121,22 @@ export function createDrumKitScore(): Score {
       ownerId: 'drums-m1-open-hh',
       type: 'articulation',
       articulation: 'accent',
+    },
+    {
+      id: 'drums-m1-sn-1-flam',
+      ownerId: 'drums-m1-sn-1',
+      type: 'grace',
+      slash: true,
+      notes: [{ pitch: SNARE, duration: EIGHTH }],
+    },
+    {
+      id: 'drums-m2-sn-2-drag',
+      ownerId: 'drums-m2-sn-2',
+      type: 'grace',
+      notes: [
+        { pitch: SNARE, duration: SIXTEENTH },
+        { pitch: SNARE, duration: SIXTEENTH },
+      ],
     },
   ];
 

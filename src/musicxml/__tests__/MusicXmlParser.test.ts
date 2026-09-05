@@ -322,6 +322,42 @@ describe('parseMusicXmlToScore', () => {
     ]);
   });
 
+  it('skips a grace note that carries no <voice>', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Drums</part-name></score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>percussion</sign></clef>
+      </attributes>
+      <note>
+        <grace/>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <type>eighth</type>
+        <staff>1</staff>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>5</octave></pitch>
+        <duration>4</duration>
+        <voice>1</voice>
+        <type>whole</type>
+        <staff>1</staff>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    const score = parseMusicXmlToScore(xml, { scoreId: 'voiceless-grace' });
+
+    expect(score.staves[0]?.measures[0]?.voices[0]?.items).toHaveLength(1);
+    expect(score.attachments).toBeUndefined();
+  });
+
   it('parses the bundled MusicXML fixture', () => {
     const fixturePath = path.join(
       __dirname,
