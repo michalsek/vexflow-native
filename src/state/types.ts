@@ -64,7 +64,9 @@ export type Articulation =
   | 'accent'
   | 'marcato'
   | 'staccatissimo'
-  | 'fermata';
+  | 'fermata'
+  | 'open'
+  | 'stopped';
 
 export type Dynamic =
   | 'ppp'

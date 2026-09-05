@@ -74,6 +74,7 @@ const SIMPLE_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
         <notations>
           <tied type="stop"/>
           <slur type="stop" number="1"/>
+          <technical><fingering>1</fingering><open/></technical>
         </notations>
       </note>
       <note>
@@ -166,6 +167,10 @@ describe('parseMusicXmlToScore', () => {
         expect.objectContaining({
           type: 'articulation',
           articulation: 'staccato',
+        }),
+        expect.objectContaining({
+          type: 'articulation',
+          articulation: 'open',
         }),
         expect.objectContaining({ type: 'lyric', text: 'la', verse: 1 }),
       ])

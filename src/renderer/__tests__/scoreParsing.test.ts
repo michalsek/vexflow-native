@@ -36,6 +36,7 @@ import type {
 } from '../../state';
 import { resolveItemHeadCenterX } from '../render';
 import {
+  ARTICULATION_TO_VF_CODE,
   beamGroupsToVF,
   durationToVF,
   indexAttachmentsByOwner,
@@ -322,6 +323,44 @@ describe('articulation attachments', () => {
     );
     expect(articulations).toHaveLength(1);
     expect(articulations[0]?.getPosition()).toBe(ModifierPosition.BELOW);
+  });
+
+  it('renders open and stopped as the VexFlow harmonic and plus codes above', () => {
+    expect(ARTICULATION_TO_VF_CODE.open).toBe('ah');
+    expect(ARTICULATION_TO_VF_CODE.stopped).toBe('a+');
+
+    const voice = makeQuarterNotesVoice('voice-artic-open');
+    const score: Score = {
+      ...TEST_SCORE,
+      attachments: [
+        {
+          id: 'artic-open-1',
+          ownerId: 'voice-artic-open-n1',
+          type: 'articulation',
+          articulation: 'open',
+        },
+        {
+          id: 'artic-stopped-1',
+          ownerId: 'voice-artic-open-n2',
+          type: 'articulation',
+          articulation: 'stopped',
+        },
+      ],
+    };
+
+    const { notes } = makeVFVoice(score, score.defaults.meter, 'treble', voice);
+
+    for (const index of [0, 1]) {
+      const articulations = getModifiersByCategory(
+        notes[index] as StaveNote,
+        'Articulation'
+      );
+      expect(articulations).toHaveLength(1);
+      expect(articulations[0]?.getPosition()).toBe(ModifierPosition.ABOVE);
+    }
+    expect(
+      getModifiersByCategory(notes[2] as StaveNote, 'Articulation')
+    ).toHaveLength(0);
   });
 
   it('skips articulation attachments on rests', () => {
