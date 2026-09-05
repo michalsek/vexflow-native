@@ -11,6 +11,7 @@ import * as VexFlow from 'vexflow';
 import {
   Beam,
   Formatter,
+  Fraction as VFFraction,
   ModifierPosition,
   Stave,
   StaveNote,
@@ -35,6 +36,7 @@ import type {
 } from '../../state';
 import { resolveItemHeadCenterX } from '../render';
 import {
+  beamGroupsToVF,
   durationToVF,
   indexAttachmentsByOwner,
   makeVFVoice,
@@ -70,6 +72,23 @@ function makeEighthNotes(
       length: '8',
     },
     stemDirection,
+  }));
+}
+
+function makeEighthNoteRun(voiceId: string, count: number): VoiceItem[] {
+  const steps = ['C', 'D', 'E', 'F', 'G', 'A', 'B'] as const;
+
+  return Array.from({ length: count }, (_, index) => ({
+    id: `${voiceId}-n${index + 1}`,
+    type: 'note' as const,
+    voiceId,
+    pitch: {
+      step: steps[index % steps.length] ?? 'C',
+      octave: 4,
+    },
+    duration: {
+      length: '8' as const,
+    },
   }));
 }
 
@@ -550,7 +569,7 @@ describe('makeVFVoice', () => {
     ).toThrow(/Too many ticks/);
   });
 
-  it('keeps default beam generation options for voices without explicit stems', () => {
+  it("beams by the meter's conventional groups when it declares none", () => {
     const generateBeamsSpy = jest.spyOn(Beam, 'generateBeams');
     const voice = makeVoice(
       'voice-without-stems',
@@ -559,10 +578,45 @@ describe('makeVFVoice', () => {
 
     makeVFVoice(TEST_SCORE, TEST_SCORE.defaults.meter, 'treble', voice);
 
-    expect(generateBeamsSpy).toHaveBeenLastCalledWith(
-      expect.any(Array),
-      undefined
+    expect(generateBeamsSpy).toHaveBeenLastCalledWith(expect.any(Array), {
+      groups: [new VFFraction(1, 4)],
+    });
+  });
+
+  it('groups compound meters in dotted-quarter beams', () => {
+    const voice = makeVoice(
+      'voice-six-eight',
+      makeEighthNoteRun('voice-six-eight', 6)
     );
+
+    const { beams } = makeVFVoice(
+      TEST_SCORE,
+      { beats: 6, beatUnit: 8 },
+      'treble',
+      voice
+    );
+
+    expect(beams.map((beam) => beam.getNotes().length)).toEqual([3, 3]);
+  });
+
+  it("prefers the meter's explicit beam groups over the defaults", () => {
+    const voice = makeVoice(
+      'voice-explicit-groups',
+      makeEighthNoteRun('voice-explicit-groups', 6)
+    );
+
+    const { beams } = makeVFVoice(
+      TEST_SCORE,
+      { beats: 6, beatUnit: 8, beamGroups: [{ num: 2, den: 8 }] },
+      'treble',
+      voice
+    );
+
+    expect(beams.map((beam) => beam.getNotes().length)).toEqual([2, 2, 2]);
+  });
+
+  it('returns no beam groups without a meter', () => {
+    expect(beamGroupsToVF(undefined)).toBeUndefined();
   });
 });
 
