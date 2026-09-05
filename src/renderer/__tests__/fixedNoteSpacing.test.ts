@@ -45,15 +45,18 @@ const spacerItems = (): VoiceItem[] =>
 
 /** Formats real + spacer voices to a stave with fixed spacing applied and
  * returns each spacer note's absolute x, keyed by item id. */
-const formatWithLattice = (realItems: VoiceItem[]): Map<string, number> => {
+const formatWithLattice = (
+  realItems: VoiceItem[],
+  score: Score = TEST_SCORE
+): Map<string, number> => {
   const stave = new Stave(10, 40, 700);
-  const real = makeVFVoice(TEST_SCORE, TEST_SCORE.defaults.meter, 'treble', {
+  const real = makeVFVoice(score, score.defaults.meter, 'treble', {
     id: 'real',
     index: 0,
     items: realItems,
   });
   const spacerVoiceItems = spacerItems();
-  const spacer = makeVFVoice(TEST_SCORE, TEST_SCORE.defaults.meter, 'treble', {
+  const spacer = makeVFVoice(score, score.defaults.meter, 'treble', {
     id: 'spacer',
     index: 1,
     items: spacerVoiceItems,
@@ -117,6 +120,45 @@ describe('applyFixedNoteSpacing', () => {
 
     for (const [id, x] of sparse) {
       expect(dense.get(id)).toBeCloseTo(x, 6);
+    }
+  });
+
+  it('keeps the lattice in place when the real voice holds a tuplet', () => {
+    /* A tuplet raises the formatter's tick resolution multiplier (3 for a
+     * triplet) and its tick-context keys with it. Comparing those keys against
+     * the voice's plain total ticks scaled every position by the multiplier
+     * and the overflow clamp then crushed the last context flush against the
+     * note end — a beat holding only a downbeat shrank to a sliver. */
+    const plain = formatWithLattice([
+      rest('r0', 'q'),
+      rest('r1', 'q'),
+      rest('r2', 'q'),
+      rest('r3', 'q'),
+    ]);
+    const withTriplet = formatWithLattice(
+      [
+        rest('r0', 'q'),
+        rest('r1', 'q'),
+        note('t1', '8'),
+        note('t2', '8'),
+        note('t3', '8'),
+        note('d', 'q'),
+      ],
+      {
+        ...TEST_SCORE,
+        tuplets: [
+          {
+            id: 'triplet',
+            voiceId: 'real',
+            itemIds: ['t1', 't2', 't3'],
+            ratio: { num: 3, den: 2 },
+          },
+        ],
+      }
+    );
+
+    for (const [id, x] of plain) {
+      expect(withTriplet.get(id)).toBeCloseTo(x, 6);
     }
   });
 });
