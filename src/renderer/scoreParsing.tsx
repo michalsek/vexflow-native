@@ -83,6 +83,8 @@ export const ARTICULATION_TO_VF_CODE: Record<Articulation, string> = {
   accent: 'a>',
   marcato: 'a^',
   fermata: 'a@',
+  open: 'ah',
+  stopped: 'a+',
 };
 
 /**

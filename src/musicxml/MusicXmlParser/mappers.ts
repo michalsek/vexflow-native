@@ -226,9 +226,23 @@ export function articulationsFromNotations(
     articulations.push('fermata');
   }
 
-  return articulations.filter(
+  const technical = childrenNamed(notations, 'technical').flatMap((group) =>
+    group.children.map((child) => mapTechnical(child.name))
+  );
+
+  return [...articulations, ...technical].filter(
     (item): item is Articulation => item !== undefined
   );
+}
+
+function mapTechnical(name: string): Articulation | undefined {
+  switch (name) {
+    case 'open':
+    case 'stopped':
+      return name;
+    default:
+      return undefined;
+  }
 }
 
 function mapArticulation(name: string): Articulation | undefined {
