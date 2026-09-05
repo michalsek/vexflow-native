@@ -104,6 +104,8 @@ export interface Pitch {
   accidental?: Accidental;
   notehead?: Notehead;
   ghost?: boolean;
+  /** A note or chord with any accented pitch draws one accent (`>`) above it. */
+  accent?: boolean;
 }
 
 export interface DurationValue {
