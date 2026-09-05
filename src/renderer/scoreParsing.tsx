@@ -300,14 +300,22 @@ export function voiceItemToStaveNote(
 }
 
 /**
- * Translates beam group fractions into the VexFlow representation.
+ * Beam groups for a meter: its explicit `beamGroups`, otherwise VexFlow's
+ * conventional grouping for the time signature (quarters in x/4, dotted
+ * quarters in 6/8, 9/8, 12/8, halves in x/2).
  */
 export function beamGroupsToVF(meter?: Meter): VFFraction[] | undefined {
-  if (!meter?.beamGroups?.length) {
+  if (!meter) {
     return undefined;
   }
 
-  return meter.beamGroups.map((group) => new VFFraction(group.num, group.den));
+  if (meter.beamGroups?.length) {
+    return meter.beamGroups.map(
+      (group) => new VFFraction(group.num, group.den)
+    );
+  }
+
+  return Beam.getDefaultBeamGroups(`${meter.beats}/${meter.beatUnit}`);
 }
 
 function hasExplicitStemDirection(item: VoiceItem): boolean {
