@@ -203,7 +203,7 @@ function renderMeasure(
       }));
       const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
-      if (vfVoices.length > 1) {
+      if (vfVoices.length > 0) {
         formatter.joinVoices(vfVoices);
       }
 

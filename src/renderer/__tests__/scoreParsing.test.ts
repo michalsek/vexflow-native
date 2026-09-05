@@ -12,6 +12,8 @@ import {
   Beam,
   Formatter,
   Fraction as VFFraction,
+  GraceNote as VFGraceNote,
+  GraceNoteGroup,
   ModifierPosition,
   Stave,
   StaveNote,
@@ -27,6 +29,8 @@ const Glyphs = (VexFlow as unknown as { Glyphs: Record<string, string> })
 import { installVexflowReactNativeFallbacks } from '../../base/setupVexflowReactNative';
 import type {
   Chord,
+  GraceNote,
+  GraceNoteAttachment,
   Note,
   NoteAttachment,
   Rest,
@@ -389,6 +393,231 @@ describe('articulation attachments', () => {
     expect(
       getModifiersByCategory(notes[0] as StaveNote, 'Articulation')
     ).toHaveLength(0);
+  });
+});
+
+describe('grace note attachments', () => {
+  function graceAttachment(
+    ownerId: string,
+    count: 1 | 2,
+    slash = true
+  ): GraceNoteAttachment {
+    const notes: GraceNote[] = [
+      { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
+      { pitch: { step: 'D', octave: 5 }, duration: { length: '16' } },
+    ];
+
+    return {
+      id: `${ownerId}-grace`,
+      ownerId,
+      type: 'grace',
+      slash,
+      notes: notes.slice(0, count),
+    };
+  }
+
+  function getGraceNoteGroups(note: StaveNote): GraceNoteGroup[] {
+    return getModifiersByCategory(note, 'GraceNoteGroup') as GraceNoteGroup[];
+  }
+
+  function graceNoteInternals(graceNote: unknown) {
+    return graceNote as { slash: boolean; getStemDirection: () => number };
+  }
+
+  function groupBeams(group: GraceNoteGroup): Beam[] {
+    return (group as unknown as { beams: Beam[] }).beams;
+  }
+
+  it('attaches a single slashed grace note as a GraceNoteGroup on the left', () => {
+    const item: Note = {
+      id: 'flam-owner',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      graceAttachment(item.id, 1),
+    ]) as StaveNote;
+    const groups = getGraceNoteGroups(note);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.getPosition()).toBe(ModifierPosition.LEFT);
+
+    const graceNotes = groups[0]!.getGraceNotes();
+    expect(graceNotes).toHaveLength(1);
+    expect(graceNotes[0]).toBeInstanceOf(VFGraceNote);
+    expect(graceNoteInternals(graceNotes[0]).slash).toBe(true);
+    expect(graceNotes[0]?.getDuration()).toBe('16');
+    expect(groupBeams(groups[0]!)).toHaveLength(0);
+  });
+
+  it('beams a two-note grace group and keeps it unslashed on request', () => {
+    const item: Note = {
+      id: 'drag-owner',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      graceAttachment(item.id, 2, false),
+    ]) as StaveNote;
+    const groups = getGraceNoteGroups(note);
+
+    expect(groups).toHaveLength(1);
+
+    const graceNotes = groups[0]!.getGraceNotes();
+    expect(graceNotes).toHaveLength(2);
+    expect(graceNotes.map((graceNote) => graceNote.getKeys()[0])).toEqual([
+      'c/5',
+      'd/5',
+    ]);
+    expect(
+      graceNotes.every((graceNote) => !graceNoteInternals(graceNote).slash)
+    ).toBe(true);
+    expect(groupBeams(groups[0]!)).toHaveLength(1);
+  });
+
+  it('attaches grace notes to chord owners', () => {
+    const item: Chord = {
+      id: 'flam-chord',
+      type: 'chord',
+      voiceId: 'voice',
+      pitches: [
+        { step: 'C', octave: 5 },
+        { step: 'G', octave: 5, notehead: 'x' },
+      ],
+      duration: { length: '8' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      graceAttachment(item.id, 1),
+    ]) as StaveNote;
+    const groups = getGraceNoteGroups(note);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.getGraceNotes()).toHaveLength(1);
+  });
+
+  it('stems grace notes up unless the owner stems down', () => {
+    const stemsUp: Note = {
+      id: 'grace-stem-up',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+      stemDirection: 'up',
+    };
+    const stemsDown: Note = {
+      ...stemsUp,
+      id: 'grace-stem-down',
+      stemDirection: 'down',
+    };
+    const autoStem: Note = {
+      ...stemsUp,
+      id: 'grace-stem-auto',
+      stemDirection: undefined,
+    };
+
+    const stemsOf = (item: Note) =>
+      getGraceNoteGroups(
+        voiceItemToStaveNote(item, 'treble', [
+          graceAttachment(item.id, 2),
+        ]) as StaveNote
+      )[0]!
+        .getGraceNotes()
+        .map((graceNote) => graceNoteInternals(graceNote).getStemDirection());
+
+    expect(stemsOf(stemsUp)).toEqual([Stem.UP, Stem.UP]);
+    expect(stemsOf(stemsDown)).toEqual([Stem.DOWN, Stem.DOWN]);
+    expect(stemsOf(autoStem)).toEqual([Stem.UP, Stem.UP]);
+  });
+
+  it('carries grace noteheads and accidentals through pitch mapping', () => {
+    const item: Note = {
+      id: 'grace-notehead-owner',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+    const attachment: GraceNoteAttachment = {
+      id: 'grace-notehead',
+      ownerId: item.id,
+      type: 'grace',
+      notes: [
+        {
+          pitch: { step: 'G', octave: 5, notehead: 'x', accidental: '#' },
+          duration: { length: '8' },
+        },
+      ],
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      attachment,
+    ]) as StaveNote;
+    const graceNote = getGraceNoteGroups(note)[0]!.getGraceNotes()[0]!;
+
+    expect(graceNote.getKeys()[0]).toBe('g#/5/x');
+    expect((graceNote as StaveNote).getKeyProps()[0]?.code).toBe(
+      Glyphs.noteheadXBlack
+    );
+    expect(graceNote.getModifiersByType('Accidental')).toHaveLength(1);
+  });
+
+  it('skips grace attachments on rests and empty groups', () => {
+    const rest: Rest = {
+      id: 'grace-rest',
+      type: 'rest',
+      voiceId: 'voice',
+      duration: { length: 'q' },
+    };
+    const owner: Note = {
+      id: 'grace-empty-owner',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+
+    const restNote = voiceItemToStaveNote(rest, 'treble', [
+      graceAttachment(rest.id, 1),
+    ]) as StaveNote;
+    const emptyOwner = voiceItemToStaveNote(owner, 'treble', [
+      { ...graceAttachment(owner.id, 1), notes: [] },
+    ]) as StaveNote;
+
+    expect(getGraceNoteGroups(restNote)).toHaveLength(0);
+    expect(getGraceNoteGroups(emptyOwner)).toHaveLength(0);
+  });
+
+  it('formats a voice whose notes carry grace groups', () => {
+    const voiceId = 'voice-grace-format';
+    const voice = makeVoice(voiceId, makeEighthNotes(voiceId));
+    const score: Score = {
+      ...TEST_SCORE,
+      attachments: [graceAttachment(`${voiceId}-n1`, 2)],
+    };
+
+    const { vfVoice, notes } = makeVFVoice(
+      score,
+      score.defaults.meter,
+      'treble',
+      voice
+    );
+    const stave = new Stave(0, 0, 400);
+    notes.forEach((note) => note.setStave(stave));
+    const formatter = new Formatter();
+
+    expect(() => {
+      formatter.joinVoices([vfVoice]).formatToStave([vfVoice], stave);
+    }).not.toThrow();
+    expect(
+      getGraceNoteGroups(notes[0] as StaveNote)[0]!.getWidth()
+    ).toBeGreaterThan(0);
   });
 });
 

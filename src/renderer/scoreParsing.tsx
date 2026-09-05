@@ -6,6 +6,8 @@ import {
   Element,
   Fraction as VFFraction,
   GhostNote,
+  GraceNote as VFGraceNote,
+  GraceNoteGroup,
   ModifierPosition,
   Parenthesis,
   StaveNote,
@@ -20,6 +22,7 @@ import type {
   Clef,
   KeySignature,
   DurationValue,
+  GraceNoteAttachment,
   Meter,
   NoteAttachment,
   Notehead,
@@ -184,7 +187,11 @@ export function applyGhostParentheses(
   });
 }
 
-export function applyArticulations(
+/**
+ * Attaches the owner's articulation and grace-note modifiers to a VexFlow
+ * note; dynamics and lyrics are drawn elsewhere.
+ */
+export function applyNoteAttachments(
   note: StaveNote,
   attachments: NoteAttachment[] | undefined
 ) {
@@ -193,20 +200,53 @@ export function applyArticulations(
   }
 
   for (const attachment of attachments) {
-    if (attachment.type !== 'articulation') {
-      continue;
+    if (attachment.type === 'articulation') {
+      const articulation = new VFArticulation(
+        ARTICULATION_TO_VF_CODE[attachment.articulation]
+      );
+
+      if (attachment.placement === 'below') {
+        articulation.setPosition(ModifierPosition.BELOW);
+      }
+
+      note.addModifier(articulation, 0);
+    } else if (attachment.type === 'grace') {
+      applyGraceNoteGroup(note, attachment);
     }
-
-    const articulation = new VFArticulation(
-      ARTICULATION_TO_VF_CODE[attachment.articulation]
-    );
-
-    if (attachment.placement === 'below') {
-      articulation.setPosition(ModifierPosition.BELOW);
-    }
-
-    note.addModifier(articulation, 0);
   }
+}
+
+/**
+ * Grace notes stem up unless the owner was built stem-down (auto stems that
+ * flip later in `Beam.generateBeams` are not followed); two or more are
+ * beamed together.
+ */
+function applyGraceNoteGroup(note: StaveNote, attachment: GraceNoteAttachment) {
+  if (attachment.notes.length === 0) {
+    return;
+  }
+
+  const stemDirection =
+    note.getStemDirection() === Stem.DOWN ? Stem.DOWN : Stem.UP;
+  const graceNotes = attachment.notes.map((graceNote) => {
+    const vfGraceNote = new VFGraceNote({
+      keys: [pitchToVFKey(graceNote.pitch)],
+      duration: durationToVF(graceNote.duration),
+      slash: attachment.slash,
+      stemDirection,
+    });
+    addPitchAccidentals(vfGraceNote, [graceNote.pitch]);
+    applyGhostParentheses(vfGraceNote, [graceNote.pitch]);
+    applyDots(vfGraceNote, graceNote.duration.dots);
+    return vfGraceNote;
+  });
+  const group = new GraceNoteGroup(graceNotes);
+
+  if (graceNotes.length > 1) {
+    group.beamNotes();
+  }
+
+  note.addModifier(group, 0);
 }
 
 export function indexAttachmentsByOwner(
@@ -283,7 +323,7 @@ export function voiceItemToStaveNote(
     });
     addPitchAccidentals(note, [item.pitch]);
     applyGhostParentheses(note, [item.pitch]);
-    applyArticulations(note, attachments);
+    applyNoteAttachments(note, attachments);
     applyDots(note, item.duration.dots);
     return note;
   }
@@ -296,7 +336,7 @@ export function voiceItemToStaveNote(
   });
   addPitchAccidentals(note, item.pitches);
   applyGhostParentheses(note, item.pitches);
-  applyArticulations(note, attachments);
+  applyNoteAttachments(note, attachments);
   applyDots(note, item.duration.dots);
   return note;
 }

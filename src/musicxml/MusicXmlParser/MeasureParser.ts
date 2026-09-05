@@ -1,8 +1,10 @@
 import type {
   Chord,
   Direction,
+  DurationValue,
   Measure,
   MeasureState,
+  Pitch,
   Voice,
   VoiceItem,
 } from '../../state';
@@ -204,11 +206,13 @@ function parseNote(
     );
   }
 
+  const voiceName = requiredChildText(note, 'voice');
+
   if (hasChild(note, 'grace')) {
+    collectGraceNote(note, voiceName, state);
     return currentPosition;
   }
 
-  const voiceName = requiredChildText(note, 'voice');
   const cursor = getVoiceCursor(
     voiceName,
     staffIndex,
@@ -239,6 +243,7 @@ function parseNote(
     ? mergeChordTone(voice, item, note)
     : pushItem(voice, item);
 
+  attachPendingGraceNotes(itemId, voiceName, state);
   applyNoteAttachments(note, itemId, staffNumber, voice.id, state);
 
   if (isChordTone) {
@@ -330,20 +335,7 @@ function createVoiceItem(
   isChordTone: boolean,
   state: ParserState
 ): VoiceItem {
-  const typeText = childText(note, 'type');
-  const type = typeText
-    ? mapDurationType(typeText)
-    : inferDurationType(requiredNumberText(note, 'duration'), state.divisions);
-  const dotCount = childrenNamed(note, 'dot').length;
-
-  if (dotCount > 3) {
-    throw new MusicXmlParseError('More than three dots are unsupported');
-  }
-
-  const duration = {
-    length: type,
-    dots: dotCount ? (dotCount as 1 | 2 | 3) : undefined,
-  };
+  const duration = parseDuration(note, state);
 
   if (hasChild(note, 'rest')) {
     if (isChordTone) {
@@ -359,19 +351,86 @@ function createVoiceItem(
     };
   }
 
-  const pitch = mapPitch(
-    firstChild(note, 'pitch'),
-    childText(note, 'accidental')
-  );
-
   return {
     id: '',
     type: 'note',
-    pitch,
+    pitch: parsePitch(note),
     duration,
     voiceId: voice.id,
     stemDirection: mapStemDirection(childText(note, 'stem')),
   };
+}
+
+function parseDuration(note: XmlElement, state: ParserState): DurationValue {
+  const typeText = childText(note, 'type');
+  const type = typeText
+    ? mapDurationType(typeText)
+    : inferDurationType(requiredNumberText(note, 'duration'), state.divisions);
+  const dotCount = childrenNamed(note, 'dot').length;
+
+  if (dotCount > 3) {
+    throw new MusicXmlParseError('More than three dots are unsupported');
+  }
+
+  return {
+    length: type,
+    dots: dotCount ? (dotCount as 1 | 2 | 3) : undefined,
+  };
+}
+
+function parsePitch(note: XmlElement): Pitch {
+  return mapPitch(firstChild(note, 'pitch'), childText(note, 'accidental'));
+}
+
+/**
+ * Grace chord tones keep only their first pitch; the group's slash comes
+ * from its first grace note.
+ */
+function collectGraceNote(
+  note: XmlElement,
+  voiceName: string,
+  state: ParserState
+) {
+  if (hasChild(note, 'chord')) {
+    return;
+  }
+
+  const graceNote = {
+    pitch: parsePitch(note),
+    duration: parseDuration(note, state),
+  };
+  const pending = state.pendingGraceNotes.get(voiceName);
+
+  if (pending) {
+    pending.notes.push(graceNote);
+    return;
+  }
+
+  state.pendingGraceNotes.set(voiceName, {
+    notes: [graceNote],
+    slash: attr(firstChild(note, 'grace'), 'slash') === 'yes',
+  });
+}
+
+function attachPendingGraceNotes(
+  itemId: string,
+  voiceName: string,
+  state: ParserState
+) {
+  const pending = state.pendingGraceNotes.get(voiceName);
+
+  if (!pending) {
+    return;
+  }
+
+  state.pendingGraceNotes.delete(voiceName);
+  state.attachments.push({
+    id: `${itemId}-grace`,
+    ownerId: itemId,
+    type: 'grace',
+    notes: pending.notes,
+    ...(pending.slash ? { slash: true } : {}),
+  });
 }
 
 function pushItem(voice: Voice, item: VoiceItem): string {

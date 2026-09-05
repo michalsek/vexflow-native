@@ -251,6 +251,14 @@ const accent: NoteAttachment = {
   articulation: 'accent',
   placement: 'above',
 };
+
+const flam: NoteAttachment = {
+  id: 'flam-1',
+  ownerId: 'note-1',
+  type: 'grace',
+  slash: true,
+  notes: [{ pitch: { step: 'C', octave: 5 }, duration: { length: '16' } }],
+};
 ```
 
 - `pitch.notehead`: `x`, `circle-x`, `diamond`, `circle`, `square`, `triangle`,
@@ -258,6 +266,9 @@ const accent: NoteAttachment = {
 - `pitch.ghost`: wraps the notehead in parentheses.
 - Articulation attachments accept an optional `placement` of `above` (default)
   or `below`.
+- Grace attachments draw their `notes` before the owner (a flam with one, a
+  drag with two, beamed); `slash` adds the acciaccatura slash. Grace notes stem
+  up unless the owner's `stemDirection` is `down`.
 
 See `example/src/screens/DrumKitExample.tsx` for a full drum-kit groove with
 two voices, a triplet, and an open hi-hat accent.

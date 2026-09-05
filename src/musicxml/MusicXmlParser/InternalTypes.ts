@@ -1,5 +1,6 @@
 import type {
   Dynamic,
+  GraceNote,
   Measure,
   NoteAttachment,
   ScoreDefaults,
@@ -26,6 +27,11 @@ type ActiveSpanner = {
   itemId: string;
 };
 
+export type PendingGraceNotes = {
+  notes: GraceNote[];
+  slash: boolean;
+};
+
 export type ParserState = {
   scoreId: string;
   divisions: number;
@@ -35,6 +41,8 @@ export type ParserState = {
   slurs: Slur[];
   tuplets: TupletGroup[];
   pendingDynamics: Map<string, Dynamic[]>;
+  /** Keyed by MusicXML voice name; consumed by that voice's next note. */
+  pendingGraceNotes: Map<string, PendingGraceNotes>;
   activeTies: Map<string, ActiveSpanner>;
   activeSlurs: Map<string, ActiveSpanner>;
   activeTuplets: Map<string, TupletGroup>;
