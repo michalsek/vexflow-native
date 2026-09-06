@@ -190,6 +190,36 @@ export function applyGhostParentheses(
   });
 }
 
+function hasAccentAttachment(attachments: NoteAttachment[] | undefined) {
+  return (
+    attachments?.some(
+      (attachment) =>
+        attachment.type === 'articulation' &&
+        attachment.articulation === 'accent'
+    ) ?? false
+  );
+}
+
+/**
+ * Draws one accent above a note whose pitches carry the `accent` flag, unless
+ * the owner already has an accent attachment.
+ */
+export function applyPitchAccent(
+  note: StaveNote,
+  pitches: readonly Pitch[],
+  attachments?: NoteAttachment[]
+) {
+  if (!pitches.some((pitch) => pitch.accent)) {
+    return;
+  }
+
+  if (hasAccentAttachment(attachments)) {
+    return;
+  }
+
+  note.addModifier(new VFArticulation(ARTICULATION_TO_VF_CODE.accent), 0);
+}
+
 /**
  * Attaches the owner's articulation and grace-note modifiers to a VexFlow
  * note; dynamics and lyrics are drawn elsewhere.
@@ -339,6 +369,7 @@ export function voiceItemToStaveNote(
       stemDirection: toVFStemDirection(item.stemDirection),
     });
     decorateStaveNote(note, [item.pitch], item.duration);
+    applyPitchAccent(note, [item.pitch], attachments);
     applyNoteModifiers(note, clef, attachments);
     return note;
   }
@@ -350,6 +381,7 @@ export function voiceItemToStaveNote(
     stemDirection: toVFStemDirection(item.stemDirection),
   });
   decorateStaveNote(note, item.pitches, item.duration);
+  applyPitchAccent(note, item.pitches, attachments);
   applyNoteModifiers(note, clef, attachments);
   return note;
 }
