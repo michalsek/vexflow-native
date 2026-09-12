@@ -182,9 +182,9 @@ export interface ScoreMeasureItemsLayout {
   y: number;
   /** Height of the measure's system block. */
   height: number;
-  /** Top edge of this stave's top staff line. */
+  /** Top edge of this stave's top staff line (hidden lines included). */
   staveLineTopY: number;
-  /** Bottom edge of this stave's bottom staff line. */
+  /** Bottom edge of this stave's bottom staff line (hidden lines included). */
   staveLineBottomY: number;
 }
 

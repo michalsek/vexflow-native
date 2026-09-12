@@ -302,6 +302,45 @@ const restSticking: NoteAttachment = {
   slash through the first stem. Grace notes stem up unless the owner's
   `stemDirection` is `down`.
 
+A single-drum part can use a one-line staff: set `lines: 1` on the staff and
+put every note on `ONE_LINE_STAFF_PITCH` (the staff keeps the 5-line pitch
+geometry, so that pitch lands on the visible line). `showClef: false` hides
+the first measure's clef; `lines` accepts 1, 3 or 5 (default 5).
+
+```tsx
+import type { Staff } from 'vexflow-native/state';
+import { ONE_LINE_STAFF_PITCH } from 'vexflow-native/state';
+
+const snareLine: Staff = {
+  id: 'snare',
+  order: 0,
+  defaultClef: 'percussion',
+  lines: 1,
+  measures: [
+    {
+      id: 'm1',
+      number: 1,
+      leftModifiers: { showClef: false, showMeter: true },
+      voices: [
+        {
+          id: 'v1',
+          index: 0,
+          items: [
+            {
+              id: 'hit-1',
+              type: 'note',
+              voiceId: 'v1',
+              pitch: ONE_LINE_STAFF_PITCH,
+              duration: { length: 'q' },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+```
+
 See `example/src/screens/DrumKitExample.tsx` for a full drum-kit groove with
 two voices, a triplet, an open hi-hat accent, a flam and a drag.
 

@@ -18,6 +18,7 @@ import {
   makeVFVoice,
   noteheadWidth,
 } from './scoreParsing';
+import { applyStaffLines } from './stave';
 import type { ScoreItemsLayout, ScoreOptions } from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
@@ -202,6 +203,7 @@ function renderMeasure(
       const voiceArtifacts = measure.voices.map((voice) => ({
         ...makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
           attachmentsByOwner,
+          staffLines: staff.lines,
           resolveClef: (item) =>
             item.targetStaffId
               ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -236,13 +238,16 @@ function renderMeasure(
     const measure = staff.measures[measurePlan.measureIndex]!;
     const resolvedState =
       group.resolvedStatesByStaff[staffIndex]![measurePlan.measureIndex]!;
-    const stave = new Stave(
-      measurePlan.x,
-      measurePlan.y + (measurePlan.staffYOffsets[staffIndex] ?? 0),
-      measurePlan.width
+    const stave = applyStaffLines(
+      new Stave(
+        measurePlan.x,
+        measurePlan.y + (measurePlan.staffYOffsets[staffIndex] ?? 0),
+        measurePlan.width
+      ),
+      staff.lines
     );
 
-    if (measurePlan.measureIndex === 0 || measure.leftModifiers?.showClef) {
+    if (measure.leftModifiers?.showClef ?? measurePlan.measureIndex === 0) {
       stave.addClef(resolvedState.clef);
     }
 

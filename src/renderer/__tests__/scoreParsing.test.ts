@@ -41,6 +41,7 @@ import type {
   Voice,
   VoiceItem,
 } from '../../state';
+import { ONE_LINE_STAFF_PITCH } from '../../state';
 import { resolveItemHeadCenterX } from '../render';
 import {
   ARTICULATION_TO_VF_CODE,
@@ -869,6 +870,31 @@ describe('grace note attachments', () => {
     expect(stemsOf(autoStem)).toEqual([Stem.UP, Stem.UP]);
   });
 
+  it('stems grace notes up with their auto-stem owner on a one-line staff', () => {
+    const owner: Note = {
+      id: 'one-line-owner',
+      type: 'note',
+      voiceId: 'one-line-grace',
+      pitch: ONE_LINE_STAFF_PITCH,
+      duration: { length: 'q' },
+    };
+
+    const { notes } = makeVFVoice(
+      { ...TEST_SCORE, attachments: [graceAttachment(owner.id, 2)] },
+      TEST_SCORE.defaults.meter,
+      'percussion',
+      makeVoice('one-line-grace', [owner]),
+      { staffLines: 1 }
+    );
+
+    expect(notes[0]!.getStemDirection()).toBe(Stem.UP);
+    expect(
+      getGraceNoteGroups(notes[0] as StaveNote)[0]!
+        .getGraceNotes()
+        .map((graceNote) => graceNoteInternals(graceNote).getStemDirection())
+    ).toEqual([Stem.UP, Stem.UP]);
+  });
+
   it('carries grace noteheads and accidentals through pitch mapping', () => {
     const item: Note = {
       id: 'grace-notehead-owner',
@@ -1079,6 +1105,60 @@ describe('dotted durations', () => {
 });
 
 describe('makeVFVoice', () => {
+  it('stems auto notes up on the middle line of a one-line staff', () => {
+    const items: VoiceItem[] = ['n1', 'n2', 'n3', 'n4'].map((id) => ({
+      id,
+      type: 'note',
+      voiceId: 'one-line',
+      pitch: ONE_LINE_STAFF_PITCH,
+      duration: { length: '8' },
+    }));
+    const stave = new Stave(0, 0, 200);
+
+    const { notes, beams } = makeVFVoice(
+      TEST_SCORE,
+      TEST_SCORE.defaults.meter,
+      'percussion',
+      makeVoice('one-line', items),
+      { staffLines: 1 }
+    );
+    notes.forEach((note) => note.setStave(stave));
+
+    expect(beams.map((beam) => beam.getStemDirection())).toEqual([
+      Stem.UP,
+      Stem.UP,
+    ]);
+    notes.forEach((note) => {
+      const staveNote = note as StaveNote;
+      const { highestLine, lowestLine } = staveNote.getNoteHeadBounds();
+
+      expect(staveNote.getKeyProps()[0]!.line).toBe(3);
+      expect(staveNote.getStemDirection()).toBe(Stem.UP);
+      expect(staveNote.getYs()[0]).toBe(stave.getYForLine(2));
+      expect(highestLine).toBeLessThan(6);
+      expect(lowestLine).toBeGreaterThan(0);
+    });
+  });
+
+  it('keeps the middle-line auto stem down on a five-line staff', () => {
+    const { notes } = makeVFVoice(
+      TEST_SCORE,
+      TEST_SCORE.defaults.meter,
+      'percussion',
+      makeVoice('five-line', [
+        {
+          id: 'n1',
+          type: 'note',
+          voiceId: 'five-line',
+          pitch: ONE_LINE_STAFF_PITCH,
+          duration: { length: 'q' },
+        },
+      ])
+    );
+
+    expect(notes[0]!.getStemDirection()).toBe(Stem.DOWN);
+  });
+
   it('preserves explicit MusicXML stem directions during beam generation', () => {
     const voice = makeVoice(
       'voice-with-stems',

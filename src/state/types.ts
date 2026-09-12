@@ -224,6 +224,13 @@ export interface Staff {
   shortName?: string;
   order: number;
   defaultClef: Clef;
+  /**
+   * Visible staff lines: 1, 3 or 5 (default 5; other values render 5). Fewer
+   * lines hide the outer lines symmetrically around the middle line while
+   * notes keep the 5-line pitch geometry, so a one-line staff's line is
+   * `ONE_LINE_STAFF_PITCH`.
+   */
+  lines?: number;
   transposition?: number;
   measures: Measure[];
 }

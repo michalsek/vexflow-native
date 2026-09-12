@@ -5,6 +5,7 @@ const mockFormatterJoinVoices = jest.fn();
 const mockFormatterFormatToStave = jest.fn();
 const mockStaveAddClef = jest.fn();
 const mockStaveAddTimeSignature = jest.fn();
+const mockStaveSetConfigForLines = jest.fn();
 const mockStaveSetContext = jest.fn();
 const mockStaveDraw = jest.fn();
 const mockStaveInstances: Array<{
@@ -128,6 +129,7 @@ jest.mock('vexflow', () => ({
       this.timeSignatureCount += 1;
       return mockStaveAddTimeSignature(...args);
     };
+    setConfigForLines = mockStaveSetConfigForLines.mockReturnThis();
     setContext = mockStaveSetContext.mockReturnThis();
     draw = mockStaveDraw.mockReturnThis();
     getNoteStartX = () =>
@@ -735,6 +737,55 @@ describe('renderScore', () => {
     expect(mockStaveAddTimeSignature).not.toHaveBeenCalled();
   });
 
+  it('adds the clef on the first measure unless showClef is false', () => {
+    const shown = makeShowMeterFixture(undefined);
+
+    renderScore(
+      mockRecordingContext as never,
+      shown.score,
+      shown.layoutPlan,
+      TEST_OPTIONS
+    );
+
+    expect(mockStaveAddClef).toHaveBeenCalledTimes(1);
+    expect(mockStaveAddClef).toHaveBeenCalledWith('treble');
+
+    mockStaveAddClef.mockClear();
+    const hidden = makeShowMeterFixture({ showClef: false });
+
+    renderScore(
+      mockRecordingContext as never,
+      hidden.score,
+      hidden.layoutPlan,
+      TEST_OPTIONS
+    );
+
+    expect(mockStaveAddClef).not.toHaveBeenCalled();
+  });
+
+  it('hides all but the middle stave line for a one-line staff', () => {
+    const { score, layoutPlan } = makeShowMeterFixture(undefined, 1);
+
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
+
+    expect(mockStaveSetConfigForLines).toHaveBeenCalledTimes(1);
+    expect(mockStaveSetConfigForLines).toHaveBeenCalledWith([
+      { visible: false },
+      { visible: false },
+      { visible: true },
+      { visible: false },
+      { visible: false },
+    ]);
+  });
+
+  it('keeps the default five stave lines untouched', () => {
+    const { score, layoutPlan } = makeShowMeterFixture(undefined);
+
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
+
+    expect(mockStaveSetConfigForLines).not.toHaveBeenCalled();
+  });
+
   describe('items layout', () => {
     const makeItemsLayoutFixture = () => {
       const items = [
@@ -1158,7 +1209,8 @@ describe('renderScore', () => {
 });
 
 function makeShowMeterFixture(
-  leftModifiers: { showMeter?: boolean } | undefined
+  leftModifiers: { showClef?: boolean; showMeter?: boolean } | undefined,
+  lines?: number
 ): { score: Score; layoutPlan: ScoreLayoutPlan } {
   const score: Score = {
     id: 'show-meter-render',
@@ -1170,6 +1222,7 @@ function makeShowMeterFixture(
         id: 'staff-1',
         order: 0,
         defaultClef: 'treble',
+        ...(lines === undefined ? {} : { lines }),
         measures: [
           {
             id: 'measure-1',

@@ -62,6 +62,8 @@ export interface MakeVFVoiceOptions {
    * rebuilding it on every call.
    */
   attachmentsByOwner?: Map<string, NoteAttachment[]>;
+  /** `Staff.lines`; on a one-line staff auto stems point up. */
+  staffLines?: number;
 }
 
 /**
@@ -435,6 +437,14 @@ function hasExplicitStemDirection(item: VoiceItem): boolean {
   );
 }
 
+function withUpwardAutoStem(item: VoiceItem): VoiceItem {
+  if (item.type === 'rest' || hasExplicitStemDirection(item)) {
+    return item;
+  }
+
+  return { ...item, stemDirection: 'up' };
+}
+
 /**
  * Finds the tuplet groups that belong to a given voice.
  */
@@ -501,7 +511,11 @@ export function makeVFVoice(
 } {
   const attachmentsByOwner =
     options.attachmentsByOwner ?? indexAttachmentsByOwner(score);
-  const notes = voice.items.map((item) =>
+  const items =
+    options.staffLines === 1
+      ? voice.items.map(withUpwardAutoStem)
+      : voice.items;
+  const notes = items.map((item) =>
     voiceItemToStaveNote(
       item,
       options.resolveClef?.(item) ?? clef,
@@ -554,7 +568,7 @@ export function makeVFVoice(
   }
 
   const groups = beamGroupsToVF(meter);
-  const maintainStemDirections = voice.items.some(hasExplicitStemDirection);
+  const maintainStemDirections = items.some(hasExplicitStemDirection);
   const beamOptions =
     groups || maintainStemDirections
       ? {
