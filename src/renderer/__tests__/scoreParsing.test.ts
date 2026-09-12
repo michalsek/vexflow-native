@@ -50,7 +50,6 @@ import {
   makeVFVoice,
   noteheadWidth,
   pitchToVFKey,
-  stickingText,
   voiceItemToStaveNote,
 } from '../scoreParsing';
 
@@ -435,13 +434,21 @@ describe('voiceItemToStaveNote sticking', () => {
   });
 
   it('keeps first-occurrence order when a hand repeats', () => {
-    expect(
-      stickingText([
+    const item: Chord = {
+      id: 'repeat-sticking-chord',
+      type: 'chord',
+      voiceId: 'voice',
+      pitches: [
         { step: 'C', octave: 5, sticking: 'L' },
         { step: 'D', octave: 5, sticking: 'R' },
         { step: 'E', octave: 5, sticking: 'L' },
-      ])
-    ).toBe('LR');
+      ],
+      duration: { length: '8' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+
+    expect(getAnnotations(note)[0]?.getText()).toBe('LR');
   });
 
   it('adds no annotation without sticking', () => {

@@ -229,7 +229,7 @@ const STICKING_FONT = {
 };
 
 /** Distinct sticking letters in pitch order; empty when no pitch is stuck. */
-export function stickingText(pitches: readonly Pitch[]): string {
+function stickingText(pitches: readonly Pitch[]): string {
   let text = '';
 
   for (const pitch of pitches) {

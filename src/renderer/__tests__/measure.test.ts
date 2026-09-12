@@ -313,8 +313,6 @@ describe('measureScore', () => {
 
     describe('sticking vertical extents', () => {
       it('grows the bottom bound for a sticking annotation below the staff', () => {
-        // Octave 4 noteheads sit low on a treble stave, so the below-note
-        // sticking label must extend past the plain bottom bound.
         const withSticking = measureScore(
           withPitchSticking(makeStemsUpScore(undefined, 4)),
           TEST_OPTIONS
