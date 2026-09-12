@@ -168,8 +168,10 @@ export default class FontManager {
     return matched;
   }
 
-  /** A system typeface for the first requested family the OS knows, when
-   * none is in the provider; null when the OS knows none of them either. */
+  /** A system typeface for the first requested family the OS knows, walking
+   * the list in order until a provider family is reached — so a requested
+   * family the OS knows wins over a later provider family; null when the OS
+   * knows none of them, or when the provider has the first one. */
   private matchSystemTypeface(
     font: string | FontInfo | undefined,
     style: { weight: FontWeight; slant: FontSlant; width: FontWidth }
