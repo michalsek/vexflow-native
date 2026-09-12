@@ -273,6 +273,14 @@ export interface LyricAttachment extends AttachmentBase {
   verse?: number;
 }
 
+/** Free text drawn above or below the owner (a note, chord or rest), e.g. a
+ * sticking letter or a fingering. */
+export interface AnnotationAttachment extends AttachmentBase {
+  type: 'annotation';
+  text: string;
+  placement?: 'above' | 'below';
+}
+
 export interface GraceNote {
   pitch: Pitch;
   duration: DurationValue;
@@ -290,6 +298,7 @@ export type NoteAttachment =
   | ArticulationAttachment
   | DynamicAttachment
   | LyricAttachment
+  | AnnotationAttachment
   | GraceNoteAttachment;
 
 export interface Tie {

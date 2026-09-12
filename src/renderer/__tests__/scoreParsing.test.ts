@@ -9,6 +9,8 @@ import {
 } from '@jest/globals';
 import * as VexFlow from 'vexflow';
 import {
+  Annotation as VFAnnotation,
+  AnnotationVerticalJustify,
   Articulation as VFArticulation,
   Beam,
   Formatter,
@@ -363,6 +365,175 @@ describe('voiceItemToStaveNote accents', () => {
     ).toEqual(
       [ARTICULATION_TO_VF_CODE.accent, ARTICULATION_TO_VF_CODE.staccato].sort()
     );
+  });
+});
+
+describe('voiceItemToStaveNote annotations', () => {
+  function getAnnotations(note: StaveNote) {
+    return getModifiersByCategory(note, 'Annotation') as VFAnnotation[];
+  }
+
+  function verticalJustification(annotation: VFAnnotation | undefined) {
+    return (annotation as unknown as { verticalJustification: number })
+      .verticalJustification;
+  }
+
+  function annotationAttachment(
+    ownerId: string,
+    text: string,
+    placement?: 'above' | 'below'
+  ): NoteAttachment {
+    return {
+      id: `${ownerId}-annotation`,
+      ownerId,
+      type: 'annotation',
+      text,
+      ...(placement ? { placement } : {}),
+    };
+  }
+
+  it('draws a bold annotation below a note by default', () => {
+    const item: Note = {
+      id: 'annotated-note',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('annotated-note', 'R'),
+    ]) as StaveNote;
+    const annotations = getAnnotations(note);
+
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]?.getText()).toBe('R');
+    expect(verticalJustification(annotations[0])).toBe(
+      AnnotationVerticalJustify.BOTTOM
+    );
+    expect(annotations[0]?.fontInfo.weight).toBe('bold');
+  });
+
+  it('draws one annotation per attachment on a chord', () => {
+    const item: Chord = {
+      id: 'annotated-chord',
+      type: 'chord',
+      voiceId: 'voice',
+      pitches: [
+        { step: 'G', octave: 5, notehead: 'x' },
+        { step: 'C', octave: 5 },
+      ],
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('annotated-chord', 'RL'),
+      annotationAttachment('annotated-chord', '1', 'above'),
+    ]) as StaveNote;
+
+    expect(
+      getAnnotations(note).map((annotation) => annotation.getText())
+    ).toEqual(['RL', '1']);
+  });
+
+  it('draws an annotation below a visible rest', () => {
+    const item: Rest = {
+      id: 'annotated-rest',
+      type: 'rest',
+      voiceId: 'voice',
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('annotated-rest', 'L'),
+    ]) as StaveNote;
+    const annotations = getAnnotations(note);
+
+    expect(note.isRest()).toBe(true);
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]?.getText()).toBe('L');
+    expect(verticalJustification(annotations[0])).toBe(
+      AnnotationVerticalJustify.BOTTOM
+    );
+  });
+
+  it('places an `above` annotation on top', () => {
+    const item: Note = {
+      id: 'above-note',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('above-note', 'R', 'above'),
+    ]) as StaveNote;
+
+    expect(verticalJustification(getAnnotations(note)[0])).toBe(
+      AnnotationVerticalJustify.TOP
+    );
+  });
+
+  it('adds no annotation without annotation attachments', () => {
+    const item: Chord = {
+      id: 'plain-chord',
+      type: 'chord',
+      voiceId: 'voice',
+      pitches: [
+        { step: 'G', octave: 5, notehead: 'x', accent: true },
+        { step: 'C', octave: 5, ghost: true },
+      ],
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      {
+        id: 'plain-chord-staccato',
+        ownerId: 'plain-chord',
+        type: 'articulation',
+        articulation: 'staccato',
+      },
+    ]) as StaveNote;
+
+    expect(getAnnotations(note)).toHaveLength(0);
+  });
+
+  it('leaves grace notes without annotations', () => {
+    const item: Note = {
+      id: 'annotated-flam',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
+    };
+    const attachments: NoteAttachment[] = [
+      {
+        id: 'flam',
+        ownerId: 'annotated-flam',
+        type: 'grace',
+        slash: true,
+        notes: [{ pitch: { step: 'C', octave: 5 }, duration: { length: '8' } }],
+      },
+      annotationAttachment('annotated-flam', 'R'),
+    ];
+
+    const note = voiceItemToStaveNote(
+      item,
+      'percussion',
+      attachments
+    ) as StaveNote;
+    const group = getModifiersByCategory(
+      note,
+      'GraceNoteGroup'
+    )[0] as GraceNoteGroup;
+
+    expect(
+      getAnnotations(note).map((annotation) => annotation.getText())
+    ).toEqual(['R']);
+    group.getGraceNotes().forEach((graceNote) => {
+      expect(getAnnotations(graceNote as unknown as StaveNote)).toHaveLength(0);
+    });
   });
 });
 

@@ -311,6 +311,25 @@ describe('measureScore', () => {
       });
     });
 
+    describe('annotation vertical extents', () => {
+      it('grows the bottom bound for an annotation below the staff', () => {
+        const withAnnotations = measureScore(
+          makeStemsUpScore(annotationAttachments(), 4),
+          TEST_OPTIONS
+        );
+        const plain = measureScore(
+          makeStemsUpScore(undefined, 4),
+          TEST_OPTIONS
+        );
+
+        const annotatedBounds = withAnnotations.measures[0]!.staffBounds[0]!;
+        const plainBounds = plain.measures[0]!.staffBounds[0]!;
+
+        expect(annotatedBounds.bottom).toBeGreaterThan(plainBounds.bottom);
+        expect(annotatedBounds.top).toBeLessThanOrEqual(plainBounds.top);
+      });
+    });
+
     describe('grace note extents', () => {
       it('widens the intrinsic width by the grace group on the left', () => {
         const withGrace = measureScore(
@@ -398,6 +417,17 @@ function accentAttachments(placement?: 'above' | 'below'): NoteAttachment[] {
     type: 'articulation' as const,
     articulation: 'accent' as const,
     ...(placement ? { placement } : {}),
+  }));
+}
+
+/** Alternating R/L sticking annotations on every note of `makeStemsUpScore`'s
+ * voice. */
+function annotationAttachments(): NoteAttachment[] {
+  return [1, 2, 3, 4].map((index) => ({
+    id: `annotation-${index}`,
+    ownerId: `stems-up-m1-v1-n${index}`,
+    type: 'annotation' as const,
+    text: index % 2 === 1 ? 'R' : 'L',
   }));
 }
 

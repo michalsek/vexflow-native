@@ -270,6 +270,20 @@ const drag: NoteAttachment = {
     { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
   ],
 };
+
+const rightHand: NoteAttachment = {
+  id: 'sticking-1',
+  ownerId: 'note-1',
+  type: 'annotation',
+  text: 'R',
+};
+
+const restSticking: NoteAttachment = {
+  id: 'sticking-2',
+  ownerId: 'rest-1',
+  type: 'annotation',
+  text: 'L',
+};
 ```
 
 - `pitch.notehead`: `x`, `circle-x`, `diamond`, `circle`, `square`, `triangle`,
@@ -278,6 +292,9 @@ const drag: NoteAttachment = {
 - `pitch.accent`: draws one accent (`>`) above the note or chord, however many
   of its pitches are flagged; skipped when the owner already has an `accent`
   articulation attachment.
+- Annotation attachments draw their `text` in a bold sans font under the
+  owner (`placement: 'above'` puts it on top). The owner may be a note, a
+  chord or a visible rest, so a sticking lane can mark silent slots too.
 - Articulation attachments accept an optional `placement` of `above` (default)
   or `below`.
 - Grace attachments draw their `notes` before the owner (a flam is one slashed

@@ -1,4 +1,5 @@
 import {
+  Annotation as VFAnnotation,
   Articulation as VFArticulation,
   Formatter,
   GraceNoteGroup,
@@ -354,10 +355,10 @@ function createNoopRenderContext(): RenderContext {
 const NOOP_RENDER_CONTEXT = createNoopRenderContext();
 
 /**
- * Merges the drawn extents of a note's articulations and grace-note groups
- * into the staff bounds. VexFlow only positions these modifiers inside
- * `draw()`, so each one is drawn against a no-op context first to make its
- * bounding boxes real.
+ * Merges the drawn extents of a note's articulations, annotations and
+ * grace-note groups into the staff bounds. VexFlow only positions these
+ * modifiers inside `draw()`, so each one is drawn against a no-op context
+ * first to make its bounding boxes real.
  */
 function mergeModifierBounds(
   bounds: StaffVerticalBounds | undefined,
@@ -369,9 +370,10 @@ function mergeModifierBounds(
 
   for (const modifier of note.getModifiers()) {
     const isArticulation = modifier instanceof VFArticulation;
+    const isAnnotation = modifier instanceof VFAnnotation;
     const isGraceNoteGroup = modifier instanceof GraceNoteGroup;
 
-    if (!isArticulation && !isGraceNoteGroup) {
+    if (!isArticulation && !isAnnotation && !isGraceNoteGroup) {
       continue;
     }
 

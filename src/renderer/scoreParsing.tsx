@@ -1,5 +1,7 @@
 import {
   Accidental as VFAccidental,
+  Annotation as VFAnnotation,
+  AnnotationVerticalJustify,
   Articulation as VFArticulation,
   Beam,
   Dot,
@@ -220,9 +222,15 @@ export function applyPitchAccent(
   note.addModifier(new VFArticulation(ARTICULATION_TO_VF_CODE.accent), 0);
 }
 
+const ANNOTATION_FONT = {
+  family: 'Arial, Helvetica, sans-serif',
+  size: 10,
+  weight: 'bold',
+};
+
 /**
- * Attaches the owner's articulation and grace-note modifiers to a VexFlow
- * note; dynamics and lyrics are drawn elsewhere.
+ * Attaches the owner's articulation, annotation and grace-note modifiers to
+ * a VexFlow note; dynamics and lyrics are drawn elsewhere.
  */
 export function applyNoteModifiers(
   note: StaveNote,
@@ -244,6 +252,16 @@ export function applyNoteModifiers(
       }
 
       note.addModifier(articulation, 0);
+    } else if (attachment.type === 'annotation') {
+      const annotation = new VFAnnotation(attachment.text);
+
+      annotation.setFont(ANNOTATION_FONT);
+      annotation.setVerticalJustification(
+        attachment.placement === 'above'
+          ? AnnotationVerticalJustify.TOP
+          : AnnotationVerticalJustify.BOTTOM
+      );
+      note.addModifier(annotation, 0);
     } else if (attachment.type === 'grace') {
       applyGraceNoteGroup(note, clef, attachment);
     }
@@ -358,6 +376,11 @@ export function voiceItemToStaveNote(
       duration: durationToVF(item.duration, true),
     });
     applyDots(note, item.duration.dots);
+    applyNoteModifiers(
+      note,
+      clef,
+      attachments?.filter((attachment) => attachment.type === 'annotation')
+    );
     return note;
   }
 
