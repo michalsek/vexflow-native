@@ -895,6 +895,32 @@ describe('grace note attachments', () => {
     ).toEqual([Stem.UP, Stem.UP]);
   });
 
+  it('keeps grace notes down under an explicit stem-down owner on a one-line staff', () => {
+    const owner: Note = {
+      id: 'one-line-down-owner',
+      type: 'note',
+      voiceId: 'one-line-grace-down',
+      pitch: ONE_LINE_STAFF_PITCH,
+      duration: { length: 'q' },
+      stemDirection: 'down',
+    };
+
+    const { notes } = makeVFVoice(
+      { ...TEST_SCORE, attachments: [graceAttachment(owner.id, 2)] },
+      TEST_SCORE.defaults.meter,
+      'percussion',
+      makeVoice('one-line-grace-down', [owner]),
+      { staffLines: 1 }
+    );
+
+    expect(notes[0]!.getStemDirection()).toBe(Stem.DOWN);
+    expect(
+      getGraceNoteGroups(notes[0] as StaveNote)[0]!
+        .getGraceNotes()
+        .map((graceNote) => graceNoteInternals(graceNote).getStemDirection())
+    ).toEqual([Stem.DOWN, Stem.DOWN]);
+  });
+
   it('carries grace noteheads and accidentals through pitch mapping', () => {
     const item: Note = {
       id: 'grace-notehead-owner',
@@ -1138,6 +1164,70 @@ describe('makeVFVoice', () => {
       expect(highestLine).toBeLessThan(6);
       expect(lowestLine).toBeGreaterThan(0);
     });
+  });
+
+  it('stems a chord up on a one-line staff and keeps explicit down stems', () => {
+    const voice = makeVoice('one-line-chord', [
+      {
+        id: 'c1',
+        type: 'chord',
+        voiceId: 'one-line-chord',
+        pitches: [ONE_LINE_STAFF_PITCH, { step: 'D', octave: 5 }],
+        duration: { length: '8' },
+      },
+      {
+        id: 'n2',
+        type: 'note',
+        voiceId: 'one-line-chord',
+        pitch: ONE_LINE_STAFF_PITCH,
+        duration: { length: '8' },
+        stemDirection: 'down',
+      },
+    ]);
+    const firstItem = voice.items[0];
+
+    const { notes } = makeVFVoice(
+      TEST_SCORE,
+      TEST_SCORE.defaults.meter,
+      'percussion',
+      voice,
+      { staffLines: 1 }
+    );
+
+    expect(notes.map((note) => note.getStemDirection())).toEqual([
+      Stem.UP,
+      Stem.DOWN,
+    ]);
+    expect(voice.items[0]).toBe(firstItem);
+    expect(voice.items[0]).not.toHaveProperty('stemDirection');
+  });
+
+  it('auto-flips a five-line beam group when staffLines is undefined', () => {
+    const items: VoiceItem[] = ['n1', 'n2', 'n3', 'n4'].map((id) => ({
+      id,
+      type: 'note',
+      voiceId: 'five-line-beam',
+      pitch: { step: 'G', octave: 5 },
+      duration: { length: '8' },
+    }));
+
+    const { notes, beams } = makeVFVoice(
+      TEST_SCORE,
+      TEST_SCORE.defaults.meter,
+      'treble',
+      makeVoice('five-line-beam', items)
+    );
+
+    expect(beams.map((beam) => beam.getStemDirection())).toEqual([
+      Stem.DOWN,
+      Stem.DOWN,
+    ]);
+    expect(notes.map((note) => note.getStemDirection())).toEqual([
+      Stem.DOWN,
+      Stem.DOWN,
+      Stem.DOWN,
+      Stem.DOWN,
+    ]);
   });
 
   it('keeps the middle-line auto stem down on a five-line staff', () => {

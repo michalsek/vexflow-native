@@ -179,6 +179,7 @@ export interface MeasureState {
 }
 
 export interface MeasureLeftModifiers {
+  /** undefined = shown on the first measure only; false hides it there too. */
   showClef?: boolean;
   showMeter?: boolean;
   showKeySignature?: boolean;
@@ -218,6 +219,8 @@ export interface Measure {
   voices: Voice[];
 }
 
+export type StaffLines = 1 | 3 | 5;
+
 export interface Staff {
   id: Id;
   name?: string;
@@ -225,12 +228,11 @@ export interface Staff {
   order: number;
   defaultClef: Clef;
   /**
-   * Visible staff lines: 1, 3 or 5 (default 5; other values render 5). Fewer
-   * lines hide the outer lines symmetrically around the middle line while
-   * notes keep the 5-line pitch geometry, so a one-line staff's line is
-   * `ONE_LINE_STAFF_PITCH`.
+   * Visible staff lines (default 5). Fewer lines hide the outer lines
+   * symmetrically around the middle one while notes keep the 5-line pitch
+   * geometry, so a one-line staff's line is `ONE_LINE_STAFF_PITCH`.
    */
-  lines?: number;
+  lines?: StaffLines;
   transposition?: number;
   measures: Measure[];
 }

@@ -115,6 +115,7 @@ export function measureScore(
         return {
           ownerStaffId: staff.id,
           staffIndex,
+          staffLines: staff.lines,
           measure,
           resolvedState,
           showClef: measure.leftModifiers?.showClef ?? measureIndex === 0,
@@ -220,6 +221,7 @@ function measureStaffVerticalBounds({
   staffMeasurementContexts: Array<{
     ownerStaffId: string;
     staffIndex: number;
+    staffLines: Staff['lines'];
     measure: Staff['measures'][number];
     resolvedState: ReturnType<typeof buildResolvedMeasureStates>[number];
     showClef: boolean;
@@ -229,11 +231,8 @@ function measureStaffVerticalBounds({
 }): StaffVerticalBounds[] {
   const width = Math.max(intrinsicNoteWidth, 1);
   const renderedStaves = staffMeasurementContexts.map(
-    ({ resolvedState, showClef, showMeter, staffIndex }) => {
-      const stave = applyStaffLines(
-        new Stave(0, 0, width),
-        staves[staffIndex]?.lines
-      );
+    ({ resolvedState, showClef, showMeter, staffLines }) => {
+      const stave = applyStaffLines(new Stave(0, 0, width), staffLines);
 
       if (showClef) {
         stave.addClef(resolvedState.clef);

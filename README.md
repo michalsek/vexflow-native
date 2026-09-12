@@ -305,7 +305,8 @@ const restSticking: NoteAttachment = {
 A single-drum part can use a one-line staff: set `lines: 1` on the staff and
 put every note on `ONE_LINE_STAFF_PITCH` (the staff keeps the 5-line pitch
 geometry, so that pitch lands on the visible line). `showClef: false` hides
-the first measure's clef; `lines` accepts 1, 3 or 5 (default 5).
+the first measure's clef (`showClef` undefined shows it on the first measure
+only); `lines` accepts 1, 3 or 5 (default 5).
 
 ```tsx
 import type { Staff } from 'vexflow-native/state';

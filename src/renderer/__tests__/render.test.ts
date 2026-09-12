@@ -129,6 +129,7 @@ jest.mock('vexflow', () => ({
       this.timeSignatureCount += 1;
       return mockStaveAddTimeSignature(...args);
     };
+    getNumLines = () => 5;
     setConfigForLines = mockStaveSetConfigForLines.mockReturnThis();
     setContext = mockStaveSetContext.mockReturnThis();
     draw = mockStaveDraw.mockReturnThis();
@@ -188,7 +189,7 @@ jest.mock('../scoreParsing', () => ({
 }));
 
 import { renderScore } from '../render';
-import type { Score } from '../../state';
+import type { Score, StaffLines } from '../../state';
 import type { ScoreLayoutPlan } from '../layout';
 import { insets, renderOptions, spacing } from '../constants';
 
@@ -1210,7 +1211,7 @@ describe('renderScore', () => {
 
 function makeShowMeterFixture(
   leftModifiers: { showClef?: boolean; showMeter?: boolean } | undefined,
-  lines?: number
+  lines?: StaffLines
 ): { score: Score; layoutPlan: ScoreLayoutPlan } {
   const score: Score = {
     id: 'show-meter-render',

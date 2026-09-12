@@ -13,6 +13,7 @@ import type {
   Meter,
   NoteAttachment,
   Score,
+  StaffLines,
   Step,
   VoiceItem,
 } from '../../state';
@@ -529,24 +530,29 @@ describe('applyStaffLines', () => {
     ]);
   });
 
-  it('keeps every line visible by default and for unsupported counts', () => {
-    const allVisible = [true, true, true, true, true];
+  it('leaves the middle three lines visible for three lines', () => {
+    const stave = applyStaffLines(new Stave(0, 0, 100), 3);
 
+    expect(stave.getConfigForLines().map(({ visible }) => visible)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it('keeps every line visible by default', () => {
     expect(
       applyStaffLines(new Stave(0, 0, 100))
         .getConfigForLines()
         .map(({ visible }) => visible)
-    ).toEqual(allVisible);
-    expect(
-      applyStaffLines(new Stave(0, 0, 100), 4)
-        .getConfigForLines()
-        .map(({ visible }) => visible)
-    ).toEqual(allVisible);
+    ).toEqual([true, true, true, true, true]);
   });
 });
 
 /** Four up-stemmed quarters on the one-line pitch; `lines` sets `Staff.lines`. */
-function makeStaffLinesScore(lines?: number): Score {
+function makeStaffLinesScore(lines?: StaffLines): Score {
   const base = makeSingleStaffScore();
   const staff = base.staves[0]!;
   const measure = staff.measures[0]!;
