@@ -23,6 +23,7 @@ jest.mock('@shopify/react-native-skia', () => ({
   },
   Skia: {
     Font: jest.fn(),
+    FontMgr: { System: jest.fn() },
   },
 }));
 
@@ -35,6 +36,7 @@ import {
 import FontManager from '../FontManager';
 
 const mockSkiaFont = Skia.Font as jest.Mock;
+const mockSystemFontMgr = Skia.FontMgr.System as jest.Mock;
 
 type MockFontProvider = {
   countFamilies: ReturnType<typeof jest.fn>;
@@ -184,6 +186,48 @@ describe('FontManager', () => {
     // Family availability now reads the precomputed list, not the provider.
     expect(fontProvider.countFamilies.mock.calls.length).toBe(
       scansAfterConstruction
+    );
+  });
+
+  it('falls back to a system typeface when the provider has none of the requested families', () => {
+    const fontProvider = createFontProvider(['DefaultFamily']);
+    const manager = new FontManager(fontProvider as never, 'DefaultFamily');
+    const typeface = { name: 'Helvetica-Bold' };
+    const matchFamilyStyle = jest.fn((family: string) =>
+      family === 'Helvetica' ? typeface : null
+    );
+
+    mockSystemFontMgr.mockReturnValue({ matchFamilyStyle });
+    mockSkiaFont.mockReturnValue({ typeface, size: 13 });
+
+    expect(
+      manager.createSkFont(
+        { family: 'Arial, Helvetica', size: 10 } as FontInfo,
+        undefined,
+        'bold'
+      )
+    ).toEqual({ typeface, size: 13 });
+    expect(matchFamilyStyle).toHaveBeenCalledTimes(2);
+    expect(fontProvider.matchFamilyStyle).not.toHaveBeenCalled();
+  });
+
+  it('keeps the provider default when the OS knows none of the families either', () => {
+    const fontProvider = createFontProvider(['DefaultFamily']);
+    const manager = new FontManager(fontProvider as never, 'DefaultFamily');
+
+    mockSystemFontMgr.mockReturnValue({
+      matchFamilyStyle: jest.fn(() => null),
+    });
+    mockSkiaFont.mockReturnValue({ size: 13 });
+    manager.createSkFont('Missing', 10);
+
+    expect(fontProvider.matchFamilyStyle).toHaveBeenCalledWith(
+      'DefaultFamily',
+      {
+        weight: FontWeight.Normal,
+        slant: FontSlant.Upright,
+        width: FontWidth.Normal,
+      }
     );
   });
 });
