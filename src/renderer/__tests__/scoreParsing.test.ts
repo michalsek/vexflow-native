@@ -9,6 +9,8 @@ import {
 } from '@jest/globals';
 import * as VexFlow from 'vexflow';
 import {
+  Annotation as VFAnnotation,
+  AnnotationVerticalJustify,
   Articulation as VFArticulation,
   Beam,
   Formatter,
@@ -48,6 +50,7 @@ import {
   makeVFVoice,
   noteheadWidth,
   pitchToVFKey,
+  stickingText,
   voiceItemToStaveNote,
 } from '../scoreParsing';
 
@@ -363,6 +366,140 @@ describe('voiceItemToStaveNote accents', () => {
     ).toEqual(
       [ARTICULATION_TO_VF_CODE.accent, ARTICULATION_TO_VF_CODE.staccato].sort()
     );
+  });
+});
+
+describe('voiceItemToStaveNote sticking', () => {
+  function getAnnotations(note: StaveNote) {
+    return getModifiersByCategory(note, 'Annotation') as VFAnnotation[];
+  }
+
+  it('draws one bold annotation below a single stuck note', () => {
+    const item: Note = {
+      id: 'sticking-note',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5, sticking: 'R' },
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+    const annotations = getAnnotations(note);
+
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]?.getText()).toBe('R');
+    expect(
+      (annotations[0] as unknown as { verticalJustification: number })
+        .verticalJustification
+    ).toBe(AnnotationVerticalJustify.BOTTOM);
+    expect(annotations[0]?.fontInfo.weight).toBe('bold');
+  });
+
+  it('collapses a chord of same-hand pitches to one letter', () => {
+    const item: Chord = {
+      id: 'sticking-chord-same',
+      type: 'chord',
+      voiceId: 'voice',
+      pitches: [
+        { step: 'G', octave: 5, notehead: 'x', sticking: 'R' },
+        { step: 'C', octave: 5, sticking: 'R' },
+      ],
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+    const annotations = getAnnotations(note);
+
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]?.getText()).toBe('R');
+  });
+
+  it('joins distinct hands in pitch order, skipping unstuck pitches', () => {
+    const item: Chord = {
+      id: 'sticking-chord-mixed',
+      type: 'chord',
+      voiceId: 'voice',
+      pitches: [
+        { step: 'G', octave: 5, notehead: 'x', sticking: 'R' },
+        { step: 'F', octave: 4 },
+        { step: 'C', octave: 5, sticking: 'L' },
+      ],
+      duration: { length: '8' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+    const annotations = getAnnotations(note);
+
+    expect(annotations).toHaveLength(1);
+    expect(annotations[0]?.getText()).toBe('RL');
+  });
+
+  it('keeps first-occurrence order when a hand repeats', () => {
+    expect(
+      stickingText([
+        { step: 'C', octave: 5, sticking: 'L' },
+        { step: 'D', octave: 5, sticking: 'R' },
+        { step: 'E', octave: 5, sticking: 'L' },
+      ])
+    ).toBe('LR');
+  });
+
+  it('adds no annotation without sticking', () => {
+    const item: Chord = {
+      id: 'plain-sticking-chord',
+      type: 'chord',
+      voiceId: 'voice',
+      pitches: [
+        { step: 'G', octave: 5, notehead: 'x', accent: true },
+        { step: 'C', octave: 5, ghost: true },
+      ],
+      duration: { length: 'q' },
+    };
+
+    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+
+    expect(getAnnotations(note)).toHaveLength(0);
+  });
+
+  it('leaves grace notes without sticking annotations', () => {
+    const item: Note = {
+      id: 'sticking-flam',
+      type: 'note',
+      voiceId: 'voice',
+      pitch: { step: 'C', octave: 5, sticking: 'R' },
+      duration: { length: 'q' },
+    };
+    const attachments: NoteAttachment[] = [
+      {
+        id: 'flam',
+        ownerId: 'sticking-flam',
+        type: 'grace',
+        slash: true,
+        notes: [
+          {
+            pitch: { step: 'C', octave: 5, sticking: 'L' },
+            duration: { length: '8' },
+          },
+        ],
+      },
+    ];
+
+    const note = voiceItemToStaveNote(
+      item,
+      'percussion',
+      attachments
+    ) as StaveNote;
+    const group = getModifiersByCategory(
+      note,
+      'GraceNoteGroup'
+    )[0] as GraceNoteGroup;
+
+    expect(
+      getAnnotations(note).map((annotation) => annotation.getText())
+    ).toEqual(['R']);
+    group.getGraceNotes().forEach((graceNote) => {
+      expect(getAnnotations(graceNote as unknown as StaveNote)).toHaveLength(0);
+    });
   });
 });
 

@@ -106,6 +106,8 @@ export interface Pitch {
   ghost?: boolean;
   /** A note or chord with any accented pitch draws one accent (`>`) above it. */
   accent?: boolean;
+  /** Hand playing the note; drawn as an L/R annotation under the owner. */
+  sticking?: 'L' | 'R';
 }
 
 export interface DurationValue {

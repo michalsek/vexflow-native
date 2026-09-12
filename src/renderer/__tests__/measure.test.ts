@@ -311,6 +311,27 @@ describe('measureScore', () => {
       });
     });
 
+    describe('sticking vertical extents', () => {
+      it('grows the bottom bound for a sticking annotation below the staff', () => {
+        // Octave 4 noteheads sit low on a treble stave, so the below-note
+        // sticking label must extend past the plain bottom bound.
+        const withSticking = measureScore(
+          withPitchSticking(makeStemsUpScore(undefined, 4)),
+          TEST_OPTIONS
+        );
+        const plain = measureScore(
+          makeStemsUpScore(undefined, 4),
+          TEST_OPTIONS
+        );
+
+        const stickingBounds = withSticking.measures[0]!.staffBounds[0]!;
+        const plainBounds = plain.measures[0]!.staffBounds[0]!;
+
+        expect(stickingBounds.bottom).toBeGreaterThan(plainBounds.bottom);
+        expect(stickingBounds.top).toBeLessThanOrEqual(plainBounds.top);
+      });
+    });
+
     describe('grace note extents', () => {
       it('widens the intrinsic width by the grace group on the left', () => {
         const withGrace = measureScore(
@@ -399,6 +420,33 @@ function accentAttachments(placement?: 'above' | 'below'): NoteAttachment[] {
     articulation: 'accent' as const,
     ...(placement ? { placement } : {}),
   }));
+}
+
+/** Alternating R/L sticking on every note of `makeStemsUpScore`'s voice. */
+function withPitchSticking(score: Score): Score {
+  return {
+    ...score,
+    staves: score.staves.map((staff) => ({
+      ...staff,
+      measures: staff.measures.map((measure) => ({
+        ...measure,
+        voices: measure.voices.map((voice) => ({
+          ...voice,
+          items: voice.items.map((item, index) =>
+            item.type === 'note'
+              ? {
+                  ...item,
+                  pitch: {
+                    ...item.pitch,
+                    sticking: index % 2 === 0 ? ('R' as const) : ('L' as const),
+                  },
+                }
+              : item
+          ),
+        })),
+      })),
+    })),
+  };
 }
 
 /** A two-note slashed grace group on every note of `makeStemsUpScore`'s
