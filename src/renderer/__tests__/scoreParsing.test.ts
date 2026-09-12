@@ -368,92 +368,116 @@ describe('voiceItemToStaveNote accents', () => {
   });
 });
 
-describe('voiceItemToStaveNote sticking', () => {
+describe('voiceItemToStaveNote annotations', () => {
   function getAnnotations(note: StaveNote) {
     return getModifiersByCategory(note, 'Annotation') as VFAnnotation[];
   }
 
-  it('draws one bold annotation below a single stuck note', () => {
+  function verticalJustification(annotation: VFAnnotation | undefined) {
+    return (annotation as unknown as { verticalJustification: number })
+      .verticalJustification;
+  }
+
+  function annotationAttachment(
+    ownerId: string,
+    text: string,
+    placement?: 'above' | 'below'
+  ): NoteAttachment {
+    return {
+      id: `${ownerId}-annotation`,
+      ownerId,
+      type: 'annotation',
+      text,
+      ...(placement ? { placement } : {}),
+    };
+  }
+
+  it('draws a bold annotation below a note by default', () => {
     const item: Note = {
-      id: 'sticking-note',
+      id: 'annotated-note',
       type: 'note',
       voiceId: 'voice',
-      pitch: { step: 'C', octave: 5, sticking: 'R' },
+      pitch: { step: 'C', octave: 5 },
       duration: { length: 'q' },
     };
 
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('annotated-note', 'R'),
+    ]) as StaveNote;
     const annotations = getAnnotations(note);
 
     expect(annotations).toHaveLength(1);
     expect(annotations[0]?.getText()).toBe('R');
-    expect(
-      (annotations[0] as unknown as { verticalJustification: number })
-        .verticalJustification
-    ).toBe(AnnotationVerticalJustify.BOTTOM);
+    expect(verticalJustification(annotations[0])).toBe(
+      AnnotationVerticalJustify.BOTTOM
+    );
     expect(annotations[0]?.fontInfo.weight).toBe('bold');
   });
 
-  it('collapses a chord of same-hand pitches to one letter', () => {
+  it('draws one annotation per attachment on a chord', () => {
     const item: Chord = {
-      id: 'sticking-chord-same',
+      id: 'annotated-chord',
       type: 'chord',
       voiceId: 'voice',
       pitches: [
-        { step: 'G', octave: 5, notehead: 'x', sticking: 'R' },
-        { step: 'C', octave: 5, sticking: 'R' },
+        { step: 'G', octave: 5, notehead: 'x' },
+        { step: 'C', octave: 5 },
       ],
       duration: { length: 'q' },
     };
 
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
-    const annotations = getAnnotations(note);
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('annotated-chord', 'RL'),
+      annotationAttachment('annotated-chord', '1', 'above'),
+    ]) as StaveNote;
 
-    expect(annotations).toHaveLength(1);
-    expect(annotations[0]?.getText()).toBe('R');
+    expect(
+      getAnnotations(note).map((annotation) => annotation.getText())
+    ).toEqual(['RL', '1']);
   });
 
-  it('joins distinct hands in pitch order, skipping unstuck pitches', () => {
-    const item: Chord = {
-      id: 'sticking-chord-mixed',
-      type: 'chord',
+  it('draws an annotation below a visible rest', () => {
+    const item: Rest = {
+      id: 'annotated-rest',
+      type: 'rest',
       voiceId: 'voice',
-      pitches: [
-        { step: 'G', octave: 5, notehead: 'x', sticking: 'R' },
-        { step: 'F', octave: 4 },
-        { step: 'C', octave: 5, sticking: 'L' },
-      ],
-      duration: { length: '8' },
+      duration: { length: 'q' },
     };
 
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('annotated-rest', 'L'),
+    ]) as StaveNote;
     const annotations = getAnnotations(note);
 
+    expect(note.isRest()).toBe(true);
     expect(annotations).toHaveLength(1);
-    expect(annotations[0]?.getText()).toBe('RL');
+    expect(annotations[0]?.getText()).toBe('L');
+    expect(verticalJustification(annotations[0])).toBe(
+      AnnotationVerticalJustify.BOTTOM
+    );
   });
 
-  it('keeps first-occurrence order when a hand repeats', () => {
-    const item: Chord = {
-      id: 'repeat-sticking-chord',
-      type: 'chord',
+  it('places an `above` annotation on top', () => {
+    const item: Note = {
+      id: 'above-note',
+      type: 'note',
       voiceId: 'voice',
-      pitches: [
-        { step: 'C', octave: 5, sticking: 'L' },
-        { step: 'D', octave: 5, sticking: 'R' },
-        { step: 'E', octave: 5, sticking: 'L' },
-      ],
-      duration: { length: '8' },
+      pitch: { step: 'C', octave: 5 },
+      duration: { length: 'q' },
     };
 
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      annotationAttachment('above-note', 'R', 'above'),
+    ]) as StaveNote;
 
-    expect(getAnnotations(note)[0]?.getText()).toBe('LR');
+    expect(verticalJustification(getAnnotations(note)[0])).toBe(
+      AnnotationVerticalJustify.TOP
+    );
   });
 
-  it('adds no annotation without sticking', () => {
+  it('adds no annotation without annotation attachments', () => {
     const item: Chord = {
-      id: 'plain-sticking-chord',
+      id: 'plain-chord',
       type: 'chord',
       voiceId: 'voice',
       pitches: [
@@ -463,32 +487,35 @@ describe('voiceItemToStaveNote sticking', () => {
       duration: { length: 'q' },
     };
 
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
+    const note = voiceItemToStaveNote(item, 'percussion', [
+      {
+        id: 'plain-chord-staccato',
+        ownerId: 'plain-chord',
+        type: 'articulation',
+        articulation: 'staccato',
+      },
+    ]) as StaveNote;
 
     expect(getAnnotations(note)).toHaveLength(0);
   });
 
-  it('leaves grace notes without sticking annotations', () => {
+  it('leaves grace notes without annotations', () => {
     const item: Note = {
-      id: 'sticking-flam',
+      id: 'annotated-flam',
       type: 'note',
       voiceId: 'voice',
-      pitch: { step: 'C', octave: 5, sticking: 'R' },
+      pitch: { step: 'C', octave: 5 },
       duration: { length: 'q' },
     };
     const attachments: NoteAttachment[] = [
       {
         id: 'flam',
-        ownerId: 'sticking-flam',
+        ownerId: 'annotated-flam',
         type: 'grace',
         slash: true,
-        notes: [
-          {
-            pitch: { step: 'C', octave: 5, sticking: 'L' },
-            duration: { length: '8' },
-          },
-        ],
+        notes: [{ pitch: { step: 'C', octave: 5 }, duration: { length: '8' } }],
       },
+      annotationAttachment('annotated-flam', 'R'),
     ];
 
     const note = voiceItemToStaveNote(

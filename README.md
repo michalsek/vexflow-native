@@ -244,7 +244,6 @@ import type { NoteAttachment, Pitch } from 'vexflow-native/state';
 const hiHat: Pitch = { step: 'G', octave: 5, notehead: 'x' };
 const ghostSnare: Pitch = { step: 'C', octave: 5, ghost: true };
 const accentedSnare: Pitch = { step: 'C', octave: 5, accent: true };
-const stickingSnare: Pitch = { step: 'C', octave: 5, sticking: 'R' };
 
 const accent: NoteAttachment = {
   id: 'accent-1',
@@ -271,6 +270,20 @@ const drag: NoteAttachment = {
     { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
   ],
 };
+
+const rightHand: NoteAttachment = {
+  id: 'sticking-1',
+  ownerId: 'note-1',
+  type: 'annotation',
+  text: 'R',
+};
+
+const restSticking: NoteAttachment = {
+  id: 'sticking-2',
+  ownerId: 'rest-1',
+  type: 'annotation',
+  text: 'L',
+};
 ```
 
 - `pitch.notehead`: `x`, `circle-x`, `diamond`, `circle`, `square`, `triangle`,
@@ -279,9 +292,9 @@ const drag: NoteAttachment = {
 - `pitch.accent`: draws one accent (`>`) above the note or chord, however many
   of its pitches are flagged; skipped when the owner already has an `accent`
   articulation attachment.
-- `pitch.sticking`: `L` or `R`; draws one bold sticking label below the note
-  or chord, distinct letters in pitch order (an all-`R` chord reads `R`, an
-  `R`+`L` chord reads `RL`). Grace notes are not affected.
+- Annotation attachments draw their `text` in a bold sans font under the
+  owner (`placement: 'above'` puts it on top). The owner may be a note, a
+  chord or a visible rest, so a sticking lane can mark silent slots too.
 - Articulation attachments accept an optional `placement` of `above` (default)
   or `below`.
 - Grace attachments draw their `notes` before the owner (a flam is one slashed

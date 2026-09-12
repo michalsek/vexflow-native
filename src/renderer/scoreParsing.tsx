@@ -222,45 +222,15 @@ export function applyPitchAccent(
   note.addModifier(new VFArticulation(ARTICULATION_TO_VF_CODE.accent), 0);
 }
 
-const STICKING_FONT = {
+const ANNOTATION_FONT = {
   family: 'Arial, Helvetica, sans-serif',
   size: 10,
   weight: 'bold',
 };
 
-/** Distinct sticking letters in pitch order; empty when no pitch is stuck. */
-function stickingText(pitches: readonly Pitch[]): string {
-  let text = '';
-
-  for (const pitch of pitches) {
-    if (pitch.sticking && !text.includes(pitch.sticking)) {
-      text += pitch.sticking;
-    }
-  }
-
-  return text;
-}
-
 /**
- * Draws one centered L/R annotation below a note whose pitches carry
- * `sticking`.
- */
-export function applyPitchSticking(note: StaveNote, pitches: readonly Pitch[]) {
-  const text = stickingText(pitches);
-
-  if (!text) {
-    return;
-  }
-
-  const annotation = new VFAnnotation(text);
-  annotation.setFont(STICKING_FONT);
-  annotation.setVerticalJustification(AnnotationVerticalJustify.BOTTOM);
-  note.addModifier(annotation, 0);
-}
-
-/**
- * Attaches the owner's articulation and grace-note modifiers to a VexFlow
- * note; dynamics and lyrics are drawn elsewhere.
+ * Attaches the owner's articulation, annotation and grace-note modifiers to
+ * a VexFlow note; dynamics and lyrics are drawn elsewhere.
  */
 export function applyNoteModifiers(
   note: StaveNote,
@@ -282,6 +252,16 @@ export function applyNoteModifiers(
       }
 
       note.addModifier(articulation, 0);
+    } else if (attachment.type === 'annotation') {
+      const annotation = new VFAnnotation(attachment.text);
+
+      annotation.setFont(ANNOTATION_FONT);
+      annotation.setVerticalJustification(
+        attachment.placement === 'above'
+          ? AnnotationVerticalJustify.TOP
+          : AnnotationVerticalJustify.BOTTOM
+      );
+      note.addModifier(annotation, 0);
     } else if (attachment.type === 'grace') {
       applyGraceNoteGroup(note, clef, attachment);
     }
@@ -396,6 +376,11 @@ export function voiceItemToStaveNote(
       duration: durationToVF(item.duration, true),
     });
     applyDots(note, item.duration.dots);
+    applyNoteModifiers(
+      note,
+      clef,
+      attachments?.filter((attachment) => attachment.type === 'annotation')
+    );
     return note;
   }
 
@@ -408,7 +393,6 @@ export function voiceItemToStaveNote(
     });
     decorateStaveNote(note, [item.pitch], item.duration);
     applyPitchAccent(note, [item.pitch], attachments);
-    applyPitchSticking(note, [item.pitch]);
     applyNoteModifiers(note, clef, attachments);
     return note;
   }
@@ -421,7 +405,6 @@ export function voiceItemToStaveNote(
   });
   decorateStaveNote(note, item.pitches, item.duration);
   applyPitchAccent(note, item.pitches, attachments);
-  applyPitchSticking(note, item.pitches);
   applyNoteModifiers(note, clef, attachments);
   return note;
 }
