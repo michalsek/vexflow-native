@@ -13,11 +13,14 @@ import type {
   Meter,
   NoteAttachment,
   Score,
+  StaffLines,
   Step,
   VoiceItem,
 } from '../../state';
+import { ONE_LINE_STAFF_PITCH } from '../../state';
 import { insets, renderOptions, spacing } from '../constants';
 import { measureScore } from '../measure';
+import { applyStaffLines } from '../stave';
 import type { ScoreOptions } from '../types';
 
 const TEST_OPTIONS: ScoreOptions = {
@@ -175,6 +178,23 @@ describe('measureScore', () => {
 
     expect(addTimeSignatureSpy).not.toHaveBeenCalled();
     expect(withFalseFlag).toEqual(withoutFlag);
+  });
+
+  it('skips the first measure clef when showClef is false', () => {
+    const addClefSpy = jest.spyOn(Stave.prototype, 'addClef');
+
+    measureScore(makeSingleStaffScore({ showClef: false }), TEST_OPTIONS);
+
+    expect(addClefSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the staff bounds of a one-line staff equal to the five-line ones', () => {
+    const fiveLine = measureScore(makeStaffLinesScore(), TEST_OPTIONS);
+    const oneLine = measureScore(makeStaffLinesScore(1), TEST_OPTIONS);
+
+    expect(oneLine.measures[0]!.staffBounds).toEqual(
+      fiveLine.measures[0]!.staffBounds
+    );
   });
 
   describe('intrinsic width of shown left modifiers', () => {
@@ -487,6 +507,74 @@ function makeStemsUpScore(
                   pitch: { step: step as Step, octave },
                   stemDirection: 'up' as const,
                   duration: { length: 'q' as const },
+                })),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+describe('applyStaffLines', () => {
+  it('leaves only the middle line visible for one line', () => {
+    const stave = applyStaffLines(new Stave(0, 0, 100), 1);
+
+    expect(stave.getConfigForLines().map(({ visible }) => visible)).toEqual([
+      false,
+      false,
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it('leaves the middle three lines visible for three lines', () => {
+    const stave = applyStaffLines(new Stave(0, 0, 100), 3);
+
+    expect(stave.getConfigForLines().map(({ visible }) => visible)).toEqual([
+      false,
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it('keeps every line visible by default', () => {
+    expect(
+      applyStaffLines(new Stave(0, 0, 100))
+        .getConfigForLines()
+        .map(({ visible }) => visible)
+    ).toEqual([true, true, true, true, true]);
+  });
+});
+
+/** Four up-stemmed quarters on the one-line pitch; `lines` sets `Staff.lines`. */
+function makeStaffLinesScore(lines?: StaffLines): Score {
+  const base = makeSingleStaffScore();
+  const staff = base.staves[0]!;
+  const measure = staff.measures[0]!;
+  const voice = measure.voices[0]!;
+
+  return {
+    ...base,
+    id: `staff-lines-${lines ?? 'default'}`,
+    staves: [
+      {
+        ...staff,
+        ...(lines === undefined ? {} : { lines }),
+        measures: [
+          {
+            ...measure,
+            voices: [
+              {
+                ...voice,
+                items: voice.items.map((item) => ({
+                  ...item,
+                  pitch: ONE_LINE_STAFF_PITCH,
+                  stemDirection: 'up' as const,
                 })),
               },
             ],
