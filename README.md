@@ -428,8 +428,7 @@ export function DirectVexFlow() {
 When the score model has no attachment for a mark you need, `ScoreRenderer`
 lets you reach the VexFlow note of every item without leaving the typed
 score. Both hooks are optional and keep the item's layout, style overrides
-and `onItemsLayout` entry intact. Memoize them (`useCallback`): a new
-function identity re-records the score.
+and `onItemsLayout` entry intact.
 
 - `decorateItem(item, note, { clef, staff, measureIndex, attachments })` runs
   once per drawable item (never for `hidden`/`spacer` rests) in **both** the
@@ -448,10 +447,12 @@ function identity re-records the score.
 
 The VexFlow classes the hooks need are re-exported from
 `vexflow-native/renderer` (`StaveNote`, `Modifier`, `Articulation`,
-`Annotation`, `Ornament`, `RenderContext`).
+`Annotation`, `Ornament`, `RenderContext`); `vexflow` is a peer dependency,
+so these are your own copy of the classes and `instanceof` checks against
+them hold. Define the hooks outside the component (or wrap them in
+`useCallback` inside it) — a new function identity re-records the score.
 
 ```tsx
-import { useCallback } from 'react';
 import {
   Articulation,
   ScoreRenderer,
@@ -484,8 +485,8 @@ const onDrawItem: DrawItem = (ctx, item, _note, layout) => {
   score={score}
   defaultFont="Bravura"
   fontManager={fontManager}
-  decorateItem={useCallback(decorateItem, [])}
-  onDrawItem={useCallback(onDrawItem, [])}
+  decorateItem={decorateItem}
+  onDrawItem={onDrawItem}
 />;
 ```
 

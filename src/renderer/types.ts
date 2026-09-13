@@ -53,14 +53,16 @@ export interface ScoreItemContext {
   clef: Clef;
   staff: Staff;
   measureIndex: number;
+  /** For rests, the rest-eligible subset (everything but grace). */
   attachments: readonly NoteAttachment[];
 }
 
 /**
  * Called once per drawable item (not hidden/spacer rests) in BOTH the
- * measurement and the drawing pass, right after the note is fully built and
- * before formatting, so added modifiers count in width and vertical bounds.
- * Must be deterministic in its inputs; `note` is rebuilt on every pass.
+ * measurement and the drawing pass, after the item's own attachments are
+ * applied, before measure directions and before formatting, so added
+ * modifiers count in width and vertical bounds. Must be deterministic in its
+ * inputs; `note` is rebuilt on every pass.
  */
 export type DecorateItem = (
   item: VoiceItem,
@@ -79,7 +81,7 @@ export type DrawItem = (
   ctx: RenderContext,
   item: VoiceItem,
   note: StaveNote,
-  layout: ScoreItemLayout
+  layout: Readonly<ScoreItemLayout>
 ) => void;
 
 export interface ScoreItemHooks {

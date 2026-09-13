@@ -108,8 +108,9 @@ export function measureScore(
               attachmentsByOwner,
               staff,
               directions: voiceIndex === 0 ? measure.directions : undefined,
-              decorateItem,
-              measureIndex,
+              itemContext: decorateItem
+                ? { decorateItem, staff, measureIndex }
+                : undefined,
               resolveClef: (item) =>
                 item.targetStaffId
                   ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??

@@ -62,6 +62,7 @@ jest.mock('../render', () => ({
 }));
 
 import { layoutScore } from '../layout';
+import { measureScore } from '../measure';
 import { renderScore } from '../render';
 import { useScoreRecording } from '../useScoreRecording';
 
@@ -153,6 +154,31 @@ describe('useScoreRecording items layout', () => {
       width: 393,
       height: 116,
     });
+  });
+
+  it('forwards decorateItem to measurement and both hooks to rendering', () => {
+    const decorateItem = jest.fn();
+    const onDrawItem = jest.fn();
+
+    useScoreRecording({
+      ...HOOK_ARGS,
+      enabled: true,
+      decorateItem,
+      onDrawItem,
+    });
+
+    expect(measureScore).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { decorateItem }
+    );
+    expect(renderScore).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      { decorateItem, onDrawItem }
+    );
   });
 
   it('returns an empty items layout in the disabled branch', () => {

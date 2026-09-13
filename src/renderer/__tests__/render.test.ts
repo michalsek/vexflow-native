@@ -772,6 +772,17 @@ describe('renderScore', () => {
       ],
     });
     const onDrawItem = jest.fn();
+    // The spacer is a GhostNote: no notehead-span getters.
+    mockMakeVFVoice.mockImplementationOnce((_score, _meter, _clef, voice) =>
+      makeMockVoiceResult(voice, (absX) =>
+        absX === MOCK_NOTE_FIRST_X
+          ? null
+          : {
+              begin: absX + MOCK_HEAD_BEGIN_OFFSET,
+              end: absX + MOCK_HEAD_END_OFFSET,
+            }
+      )
+    );
 
     renderScore(
       mockRecordingContext as never,

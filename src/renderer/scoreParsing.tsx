@@ -62,13 +62,14 @@ export interface MakeVFVoiceOptions {
   staff?: Staff;
   /** Measure directions drawn on this voice's first drawn item. */
   directions?: Direction[];
-  /** Consulted with `staff` and `measureIndex`; skipped when either is absent. */
-  decorateItem?: DecorateItem;
-  measureIndex?: number;
+  itemContext?: {
+    decorateItem: DecorateItem;
+    staff: Staff;
+    measureIndex: number;
+  };
 }
 
-/** Receives the item's raw attachments (rests included, unfiltered). */
-export type ItemDecorator = (
+type ItemDecorator = (
   item: VoiceItem,
   note: StaveNote,
   attachments: readonly NoteAttachment[]
@@ -151,13 +152,11 @@ export function voiceItemToStaveNote(
   }
 
   const note = buildStaveNote(item, clef);
+  const applied =
+    (item.type === 'rest' ? restAttachments(attachments) : attachments) ?? [];
 
-  applyNoteModifiers(
-    note,
-    clef,
-    item.type === 'rest' ? restAttachments(attachments) : attachments
-  );
-  decorate?.(item, note, attachments ?? []);
+  applyNoteModifiers(note, clef, applied);
+  decorate?.(item, note, applied);
 
   return note;
 }
@@ -280,19 +279,18 @@ export function makeVFVoice(
 } {
   const attachmentsByOwner =
     options.attachmentsByOwner ?? indexAttachmentsByOwner(score);
-  const { decorateItem, staff, measureIndex } = options;
+  const { itemContext } = options;
   const notes = voice.items.map((item) => {
     const itemClef = options.resolveClef?.(item) ?? clef;
-    const decorate: ItemDecorator | undefined =
-      decorateItem && staff && measureIndex !== undefined
-        ? (decoratedItem, note, attachments) =>
-            decorateItem(decoratedItem, note, {
-              clef: itemClef,
-              staff,
-              measureIndex,
-              attachments,
-            })
-        : undefined;
+    const decorate: ItemDecorator | undefined = itemContext
+      ? (decoratedItem, note, attachments) =>
+          itemContext.decorateItem(decoratedItem, note, {
+            clef: itemClef,
+            staff: itemContext.staff,
+            measureIndex: itemContext.measureIndex,
+            attachments,
+          })
+      : undefined;
 
     return voiceItemToStaveNote(
       item,

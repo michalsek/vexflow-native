@@ -1,5 +1,5 @@
 import { Formatter, Stave, StaveConnector } from 'vexflow';
-import type { StaveNote, Voice as VFVoice } from 'vexflow';
+import type { Voice as VFVoice } from 'vexflow';
 import type { StaveConnectorType } from 'vexflow';
 
 import type { VexflowRecordingContext } from '../base';
@@ -18,20 +18,12 @@ import {
   applyMeasureModifiers,
   resolveMeasureModifiers,
 } from './measureModifiers';
-import {
-  indexAttachmentsByOwner,
-  makeVFVoice,
-  noteheadWidth,
-} from './scoreParsing';
+import { indexAttachmentsByOwner, makeVFVoice } from './scoreParsing';
 import { applyFixedNoteSpacing } from './fixedNoteSpacing';
-import { computeModifierBounds } from './itemLayout';
+import { itemLayoutOf } from './itemLayout';
+import { hasNoteHeads } from './noteModifiers';
 import { applyStaffLines, visibleLineYs } from './stave';
-import type {
-  ScoreItemHooks,
-  ScoreItemLayout,
-  ScoreItemsLayout,
-  ScoreOptions,
-} from './types';
+import type { ScoreItemHooks, ScoreItemsLayout, ScoreOptions } from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
 /**
@@ -143,8 +135,13 @@ function renderMeasure(
           attachmentsByOwner,
           staff,
           directions: voiceIndex === 0 ? measure.directions : undefined,
-          decorateItem: options.decorateItem,
-          measureIndex: measurePlan.measureIndex,
+          itemContext: options.decorateItem
+            ? {
+                decorateItem: options.decorateItem,
+                staff,
+                measureIndex: measurePlan.measureIndex,
+              }
+            : undefined,
           resolveClef: (item) =>
             item.targetStaffId
               ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -297,42 +294,6 @@ function collectMeasureLayout(
   });
 }
 
-/** Detected structurally because `GhostNote`s lack these getters. */
-type NoteHeadSpan = {
-  getNoteHeadBeginX?: () => number;
-  getNoteHeadEndX?: () => number;
-};
-
-/**
- * Center of a formatted note's visual notehead span. When the getters are
- * missing (GhostNotes) the fallback is the center of a NOTIONAL notehead at
- * the block's left edge, capped by the block width — so a `spacer` rest
- * anchors where a real note's head would sit on the same tick, and external
- * UI aligned to it does not hop when the note appears. Zero-width `hidden`
- * rests keep anchoring at their tick x.
- */
-export function resolveItemHeadCenterX(
-  note: VFVoiceNote,
-  x: number,
-  width: number
-): number {
-  const { getNoteHeadBeginX, getNoteHeadEndX } = note as NoteHeadSpan;
-
-  if (
-    typeof getNoteHeadBeginX === 'function' &&
-    typeof getNoteHeadEndX === 'function'
-  ) {
-    const center =
-      (getNoteHeadBeginX.call(note) + getNoteHeadEndX.call(note)) / 2;
-
-    if (Number.isFinite(center) && center > x && center <= x + width) {
-      return center;
-    }
-  }
-
-  return x + Math.min(width, noteheadWidth()) / 2;
-}
-
 /**
  * Draws each item and records its formatted geometry; the layout entry is
  * taken after `draw()` because modifiers only take their position there.
@@ -361,36 +322,13 @@ function drawVoiceItems(
 
       itemsLayout.items[item.id] = layout;
 
-      if (onDrawItem && !isPlaceholderRest(item)) {
-        onDrawItem(ctx, item, note as StaveNote, layout);
+      if (onDrawItem && hasNoteHeads(note)) {
+        onDrawItem(ctx, item, note, layout);
       }
     } finally {
       ctx.endColorGroup();
     }
   });
-}
-
-function isPlaceholderRest(item: VoiceItem): boolean {
-  return (
-    item.type === 'rest' && (item.kind === 'hidden' || item.kind === 'spacer')
-  );
-}
-
-function itemLayoutOf(
-  note: VFVoiceNote,
-  measureIndex: number
-): ScoreItemLayout {
-  const x = note.getAbsoluteX();
-  const width = note.getWidth();
-  const modifierBounds = computeModifierBounds(note);
-
-  return {
-    x,
-    width,
-    headCenterX: resolveItemHeadCenterX(note, x, width),
-    measureIndex,
-    ...(modifierBounds ? { modifierBounds } : {}),
-  };
 }
 
 function renderStaffConnectors(
