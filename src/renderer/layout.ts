@@ -17,7 +17,7 @@ import {
   type ResolvedMeasureState,
 } from './scoreParsing';
 import type { MeasuredScore } from './measure';
-import type { StaffVerticalBounds } from './measure';
+import type { StaffVerticalBounds } from './measureBounds';
 import type {
   RendererRect,
   RendererSize,

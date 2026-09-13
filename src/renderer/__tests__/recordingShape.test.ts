@@ -33,37 +33,12 @@ import { layoutScore } from '../layout';
 import { measureScore } from '../measure';
 import { renderScore } from '../render';
 import { createContentViewport, getRenderScale } from '../scale';
+import { fakeFontProvider, measurementCanvasStub } from './stubs';
 
 const TEST_OPTIONS = {
   insets: { ...insets },
   spacing: { ...spacing },
   render: { ...renderOptions },
-};
-
-/* Proportional text-measurement stub (same shape as the app's height-guard
- * harness) so glyph boxes are non-zero and drawing paths are realistic. */
-const measurementCanvasStub = {
-  getContext: (type: string) =>
-    type === '2d'
-      ? {
-          font: '',
-          measureText: (text: string) => ({
-            width: text.length * 8,
-            actualBoundingBoxAscent: 10,
-            actualBoundingBoxDescent: 2,
-            actualBoundingBoxLeft: 0,
-            actualBoundingBoxRight: text.length * 8,
-            fontBoundingBoxAscent: 10,
-            fontBoundingBoxDescent: 2,
-          }),
-        }
-      : null,
-} as unknown as HTMLCanvasElement;
-
-const fakeFontProvider = {
-  countFamilies: () => 1,
-  getFamilyName: () => 'Bravura',
-  matchFamilyStyle: () => ({}),
 };
 
 const note = (id: string, length: '8' | 'q'): VoiceItem => ({

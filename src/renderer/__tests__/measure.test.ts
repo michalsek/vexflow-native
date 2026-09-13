@@ -11,6 +11,7 @@ import { Articulation as VFArticulation, Element, Stave } from 'vexflow';
 import type {
   Measure,
   Meter,
+  Note,
   NoteAttachment,
   Score,
   StaffLines,
@@ -22,6 +23,7 @@ import { insets, renderOptions, spacing } from '../constants';
 import { measureScore } from '../measure';
 import { applyStaffLines } from '../stave';
 import type { ScoreOptions } from '../types';
+import { measurementCanvasStub } from './stubs';
 
 const TEST_OPTIONS: ScoreOptions = {
   insets: { ...insets },
@@ -197,27 +199,7 @@ describe('measureScore', () => {
     );
   });
 
-  describe('intrinsic width of shown left modifiers', () => {
-    /* Under jest VexFlow has no text measurement canvas and every glyph
-     * measures 0, which would silently turn these tests into no-ops — install
-     * a proportional stub for this block. */
-    const measurementCanvasStub = {
-      getContext: (type: string) =>
-        type === '2d'
-          ? {
-              font: '',
-              measureText: (text: string) => ({
-                width: text.length * 8,
-                actualBoundingBoxAscent: 10,
-                actualBoundingBoxDescent: 2,
-                actualBoundingBoxLeft: 0,
-                actualBoundingBoxRight: text.length * 8,
-                fontBoundingBoxAscent: 10,
-                fontBoundingBoxDescent: 2,
-              }),
-            }
-          : null,
-    } as unknown as HTMLCanvasElement;
+  describe('with a measurement canvas', () => {
     let previousCanvas: HTMLCanvasElement | undefined;
 
     beforeEach(() => {
@@ -426,8 +408,49 @@ describe('measureScore', () => {
         const plainBounds = withoutGrace.measures[0]!.staffBounds[0]!;
 
         expect(graceBounds.top).toBeLessThan(plainBounds.top);
+        expect(graceBounds.top).toBeGreaterThan(0);
         expect(graceBounds.bottom).toBeGreaterThanOrEqual(plainBounds.bottom);
       });
+    });
+
+    it('keeps dotted, accidental and ghost notes level with the plain note top', () => {
+      const plainTop = measureScore(
+        makeStemsUpScore(undefined, 4),
+        TEST_OPTIONS
+      ).measures[0]!.staffBounds[0]!.top;
+      const patches: Partial<Note>[] = [
+        { duration: { length: '8', dots: 1 } },
+        { pitch: { step: 'C', octave: 4, accidental: '#' } },
+        { pitch: { step: 'C', octave: 4, ghost: true } },
+      ];
+
+      patches.forEach((patch) => {
+        const { top } = measureScore(
+          makeStemsUpScore(undefined, 4, patch),
+          TEST_OPTIONS
+        ).measures[0]!.staffBounds[0]!;
+
+        expect(top).toBe(plainTop);
+      });
+    });
+
+    it('ignores the empty boxes of spacer and hidden rests', () => {
+      const plain = measureScore(makeStemsUpScore(undefined, 4), TEST_OPTIONS);
+      const withRests = makeStemsUpScore(undefined, 4);
+
+      withRests.staves[0]!.measures[0]!.voices[0]!.items.push(
+        ...(['spacer', 'hidden'] as const).map((kind) => ({
+          id: `rest-${kind}`,
+          type: 'rest' as const,
+          voiceId: 'stems-up-m1-v1',
+          kind,
+          duration: { length: 'q' as const },
+        }))
+      );
+
+      expect(
+        measureScore(withRests, TEST_OPTIONS).measures[0]!.staffBounds
+      ).toEqual(plain.measures[0]!.staffBounds);
     });
 
     it('adds the modifier block on top of the note width', () => {
@@ -520,10 +543,12 @@ function graceAttachments(octave: number = 5): NoteAttachment[] {
 }
 
 /** One measure of four stems-up quarter notes, pitched low enough that a
- * below-placed articulation must extend past the stave's bottom line. */
+ * below-placed articulation must extend past the stave's bottom line;
+ * `patch` overrides fields of every note. */
 function makeStemsUpScore(
   attachments?: NoteAttachment[],
-  octave: number = 5
+  octave: number = 5,
+  patch: Partial<Note> = {}
 ): Score {
   return {
     id: 'stems-up-articulations',
@@ -547,6 +572,7 @@ function makeStemsUpScore(
               {
                 id: 'stems-up-m1-v1',
                 index: 0,
+                timingMode: 'soft' as const,
                 items: ['C', 'D', 'E', 'F'].map((step, index) => ({
                   id: `stems-up-m1-v1-n${index + 1}`,
                   type: 'note' as const,
@@ -554,6 +580,7 @@ function makeStemsUpScore(
                   pitch: { step: step as Step, octave },
                   stemDirection: 'up' as const,
                   duration: { length: 'q' as const },
+                  ...patch,
                 })),
               },
             ],

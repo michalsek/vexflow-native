@@ -1,12 +1,4 @@
-import {
-  Annotation as VFAnnotation,
-  Articulation as VFArticulation,
-  Formatter,
-  GraceNoteGroup,
-  Stave,
-  Voice as VFVoice,
-} from 'vexflow';
-import type { BoundingBox, RenderContext } from 'vexflow';
+import { Formatter, Stave, Voice as VFVoice } from 'vexflow';
 import { Platform } from 'react-native';
 
 import {
@@ -25,19 +17,16 @@ import {
   applyMeasureModifiers,
   resolveMeasureModifiers,
 } from './measureModifiers';
+import { mergeNoteBounds, mergeY } from './measureBounds';
 import { applyStaffLines } from './stave';
 import type { ScoreOptions } from './types';
+import type { StaffVerticalBounds } from './measureBounds';
 import type { ResolvedMeasureModifiers } from './measureModifiers';
-import type { ResolvedMeasureState, VFVoiceNote } from './scoreParsing';
+import type { ResolvedMeasureState } from './scoreParsing';
 import {
   VEXFLOW_STAVE_BOTTOM_LINE_OFFSET,
   VEXFLOW_STAVE_TOP_LINE_OFFSET,
 } from './Layout/LayoutMetrics';
-
-export interface StaffVerticalBounds {
-  top: number;
-  bottom: number;
-}
 
 export interface MeasuredMeasure {
   groupId: string;
@@ -302,7 +291,6 @@ function measureStaffVerticalBounds({
             staffIndexById.get(
               items[noteIndex]?.targetStaffId ?? ownerStaffId
             ) ?? staffIndex;
-          mergeModifierBounds(bounds[ownerStaffIndex], note);
           mergeNoteBounds(bounds[ownerStaffIndex], note);
         });
 
@@ -330,95 +318,4 @@ function measureStaffVerticalBounds({
   );
 
   return bounds;
-}
-
-/**
- * Render context that absorbs every method call without drawing anything, so
- * modifiers can run their `draw()` placement math during measurement.
- */
-function createNoopRenderContext(): RenderContext {
-  const memo: Record<PropertyKey, unknown> = {};
-  const proxy: object = new Proxy(memo, {
-    get: (target, property) => {
-      if (!(property in target)) {
-        target[property] = () => proxy;
-      }
-
-      return target[property];
-    },
-  });
-
-  return proxy as RenderContext;
-}
-
-const NOOP_RENDER_CONTEXT = createNoopRenderContext();
-
-/**
- * Merges the drawn extents of a note's articulations, annotations and
- * grace-note groups into the staff bounds. VexFlow only positions these
- * modifiers inside `draw()`, so each one is drawn against a no-op context
- * first to make its bounding boxes real.
- */
-function mergeModifierBounds(
-  bounds: StaffVerticalBounds | undefined,
-  note: VFVoiceNote
-) {
-  if (!bounds) {
-    return;
-  }
-
-  for (const modifier of note.getModifiers()) {
-    const isArticulation = modifier instanceof VFArticulation;
-    const isAnnotation = modifier instanceof VFAnnotation;
-    const isGraceNoteGroup = modifier instanceof GraceNoteGroup;
-
-    if (!isArticulation && !isAnnotation && !isGraceNoteGroup) {
-      continue;
-    }
-
-    try {
-      modifier.setContext(NOOP_RENDER_CONTEXT);
-      modifier.draw();
-
-      if (isGraceNoteGroup) {
-        modifier.getGraceNotes().forEach((graceNote) => {
-          mergeBoundingBox(bounds, graceNote.getBoundingBox());
-        });
-      } else {
-        mergeBoundingBox(bounds, modifier.getBoundingBox());
-      }
-    } catch {
-      // Ghost and spacer notes cannot place modifiers; note bounds remain
-      // the fallback.
-    }
-  }
-}
-
-function mergeNoteBounds(
-  bounds: StaffVerticalBounds | undefined,
-  note: VFVoiceNote
-) {
-  if (!bounds) {
-    return;
-  }
-
-  try {
-    mergeBoundingBox(bounds, note.getBoundingBox());
-  } catch {
-    // Ghost notes and spacers may not expose useful boxes.
-  }
-}
-
-function mergeBoundingBox(bounds: StaffVerticalBounds, box: BoundingBox) {
-  mergeY(bounds, box.getY());
-  mergeY(bounds, box.getY() + box.getH());
-}
-
-function mergeY(bounds: StaffVerticalBounds | undefined, y: number) {
-  if (!bounds || !Number.isFinite(y)) {
-    return;
-  }
-
-  bounds.top = Math.min(bounds.top, y);
-  bounds.bottom = Math.max(bounds.bottom, y);
 }
