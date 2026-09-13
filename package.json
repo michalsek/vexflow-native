@@ -25,6 +25,11 @@
       "types": "./lib/typescript/src/musicxml/index.d.ts",
       "default": "./lib/module/musicxml/index.js"
     },
+    "./percussion": {
+      "source": "./src/percussion/index.ts",
+      "types": "./lib/typescript/src/percussion/index.d.ts",
+      "default": "./lib/module/percussion/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
