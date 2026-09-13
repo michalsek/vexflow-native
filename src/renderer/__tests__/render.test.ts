@@ -21,6 +21,7 @@ const MOCK_TIME_SIGNATURE_WIDTH = 20;
 /** Mock staff-line band: top line 10 below the stave origin, 40 tall. */
 const MOCK_STAVE_LINE_TOP_OFFSET = 10;
 const MOCK_STAVE_LINE_SPAN = 40;
+const MOCK_STAVE_LINE_GAP = MOCK_STAVE_LINE_SPAN / 4;
 const mockStaveConnectorType = {
   SINGLE_RIGHT: 0,
   SINGLE_LEFT: 1,
@@ -53,11 +54,24 @@ const MOCK_HEAD_END_OFFSET = 9;
 const MOCK_HEAD_CENTER_OFFSET =
   (MOCK_HEAD_BEGIN_OFFSET + MOCK_HEAD_END_OFFSET) / 2;
 
+/** Mock modifier: a 6x4 box at the note's x, 20 below the origin. */
+const makeMockModifier = (absX: number) => ({
+  getCategory: () => 'Articulation',
+  getBoundingBox: () => ({
+    getX: () => absX,
+    getY: () => 20,
+    getW: () => 6,
+    getH: () => 4,
+  }),
+});
+
 /** Builds the mock notes of one voice; `headSpan` overrides the notehead-span
- * getters (`() => null` omits them entirely, like a GhostNote). */
+ * getters (`() => null` omits them entirely, like a GhostNote);
+ * `withModifier` hangs one mock modifier off every note. */
 const makeMockNotes = (
   itemCount: number,
-  headSpan?: (absX: number) => { begin: number; end: number } | null
+  headSpan?: (absX: number) => { begin: number; end: number } | null,
+  withModifier = false
 ) =>
   Array.from({ length: itemCount }, (_, index) => {
     const absX = MOCK_NOTE_FIRST_X + index * MOCK_NOTE_X_STEP;
@@ -75,6 +89,7 @@ const makeMockNotes = (
       setStave: mockNoteSetStave,
       getAbsoluteX: () => absX,
       getWidth: () => MOCK_NOTE_WIDTH,
+      getModifiers: () => (withModifier ? [makeMockModifier(absX)] : []),
       ...(span
         ? {
             getNoteHeadBeginX: () => span.begin,
@@ -86,10 +101,11 @@ const makeMockNotes = (
 
 const makeMockVoiceResult = (
   voice: { items: unknown[] },
-  headSpan?: (absX: number) => { begin: number; end: number } | null
+  headSpan?: (absX: number) => { begin: number; end: number } | null,
+  withModifier = false
 ) => ({
   vfVoice: { setRendered: mockVoiceSetRendered },
-  notes: makeMockNotes(voice.items.length, headSpan),
+  notes: makeMockNotes(voice.items.length, headSpan, withModifier),
   beams: [
     {
       setContext: mockBeamSetContext.mockReturnValue({ draw: mockBeamDraw }),
@@ -149,6 +165,11 @@ jest.mock('vexflow', () => ({
     getTopLineTopY = () =>
       (this.constructorArgs[1] as number) + MOCK_STAVE_LINE_TOP_OFFSET;
     getBottomLineBottomY = () => this.getTopLineTopY() + MOCK_STAVE_LINE_SPAN;
+    getYForLine = (line: number) =>
+      this.getTopLineTopY() + line * MOCK_STAVE_LINE_GAP;
+  },
+  Parenthesis: class MockParenthesis {
+    static CATEGORY = 'Parenthesis';
   },
   StaveConnector: class MockStaveConnector {
     static type: Record<string, number> = {
@@ -1002,6 +1023,7 @@ describe('renderScore', () => {
           height: 68,
           staveLineTopY: 34,
           staveLineBottomY: 74,
+          visibleLineYs: [34, 44, 54, 64, 74],
         },
       ]);
 
@@ -1009,6 +1031,54 @@ describe('renderScore', () => {
       const measure = itemsLayout.measures[0]!;
       expect(measure.staveNoteStartX).toBeLessThanOrEqual(firstItemX);
       expect(firstItemX).toBeLessThan(measure.staveNoteEndX);
+    });
+
+    it('emits only the drawn lines of a one-line staff as visibleLineYs', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+      score.staves[0]!.lines = 1;
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      expect(itemsLayout.measures[0]!.visibleLineYs).toEqual([54]);
+    });
+
+    it('emits drawn modifier boxes as modifierBounds, omitted without modifiers', () => {
+      const { score, layoutPlan } = makeItemsLayoutFixture();
+      mockMakeVFVoice.mockImplementationOnce((_score, _meter, _clef, voice) =>
+        makeMockVoiceResult(voice, undefined, true)
+      );
+
+      const itemsLayout = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      for (const item of Object.values(itemsLayout.items)) {
+        expect(item.modifierBounds).toEqual({
+          left: item.x,
+          right: item.x + 6,
+          top: 20,
+          bottom: 24,
+        });
+      }
+
+      const bare = renderScore(
+        mockRecordingContext as never,
+        score,
+        layoutPlan,
+        TEST_OPTIONS
+      );
+
+      for (const item of Object.values(bare.items)) {
+        expect(item).not.toHaveProperty('modifierBounds');
+      }
     });
 
     it('mirrors the layout plan content size', () => {
@@ -1165,6 +1235,7 @@ describe('renderScore', () => {
           height: 135,
           staveLineTopY: 34,
           staveLineBottomY: 74,
+          visibleLineYs: [34, 44, 54, 64, 74],
         },
         {
           groupId: 'piano',
@@ -1181,6 +1252,10 @@ describe('renderScore', () => {
           staveLineTopY: 24 + 120 + MOCK_STAVE_LINE_TOP_OFFSET,
           staveLineBottomY:
             24 + 120 + MOCK_STAVE_LINE_TOP_OFFSET + MOCK_STAVE_LINE_SPAN,
+          visibleLineYs: [0, 1, 2, 3, 4].map(
+            (line) =>
+              24 + 120 + MOCK_STAVE_LINE_TOP_OFFSET + line * MOCK_STAVE_LINE_GAP
+          ),
         },
       ]);
     });

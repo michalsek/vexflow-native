@@ -158,6 +158,19 @@ export interface ScoreItemLayout {
    */
   headCenterX: number;
   measureIndex: number;
+  /**
+   * Union box of the item's drawn modifiers (articulations, annotations,
+   * dynamics, lyrics, grace notes, parentheses, accidentals, dots), in the
+   * same space as `x`. undefined when the item has no modifiers.
+   */
+  modifierBounds?: ScoreItemBounds;
+}
+
+export interface ScoreItemBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
 }
 
 /**
@@ -186,6 +199,12 @@ export interface ScoreMeasureItemsLayout {
   staveLineTopY: number;
   /** Bottom edge of this stave's bottom staff line (hidden lines included). */
   staveLineBottomY: number;
+  /**
+   * Stroke centre y of each drawn line, top to bottom (5, 3 or 1 entries):
+   * `visibleLineYs[0] === staveLineTopY`, the last entry is
+   * `staveLineBottomY - lineWidth`. Always emitted by the renderer.
+   */
+  visibleLineYs?: number[];
 }
 
 /**

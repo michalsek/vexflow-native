@@ -154,7 +154,11 @@ export interface Rest {
   voiceId: Id;
   targetStaffId?: Id;
   kind?: 'visible' | 'spacer' | 'hidden';
-  staffLine?: number;
+  /**
+   * 0 = bottom line … 4 = top line of the five-line geometry; undefined = the
+   * middle line.
+   */
+  staffLine?: 0 | 1 | 2 | 3 | 4;
 }
 
 export interface Chord {

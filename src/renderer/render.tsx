@@ -24,7 +24,8 @@ import {
   noteheadWidth,
 } from './scoreParsing';
 import { applyFixedNoteSpacing } from './fixedNoteSpacing';
-import { applyStaffLines } from './stave';
+import { computeModifierBounds } from './itemLayout';
+import { applyStaffLines, visibleLineYs } from './stave';
 import type { ScoreItemsLayout, ScoreOptions } from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
@@ -221,14 +222,6 @@ function renderMeasure(
     }
   }
 
-  collectMeasureItemsLayout(
-    itemsLayout,
-    measurePlan,
-    group.staves,
-    renderedStaves,
-    staffRenderArtifacts
-  );
-
   staffRenderArtifacts.forEach(
     ({ vfVoices, voiceArtifacts, beams, tuplets }) => {
       vfVoices.forEach((voice) => voice.setRendered());
@@ -238,6 +231,14 @@ function renderMeasure(
       beams.forEach((beam) => beam.setContext(ctx).draw());
       tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
     }
+  );
+
+  collectMeasureItemsLayout(
+    itemsLayout,
+    measurePlan,
+    group.staves,
+    renderedStaves,
+    staffRenderArtifacts
   );
 }
 
@@ -252,9 +253,9 @@ function getFormatReferenceStave(renderedStaves: Stave[]): Stave {
 }
 
 /**
- * Records the formatted geometry of one measure; must run after
- * `formatToStave` because note positions are only final then. Emits one
- * measure entry per rendered stave, since note bounds differ per stave.
+ * Records the formatted geometry of one measure; must run after the items
+ * are drawn because modifiers only take their position in `draw()`. Emits
+ * one measure entry per rendered stave, since note bounds differ per stave.
  */
 function collectMeasureItemsLayout(
   itemsLayout: ScoreItemsLayout,
@@ -274,12 +275,14 @@ function collectMeasureItemsLayout(
 
         const x = note.getAbsoluteX();
         const width = note.getWidth();
+        const modifierBounds = computeModifierBounds(note);
 
         itemsLayout.items[item.id] = {
           x,
           width,
           headCenterX: resolveItemHeadCenterX(note, x, width),
           measureIndex: measurePlan.measureIndex,
+          ...(modifierBounds ? { modifierBounds } : {}),
         };
       });
     });
@@ -305,6 +308,7 @@ function collectMeasureItemsLayout(
       height: measurePlan.height,
       staveLineTopY: stave.getTopLineTopY(),
       staveLineBottomY: stave.getBottomLineBottomY(),
+      visibleLineYs: visibleLineYs(stave, staff.lines),
     });
   });
 }

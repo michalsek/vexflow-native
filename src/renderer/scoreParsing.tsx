@@ -33,7 +33,7 @@ import {
   decorateStaveNote,
   restAttachments,
 } from './noteModifiers';
-import { durationToVF, pitchToVFKey } from './vfKeys';
+import { durationToVF, pitchToVFKey, restKeyForStaffLine } from './vfKeys';
 
 export type StaffGroupLookup = {
   groupId: string;
@@ -136,7 +136,7 @@ export function voiceItemToStaveNote(
 
     const note = new StaveNote({
       clef,
-      keys: ['b/4'],
+      keys: [restKeyForStaffLine(clef, item.staffLine)],
       duration: durationToVF(item.duration, true),
     });
     applyDots(note, item.duration.dots);
