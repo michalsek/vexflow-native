@@ -21,9 +21,14 @@ import {
   makeVFVoice,
   resolveGroupStaves,
 } from './scoreParsing';
+import {
+  applyMeasureModifiers,
+  resolveMeasureModifiers,
+} from './measureModifiers';
 import { applyStaffLines } from './stave';
 import type { ScoreOptions } from './types';
-import type { VFVoiceNote } from './scoreParsing';
+import type { ResolvedMeasureModifiers } from './measureModifiers';
+import type { ResolvedMeasureState, VFVoiceNote } from './scoreParsing';
 import {
   VEXFLOW_STAVE_BOTTOM_LINE_OFFSET,
   VEXFLOW_STAVE_TOP_LINE_OFFSET,
@@ -46,6 +51,16 @@ export interface MeasuredMeasure {
 export interface MeasuredScore {
   measures: MeasuredMeasure[];
   maxIntrinsicNoteWidth: number;
+}
+
+interface StaffMeasurementContext {
+  ownerStaffId: string;
+  staffIndex: number;
+  staff: Staff;
+  measure: Staff['measures'][number];
+  resolvedState: ResolvedMeasureState;
+  modifiers: ResolvedMeasureModifiers;
+  voiceArtifacts: ReturnType<typeof makeVFVoice>[];
 }
 
 /**
@@ -91,38 +106,40 @@ export function measureScore(
           resolvedStatesByStaff[staffIndex]?.[measureIndex],
         ])
       );
-      const staffMeasurementContexts = staves.map((staff, staffIndex) => {
-        const measure = staff.measures[measureIndex]!;
-        const resolvedState = resolvedStatesByStaff[staffIndex]![measureIndex]!;
-        measureNumbers.push(measure.number);
+      const staffMeasurementContexts = staves.map(
+        (staff, staffIndex): StaffMeasurementContext => {
+          const measure = staff.measures[measureIndex]!;
+          const resolvedState =
+            resolvedStatesByStaff[staffIndex]![measureIndex]!;
+          measureNumbers.push(measure.number);
 
-        const voiceArtifacts = measure.voices.map((voice) =>
-          makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
-            attachmentsByOwner,
-            staffLines: staff.lines,
-            resolveClef: (item) =>
-              item.targetStaffId
-                ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
-                  resolvedState.clef
-                : resolvedState.clef,
-          })
-        );
-        const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
+          const voiceArtifacts = measure.voices.map((voice) =>
+            makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
+              attachmentsByOwner,
+              staff,
+              resolveClef: (item) =>
+                item.targetStaffId
+                  ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
+                    resolvedState.clef
+                  : resolvedState.clef,
+            })
+          );
+          const vfVoices = voiceArtifacts.map(({ vfVoice }) => vfVoice);
 
-        formatter.joinVoices(vfVoices);
-        allVoices.push(...vfVoices);
+          formatter.joinVoices(vfVoices);
+          allVoices.push(...vfVoices);
 
-        return {
-          ownerStaffId: staff.id,
-          staffIndex,
-          staffLines: staff.lines,
-          measure,
-          resolvedState,
-          showClef: measure.leftModifiers?.showClef ?? measureIndex === 0,
-          showMeter: measure.leftModifiers?.showMeter === true,
-          voiceArtifacts,
-        };
-      });
+          return {
+            ownerStaffId: staff.id,
+            staffIndex,
+            staff,
+            measure,
+            resolvedState,
+            modifiers: resolveMeasureModifiers(measure, measureIndex),
+            voiceArtifacts,
+          };
+        }
+      );
 
       try {
         // Clef and time signature sit before the note area, so the intrinsic
@@ -171,34 +188,31 @@ export function measureScore(
 const MODIFIER_PROBE_STAVE_WIDTH = 500;
 
 /**
- * Widest clef/time-signature block of the measure, measured as the note-start
- * delta between a bare probe stave and one carrying the shown modifiers.
+ * Widest left-modifier block of the measure, measured as the note-start delta
+ * between a bare probe stave and one carrying the resolved modifiers.
  */
 function measureLeftModifierWidth(
-  staffMeasurementContexts: Array<{
-    resolvedState: { clef: string; meter: { beats: number; beatUnit: number } };
-    showClef: boolean;
-    showMeter: boolean;
-  }>
+  staffMeasurementContexts: StaffMeasurementContext[]
 ): number {
   return staffMeasurementContexts.reduce(
-    (maxWidth, { resolvedState, showClef, showMeter }) => {
-      if (!showClef && !showMeter) {
+    (maxWidth, { resolvedState, modifiers }) => {
+      const { showClef, showMeter, showKeySignature, startBarline } = modifiers;
+
+      if (
+        !showClef &&
+        !showMeter &&
+        !showKeySignature &&
+        startBarline === 'single'
+      ) {
         return maxWidth;
       }
 
       const bareStave = new Stave(0, 0, MODIFIER_PROBE_STAVE_WIDTH);
-      const modifiedStave = new Stave(0, 0, MODIFIER_PROBE_STAVE_WIDTH);
-
-      if (showClef) {
-        modifiedStave.addClef(resolvedState.clef);
-      }
-
-      if (showMeter) {
-        modifiedStave.addTimeSignature(
-          `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
-        );
-      }
+      const modifiedStave = applyMeasureModifiers(
+        new Stave(0, 0, MODIFIER_PROBE_STAVE_WIDTH),
+        modifiers,
+        resolvedState
+      );
 
       return Math.max(
         maxWidth,
@@ -218,34 +232,16 @@ function measureStaffVerticalBounds({
   allVoices: VFVoice[];
   intrinsicNoteWidth: number;
   staves: Staff[];
-  staffMeasurementContexts: Array<{
-    ownerStaffId: string;
-    staffIndex: number;
-    staffLines: Staff['lines'];
-    measure: Staff['measures'][number];
-    resolvedState: ReturnType<typeof buildResolvedMeasureStates>[number];
-    showClef: boolean;
-    showMeter: boolean;
-    voiceArtifacts: ReturnType<typeof makeVFVoice>[];
-  }>;
+  staffMeasurementContexts: StaffMeasurementContext[];
 }): StaffVerticalBounds[] {
   const width = Math.max(intrinsicNoteWidth, 1);
   const renderedStaves = staffMeasurementContexts.map(
-    ({ resolvedState, showClef, showMeter, staffLines }) => {
-      const stave = applyStaffLines(new Stave(0, 0, width), staffLines);
-
-      if (showClef) {
-        stave.addClef(resolvedState.clef);
-      }
-
-      if (showMeter) {
-        stave.addTimeSignature(
-          `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
-        );
-      }
-
-      return stave;
-    }
+    ({ resolvedState, modifiers, staff }) =>
+      applyMeasureModifiers(
+        applyStaffLines(new Stave(0, 0, width), staff.lines),
+        modifiers,
+        resolvedState
+      )
   );
   const staffIndexById = new Map(
     staves.map((staff, staffIndex) => [staff.id, staffIndex])

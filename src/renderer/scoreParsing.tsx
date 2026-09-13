@@ -32,7 +32,6 @@ import type {
   Score,
   Staff,
   StaffGroup,
-  StaffLines,
   StemDirection,
   Tempo,
   TupletGroup,
@@ -63,8 +62,8 @@ export interface MakeVFVoiceOptions {
    * rebuilding it on every call.
    */
   attachmentsByOwner?: Map<string, NoteAttachment[]>;
-  /** `Staff.lines`; on a one-line staff auto stems point up. */
-  staffLines?: StaffLines;
+  /** Owning staff; on a one-line staff auto stems point up. */
+  staff?: Staff;
 }
 
 /**
@@ -558,7 +557,7 @@ export function makeVFVoice(
 
   const groups = beamGroupsToVF(meter);
   const maintainStemDirections =
-    options.staffLines === 1 || voice.items.some(hasExplicitStemDirection);
+    options.staff?.lines === 1 || voice.items.some(hasExplicitStemDirection);
   const beamOptions =
     groups || maintainStemDirections
       ? {

@@ -255,6 +255,53 @@ describe('measureScore', () => {
       );
     });
 
+    it('widens the measure for a repeat-begin start barline', () => {
+      const plain = measureScore(makeSingleStaffScore(), TEST_OPTIONS);
+      const repeated = measureScore(
+        makeSingleStaffScore({ startBarline: 'repeat-begin' }),
+        TEST_OPTIONS
+      );
+
+      expect(repeated.measures[0]!.intrinsicNoteWidth).toBeGreaterThan(
+        plain.measures[0]!.intrinsicNoteWidth
+      );
+    });
+
+    it('widens a clefless measure for a repeat-begin start barline', () => {
+      const bare = measureScore(
+        makeSingleStaffScore({ showClef: false }),
+        TEST_OPTIONS
+      );
+      const repeated = measureScore(
+        makeSingleStaffScore({ showClef: false, startBarline: 'repeat-begin' }),
+        TEST_OPTIONS
+      );
+
+      expect(repeated.measures[0]!.intrinsicNoteWidth).toBeGreaterThan(
+        bare.measures[0]!.intrinsicNoteWidth
+      );
+    });
+
+    it('widens the measure for a shown key signature', () => {
+      const withKey = (leftModifiers?: Measure['leftModifiers']): Score => {
+        const score = makeSingleStaffScore(leftModifiers);
+
+        return {
+          ...score,
+          defaults: { ...score.defaults, keySignature: { tonic: 'E' } },
+        };
+      };
+      const plain = measureScore(withKey(), TEST_OPTIONS);
+      const keyed = measureScore(
+        withKey({ showKeySignature: true }),
+        TEST_OPTIONS
+      );
+
+      expect(keyed.measures[0]!.intrinsicNoteWidth).toBeGreaterThan(
+        plain.measures[0]!.intrinsicNoteWidth
+      );
+    });
+
     describe('articulation vertical extents', () => {
       /* VexFlow positions an articulation only inside `draw()`, so accents
        * used to add zero measured height — the blind spot this block guards. */

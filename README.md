@@ -232,6 +232,14 @@ export function PlainScore() {
 even measure widths across document systems, or `infiniteScore` for a horizontal
 single-system layout.
 
+`leftModifiers` / `rightModifiers` are tri-state per measure (`true` shows,
+`false` hides, `undefined` = default): `showClef` defaults to the first
+measure only, `showMeter` and `showKeySignature` to hidden (the key signature
+is never drawn on a percussion clef), `startBarline` and `endBarline` to
+`'single'`. `startBarline` renders only `'single'` and `'repeat-begin'` (every
+other value draws as a single line); `endBarline` renders every value except
+`'repeat-begin'` (drawn as a single line).
+
 ## Drum Notation
 
 Percussion scores use the same score model: pick the `percussion` clef, set
@@ -305,8 +313,7 @@ const restSticking: NoteAttachment = {
 A single-drum part can use a one-line staff: set `lines: 1` on the staff and
 put every note on `ONE_LINE_STAFF_PITCH` (the staff keeps the 5-line pitch
 geometry, so that pitch lands on the visible line). `showClef: false` hides
-the first measure's clef (`showClef` undefined shows it on the first measure
-only); `lines` accepts 1, 3 or 5 (default 5).
+the first measure's clef; `lines` accepts 1, 3 or 5 (default 5).
 
 ```tsx
 import type { Staff } from 'vexflow-native/state';

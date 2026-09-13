@@ -14,6 +14,10 @@ import type {
   ScoreLayoutPlan,
 } from './layout';
 import {
+  applyMeasureModifiers,
+  resolveMeasureModifiers,
+} from './measureModifiers';
+import {
   indexAttachmentsByOwner,
   makeVFVoice,
   noteheadWidth,
@@ -203,7 +207,7 @@ function renderMeasure(
       const voiceArtifacts = measure.voices.map((voice) => ({
         ...makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
           attachmentsByOwner,
-          staffLines: staff.lines,
+          staff,
           resolveClef: (item) =>
             item.targetStaffId
               ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -247,16 +251,11 @@ function renderMeasure(
       staff.lines
     );
 
-    if (measure.leftModifiers?.showClef ?? measurePlan.measureIndex === 0) {
-      stave.addClef(resolvedState.clef);
-    }
-
-    if (measure.leftModifiers?.showMeter === true) {
-      stave.addTimeSignature(
-        `${resolvedState.meter.beats}/${resolvedState.meter.beatUnit}`
-      );
-    }
-
+    applyMeasureModifiers(
+      stave,
+      resolveMeasureModifiers(measure, measurePlan.measureIndex),
+      resolvedState
+    );
     stave.setContext(ctx).draw();
     return stave;
   });
