@@ -4,7 +4,10 @@ import type { VoiceItem } from '../../state';
 const mockFormatterJoinVoices = jest.fn();
 const mockFormatterFormatToStave = jest.fn();
 const mockStaveAddClef = jest.fn();
+const mockStaveAddKeySignature = jest.fn();
 const mockStaveAddTimeSignature = jest.fn();
+const mockStaveSetBegBarType = jest.fn();
+const mockStaveSetEndBarType = jest.fn();
 const mockStaveSetConfigForLines = jest.fn();
 const mockStaveSetContext = jest.fn();
 const mockStaveDraw = jest.fn();
@@ -112,6 +115,7 @@ const mockMakeVFVoice = jest.fn(
 );
 
 jest.mock('vexflow', () => ({
+  BarlineType: { SINGLE: 1, DOUBLE: 2, END: 3, REPEAT_BEGIN: 4, REPEAT_END: 5 },
   Formatter: class MockFormatter {
     joinVoices = mockFormatterJoinVoices;
     formatToStave = mockFormatterFormatToStave;
@@ -125,10 +129,13 @@ jest.mock('vexflow', () => ({
     constructorArgs: unknown[];
     timeSignatureCount = 0;
     addClef = mockStaveAddClef;
+    addKeySignature = mockStaveAddKeySignature;
     addTimeSignature = (...args: unknown[]) => {
       this.timeSignatureCount += 1;
       return mockStaveAddTimeSignature(...args);
     };
+    setBegBarType = mockStaveSetBegBarType;
+    setEndBarType = mockStaveSetEndBarType;
     getNumLines = () => 5;
     setConfigForLines = mockStaveSetConfigForLines.mockReturnThis();
     setContext = mockStaveSetContext.mockReturnThis();
@@ -188,8 +195,9 @@ jest.mock('../scoreParsing', () => ({
   ),
 }));
 
+import { BarlineType } from 'vexflow';
 import { renderScore } from '../render';
-import type { Score, StaffLines } from '../../state';
+import type { Measure, Score, StaffLines } from '../../state';
 import type { ScoreLayoutPlan } from '../layout';
 import { insets, renderOptions, spacing } from '../constants';
 
@@ -587,8 +595,9 @@ describe('renderScore', () => {
     expect(mockNoteSetStave).toHaveBeenNthCalledWith(2, mockStaveInstances[1]);
 
     const makeVoiceOptions = mockMakeVFVoice.mock.calls[0]?.[4] as
-      | { resolveClef: (item: VoiceItem) => string }
+      | { resolveClef: (item: VoiceItem) => string; staff: unknown }
       | undefined;
+    expect(makeVoiceOptions?.staff).toBe(score.staves[0]);
     expect(
       makeVoiceOptions?.resolveClef(
         score.staves[0]!.measures[0]!.voices[0]!.items[1]!
@@ -762,6 +771,16 @@ describe('renderScore', () => {
     );
 
     expect(mockStaveAddClef).not.toHaveBeenCalled();
+  });
+
+  it('routes endBarline to setEndBarType', () => {
+    const { score, layoutPlan } = makeShowMeterFixture(undefined, undefined, {
+      rightModifiers: { endBarline: 'end' },
+    });
+
+    renderScore(mockRecordingContext as never, score, layoutPlan, TEST_OPTIONS);
+
+    expect(mockStaveSetEndBarType).toHaveBeenCalledWith(BarlineType.END);
   });
 
   it('hides all but the middle stave line for a one-line staff', () => {
@@ -1210,13 +1229,15 @@ describe('renderScore', () => {
 });
 
 function makeShowMeterFixture(
-  leftModifiers: { showClef?: boolean; showMeter?: boolean } | undefined,
-  lines?: StaffLines
+  leftModifiers: Measure['leftModifiers'],
+  lines?: StaffLines,
+  extras: { rightModifiers?: Measure['rightModifiers']; keyed?: boolean } = {}
 ): { score: Score; layoutPlan: ScoreLayoutPlan } {
   const score: Score = {
     id: 'show-meter-render',
     defaults: {
       meter: { beats: 4, beatUnit: 4 },
+      ...(extras.keyed ? { keySignature: { tonic: 'G' as const } } : {}),
     },
     staves: [
       {
@@ -1229,6 +1250,9 @@ function makeShowMeterFixture(
             id: 'measure-1',
             number: 1,
             ...(leftModifiers ? { leftModifiers } : {}),
+            ...(extras.rightModifiers
+              ? { rightModifiers: extras.rightModifiers }
+              : {}),
             voices: [{ id: 'voice-1', index: 0, items: [] }],
           },
         ],
@@ -1268,9 +1292,7 @@ function makeShowMeterFixture(
         groupId: 'staff:staff-1',
         staffIds: ['staff-1'],
         staves: score.staves,
-        resolvedStatesByStaff: [
-          [{ clef: 'treble', meter: score.defaults.meter }],
-        ],
+        resolvedStatesByStaff: [[{ clef: 'treble', ...score.defaults }]],
         measures: [
           {
             groupId: 'staff:staff-1',

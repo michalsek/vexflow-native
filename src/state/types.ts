@@ -181,12 +181,16 @@ export interface MeasureState {
 export interface MeasureLeftModifiers {
   /** undefined = shown on the first measure only; false hides it there too. */
   showClef?: boolean;
+  /** undefined = hidden. */
   showMeter?: boolean;
+  /** undefined = hidden; never drawn on a percussion clef. */
   showKeySignature?: boolean;
+  /** undefined = 'single'; only 'single' and 'repeat-begin' render here. */
   startBarline?: Barline;
 }
 
 export interface MeasureRightModifiers {
+  /** undefined = 'single'; 'repeat-begin' draws as a single line. */
   endBarline?: Barline;
 }
 

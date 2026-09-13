@@ -84,6 +84,8 @@ const SIMPLE_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
         <type>half</type>
         <staff>2</staff>
       </note>
+      <barline location="left"><repeat direction="forward"/></barline>
+      <barline location="right"><bar-style>light-heavy</bar-style></barline>
     </measure>
   </part>
 </score-partwise>`;
@@ -256,6 +258,10 @@ describe('parseMusicXmlToScore', () => {
     );
     expect(score.ties).toHaveLength(1);
     expect(score.slurs).toHaveLength(1);
+    expect(score.staves[0]?.measures[0]).toMatchObject({
+      leftModifiers: { startBarline: 'repeat-begin' },
+      rightModifiers: { endBarline: 'end' },
+    });
   });
 
   it('preserves explicit stems on beamed MusicXML notes', () => {

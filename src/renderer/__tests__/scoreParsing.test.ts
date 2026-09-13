@@ -38,6 +38,7 @@ import type {
   NoteAttachment,
   Rest,
   Score,
+  Staff,
   Voice,
   VoiceItem,
 } from '../../state';
@@ -63,6 +64,14 @@ const TEST_SCORE: Score = {
     },
   },
   staves: [],
+};
+
+const ONE_LINE_STAFF: Staff = {
+  id: 'one-line-staff',
+  order: 0,
+  defaultClef: 'percussion',
+  lines: 1,
+  measures: [],
 };
 
 function makeEighthNotes(
@@ -884,7 +893,7 @@ describe('grace note attachments', () => {
       TEST_SCORE.defaults.meter,
       'percussion',
       makeVoice('one-line-grace', [owner]),
-      { staffLines: 1 }
+      { staff: ONE_LINE_STAFF }
     );
 
     expect(notes[0]!.getStemDirection()).toBe(Stem.UP);
@@ -910,7 +919,7 @@ describe('grace note attachments', () => {
       TEST_SCORE.defaults.meter,
       'percussion',
       makeVoice('one-line-grace-down', [owner]),
-      { staffLines: 1 }
+      { staff: ONE_LINE_STAFF }
     );
 
     expect(notes[0]!.getStemDirection()).toBe(Stem.DOWN);
@@ -1146,7 +1155,7 @@ describe('makeVFVoice', () => {
       TEST_SCORE.defaults.meter,
       'percussion',
       makeVoice('one-line', items),
-      { staffLines: 1 }
+      { staff: ONE_LINE_STAFF }
     );
     notes.forEach((note) => note.setStave(stave));
 
@@ -1191,7 +1200,7 @@ describe('makeVFVoice', () => {
       TEST_SCORE.defaults.meter,
       'percussion',
       voice,
-      { staffLines: 1 }
+      { staff: ONE_LINE_STAFF }
     );
 
     expect(notes.map((note) => note.getStemDirection())).toEqual([
@@ -1202,7 +1211,7 @@ describe('makeVFVoice', () => {
     expect(voice.items[0]).not.toHaveProperty('stemDirection');
   });
 
-  it('auto-flips a five-line beam group when staffLines is undefined', () => {
+  it('auto-flips a five-line beam group when staff is undefined', () => {
     const items: VoiceItem[] = ['n1', 'n2', 'n3', 'n4'].map((id) => ({
       id,
       type: 'note',
