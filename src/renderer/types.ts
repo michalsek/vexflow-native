@@ -242,9 +242,11 @@ export interface ScoreMeasureItemsLayout {
   /** Bottom edge of this stave's bottom staff line (hidden lines included). */
   staveLineBottomY: number;
   /**
-   * Stroke centre y of each drawn line, top to bottom (5, 3 or 1 entries):
-   * `visibleLineYs[0] === staveLineTopY`, the last entry is
-   * `staveLineBottomY - lineWidth`. Always emitted by the renderer.
+   * Stroke centre y of each drawn line, top to bottom (5, 3 or 1 entries).
+   * On a five-line staff `visibleLineYs[0] === staveLineTopY` and the last
+   * entry is `staveLineBottomY - lineWidth`; with hidden lines
+   * `staveLineTopY`/`staveLineBottomY` still span the five-line geometry, so
+   * read the drawn line from here. Always emitted by the renderer.
    */
   visibleLineYs?: number[];
 }

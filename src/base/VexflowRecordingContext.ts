@@ -94,6 +94,7 @@ export default class VexflowRecordingContext implements VexflowRenderContext {
     return this.textFont;
   }
 
+  /** @internal */
   getMeasurementContext() {
     return this.textMeasurementContext;
   }

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/base/index.ts",
+    "src/state/index.ts",
+    "src/renderer/index.ts",
+    "src/musicxml/index.ts",
+    "src/percussion/index.ts"
+  ],
+  "tsconfig": "tsconfig.build.json",
+  "out": "docs/api",
+  "readme": "none",
+  "excludeInternal": true
+}

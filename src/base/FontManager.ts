@@ -209,6 +209,7 @@ export default class FontManager {
     return null;
   }
 
+  /** @internal */
   resolveFontDescriptor(
     font?: string | FontInfo,
     size?: string | number,

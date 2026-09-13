@@ -4,4 +4,4 @@ import type { Pitch } from '../state';
 export const ONE_LINE_STAFF_PITCH: Readonly<Pitch> = Object.freeze({
   step: 'B',
   octave: 4,
-} as const);
+});

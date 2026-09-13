@@ -1,6 +1,9 @@
 # vexflow-native
 
-React Native Skia bridge for rendering VexFlow music notation.
+React Native Skia bridge for rendering VexFlow music notation: a typed score
+model, a `ScoreRenderer` component with scrolling, playhead and per-item
+style overrides, a MusicXML importer, and a low-level canvas for drawing with
+VexFlow directly.
 
 ## Installation
 
@@ -10,540 +13,63 @@ Install the library and its peer dependencies:
 npm install vexflow-native react react-native vexflow @shopify/react-native-skia react-native-gesture-handler react-native-reanimated react-native-worklets
 ```
 
-`ScoreRenderer` uses gesture handling and Reanimated worklets for scrolling, so
-configure `react-native-gesture-handler`, `react-native-reanimated`, and
+`ScoreRenderer` uses gesture handling and Reanimated worklets for scrolling,
+so configure `react-native-gesture-handler`, `react-native-reanimated`, and
 `react-native-worklets` as required by your React Native app.
 
-## Entrypoints
+Load a notation font with Skia; the `defaultFont` prop must match one of the
+family names passed to `useFonts`.
 
-- `vexflow-native` exports the low-level `VexflowCanvas` bridge for drawing with
-  VexFlow directly.
-- `vexflow-native/renderer` exports `ScoreRenderer`, a React component that
-  renders the typed score model.
-- `vexflow-native/state` exports the score state types, including `Score`.
-- `vexflow-native/musicxml` exports `parseMusicXmlToScore` and
-  `MusicXmlParseError`.
-
-## Fonts
-
-Load a notation font with Skia and pass the returned font provider to the
-renderer. The `defaultFont` prop must match one of the font family names passed
-to `useFonts`.
+## Quick start
 
 ```tsx
-import { useFonts } from '@shopify/react-native-skia';
-
-import bravuraFont from './assets/fonts/Bravura.otf';
-
-const fontManager = useFonts({
-  Bravura: [bravuraFont],
-});
-
-if (!fontManager) {
-  return null;
-}
-```
-
-## React Native Skia web patches
-
-The example app includes a `patch-package` patch for
-`@shopify/react-native-skia@2.6.2` at
-`example/patches/@shopify+react-native-skia+2.6.2.patch`. The repository root
-applies it after install with:
-
-```sh
-yarn workspace vexflow-native-example apply-patches
-```
-
-The patch is needed by the web example with this Skia version. It:
-
-- lets Skia web resolve string asset sources;
-- forwards `JsiSkTypefaceFontProvider.matchFamilyStyle` to CanvasKit so fonts
-  registered with `useFonts` can be matched by family name;
-- keeps a small diagnostic log in the web font manager patch.
-
-Native iOS and Android usage does not need this example patch. If your own app
-targets React Native Web with `@shopify/react-native-skia@2.6.2` and hits font
-matching or asset source issues, apply an equivalent patch in your app with
-`patch-package`. Re-check the patch when upgrading Skia, because it is tied to
-that package version and may become unnecessary after upstream changes.
-
-## Render MusicXML
-
-Convert a MusicXML string into a `Score`, then render it with `ScoreRenderer`.
-
-```tsx
-import React, { useMemo } from 'react';
-import { View } from 'react-native';
+import { useMemo } from 'react';
 import { useFonts } from '@shopify/react-native-skia';
 import { ScoreRenderer } from 'vexflow-native/renderer';
-import {
-  MusicXmlParseError,
-  parseMusicXmlToScore,
-} from 'vexflow-native/musicxml';
+import { parseMusicXmlToScore } from 'vexflow-native/musicxml';
 
 import bravuraFont from './assets/fonts/Bravura.otf';
 
-type MusicXmlScoreProps = {
-  xml: string;
-};
-
-export function MusicXmlScore({ xml }: MusicXmlScoreProps) {
-  const fontManager = useFonts({
-    Bravura: [bravuraFont],
-  });
-  const score = useMemo(
-    () => parseMusicXmlToScore(xml, { scoreId: 'imported-score' }),
-    [xml]
-  );
+export function MusicXmlScore({ xml }: { xml: string }) {
+  const fontManager = useFonts({ Bravura: [bravuraFont] });
+  const score = useMemo(() => parseMusicXmlToScore(xml), [xml]);
 
   if (!fontManager) {
     return null;
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScoreRenderer
-        score={score}
-        defaultFont="Bravura"
-        fontManager={fontManager}
-      />
-    </View>
-  );
-}
-
-try {
-  parseMusicXmlToScore('<score-timewise />');
-} catch (error) {
-  if (error instanceof MusicXmlParseError) {
-    // The current parser targets score-partwise MusicXML.
-  }
-}
-```
-
-The MusicXML parser currently targets `score-partwise` documents. `score-timewise`
-input throws `MusicXmlParseError`.
-
-## Render a Plain Score Object
-
-Use `ScoreRenderer` directly when you already have score state or want to build
-it yourself.
-
-```tsx
-import React from 'react';
-import { View } from 'react-native';
-import { useFonts } from '@shopify/react-native-skia';
-import { ScoreRenderer } from 'vexflow-native/renderer';
-import type { Score } from 'vexflow-native/state';
-
-import bravuraFont from './assets/fonts/Bravura.otf';
-
-const score: Score = {
-  id: 'plain-score',
-  defaults: {
-    meter: {
-      beats: 4,
-      beatUnit: 4,
-    },
-    keySignature: {
-      tonic: 'C',
-      mode: 'major',
-    },
-  },
-  staves: [
-    {
-      id: 'staff-1',
-      order: 0,
-      defaultClef: 'treble',
-      measures: [
-        {
-          id: 'measure-1',
-          number: 1,
-          leftModifiers: {
-            showClef: true,
-            showKeySignature: true,
-            showMeter: true,
-          },
-          voices: [
-            {
-              id: 'voice-1',
-              index: 0,
-              items: [
-                {
-                  id: 'note-1',
-                  type: 'note',
-                  pitch: { step: 'C', octave: 4 },
-                  duration: { length: 'q' },
-                  voiceId: 'voice-1',
-                },
-                {
-                  id: 'note-2',
-                  type: 'note',
-                  pitch: { step: 'D', octave: 4 },
-                  duration: { length: 'q' },
-                  voiceId: 'voice-1',
-                },
-                {
-                  id: 'note-3',
-                  type: 'note',
-                  pitch: { step: 'E', octave: 4 },
-                  duration: { length: 'q' },
-                  voiceId: 'voice-1',
-                },
-                {
-                  id: 'note-4',
-                  type: 'note',
-                  pitch: { step: 'F', octave: 4 },
-                  duration: { length: 'q' },
-                  voiceId: 'voice-1',
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
-
-export function PlainScore() {
-  const fontManager = useFonts({
-    Bravura: [bravuraFont],
-  });
-
-  if (!fontManager) {
-    return null;
-  }
-
-  return (
-    <View style={{ flex: 1 }}>
-      <ScoreRenderer
-        score={score}
-        defaultFont="Bravura"
-        fontManager={fontManager}
-        rendererType="document"
-      />
-    </View>
+    <ScoreRenderer
+      score={score}
+      defaultFont="Bravura"
+      fontManager={fontManager}
+    />
   );
 }
 ```
 
-`rendererType` is optional. The default is `document`; use `documentEven` for
-even measure widths across document systems, or `infiniteScore` for a horizontal
-single-system layout.
+## Documentation
 
-`leftModifiers` / `rightModifiers` are tri-state per measure (`true` shows,
-`false` hides, `undefined` = default): `showClef` defaults to the first
-measure only, `showMeter` and `showKeySignature` to hidden (the key signature
-is never drawn on a percussion clef), `startBarline` and `endBarline` to
-`'single'`. `startBarline` renders only `'single'` and `'repeat-begin'` (every
-other value draws as a single line); `endBarline` renders every value except
-`'repeat-begin'` (drawn as a single line).
+| Entry point                 | Page                                     | Contents                                                           |
+| --------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| `vexflow-native/state`      | [docs/state.md](docs/state.md)           | Score model: staves, measures, voices, pitches, attachments, meter |
+| `vexflow-native/renderer`   | [docs/renderer.md](docs/renderer.md)     | `ScoreRenderer` props, layout contract, per-item hooks             |
+| `vexflow-native/musicxml`   | [docs/musicxml.md](docs/musicxml.md)     | `parseMusicXmlToScore` coverage and limitations                    |
+| `vexflow-native/percussion` | [docs/percussion.md](docs/percussion.md) | One-line staff, sticking, flams, drags, accents, ghost notes       |
+| `vexflow-native`            | [docs/canvas.md](docs/canvas.md)         | `VexflowCanvas` and the recording layer                            |
 
-## Drum Notation
-
-Percussion scores use the same score model: pick the `percussion` clef, set
-alternate noteheads and parentheses on pitches, and attach every mark through
-`score.attachments`.
-
-```tsx
-import type { NoteAttachment, Pitch } from 'vexflow-native/state';
-
-const hiHat: Pitch = { step: 'G', octave: 5, notehead: 'x' };
-const ghostSnare: Pitch = { step: 'C', octave: 5, parenthesized: true };
-
-const accent: NoteAttachment = {
-  id: 'accent-1',
-  ownerId: 'note-1',
-  type: 'articulation',
-  articulation: 'accent',
-  placement: 'above',
-};
-
-const flam: NoteAttachment = {
-  id: 'flam-1',
-  ownerId: 'note-1',
-  type: 'grace',
-  slash: true,
-  notes: [{ pitch: { step: 'C', octave: 5 }, duration: { length: '8' } }],
-};
-
-const drag: NoteAttachment = {
-  id: 'drag-1',
-  ownerId: 'note-2',
-  type: 'grace',
-  notes: [
-    { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
-    { pitch: { step: 'C', octave: 5 }, duration: { length: '16' } },
-  ],
-};
-
-const rightHand: NoteAttachment = {
-  id: 'sticking-1',
-  ownerId: 'note-1',
-  type: 'annotation',
-  text: 'R',
-};
-
-const restSticking: NoteAttachment = {
-  id: 'sticking-2',
-  ownerId: 'rest-1',
-  type: 'annotation',
-  text: 'L',
-};
-```
-
-`Pitch` carries only what VexFlow keys by pitch index and what describes how
-the notehead is drawn: `step`, `octave`, `accidental`, `notehead` (`x`,
-`circle-x`, `diamond`, `circle`, `square`, `triangle`, `triangle-down`,
-`slash`) and `parenthesized` (wraps that notehead in parentheses). Marks live
-in attachments and are engraved once per owner: one attachment is one glyph,
-whatever the owner's pitch count. An articulation's `pitchIndices` records
-which chord pitches it belongs to without changing how it is drawn.
-
-### Attachments
-
-| `type`         | Rendering                                                                                                                                                                                                                      |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `articulation` | VexFlow articulation glyph, `placement` `above` (default) or `below`.                                                                                                                                                          |
-| `annotation`   | `text` in a bold 10pt sans font, `placement` `below` (default) or `above`, e.g. a sticking letter or a fingering.                                                                                                              |
-| `lyric`        | `text` in a regular 10pt sans font, always below; several lyrics stack by `verse` (undefined first).                                                                                                                           |
-| `dynamic`      | The SMuFL dynamics glyph (`ppp` … `fff`, `fp`, `sf`, `sfp`, `sfz`, `rf`, `rfz`, `fz`, `n`) in the music font, `placement` `below` (default) or `above`.                                                                        |
-| `grace`        | `notes` drawn before the owner (a flam is one slashed grace 8th, a drag two beamed grace 16ths); `slash` adds the acciaccatura slash through the first stem. Grace notes stem up unless the owner's `stemDirection` is `down`. |
-
-The owner may be a note, a chord or a visible rest; a rest accepts every type
-but `grace`. Marks on the same side of a note stack outward in a fixed order
-regardless of attachment order: articulations nearest the note, then
-annotations, dynamics and lyrics.
-
-`measure.directions` text entries (`type: 'text'`) are drawn on the first
-drawn item of the measure's first voice, above by default or `below`, after
-that item's own marks; a measure whose first voice holds only spacer or hidden
-rests draws none. Tempo directions are not drawn.
-
-A single-drum part can use a one-line staff: set `lines: 1` on the staff and
-put every note on `ONE_LINE_STAFF_PITCH` (the staff keeps the 5-line pitch
-geometry, so that pitch lands on the visible line). `showClef: false` hides
-the first measure's clef; `lines` accepts 1, 3 or 5 (default 5).
-
-A visible rest sits on the middle line of any clef by default; `staffLine`
-moves it (0 = bottom line … 4 = top line of the five-line geometry, resolved
-per clef).
-
-```tsx
-import type { Staff } from 'vexflow-native/state';
-import { ONE_LINE_STAFF_PITCH } from 'vexflow-native/state';
-
-const snareLine: Staff = {
-  id: 'snare',
-  order: 0,
-  defaultClef: 'percussion',
-  lines: 1,
-  measures: [
-    {
-      id: 'm1',
-      number: 1,
-      leftModifiers: { showClef: false, showMeter: true },
-      voices: [
-        {
-          id: 'v1',
-          index: 0,
-          items: [
-            {
-              id: 'hit-1',
-              type: 'note',
-              voiceId: 'v1',
-              pitch: ONE_LINE_STAFF_PITCH,
-              duration: { length: 'q' },
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
-```
-
-See `example/src/screens/DrumKitExample.tsx` for a full drum-kit groove with
-two voices, a triplet, an open hi-hat accent, a flam and a drag.
-
-## Draw Directly with VexFlow
-
-Use `VexflowCanvas` when you want direct VexFlow control instead of the typed
-score model.
-
-```tsx
-import React, { useCallback } from 'react';
-import { View } from 'react-native';
-import { useFonts } from '@shopify/react-native-skia';
-import { Formatter, Stave, StaveNote, Voice } from 'vexflow';
-import { VexflowCanvas, type OnDrawParams } from 'vexflow-native';
-
-import bravuraFont from './assets/fonts/Bravura.otf';
-
-export function DirectVexFlow() {
-  const fontManager = useFonts({
-    Bravura: [bravuraFont],
-  });
-
-  const onDraw = useCallback(({ ctx }: OnDrawParams) => {
-    const stave = new Stave(10, 40, 400);
-
-    stave.addClef('treble').addTimeSignature('4/4');
-
-    const notes = [
-      new StaveNote({ keys: ['c/4'], duration: 'q' }),
-      new StaveNote({ keys: ['d/4'], duration: 'q' }),
-      new StaveNote({ keys: ['e/4'], duration: 'q' }),
-      new StaveNote({ keys: ['f/4'], duration: 'q' }),
-    ];
-
-    const voice = new Voice({ numBeats: 4, beatValue: 4 });
-    voice.addTickables(notes);
-
-    new Formatter().joinVoices([voice]).formatToStave([voice], stave);
-
-    stave.setContext(ctx).draw();
-    voice.draw(ctx, stave);
-  }, []);
-
-  if (!fontManager) {
-    return null;
-  }
-
-  return (
-    <View style={{ flex: 1 }}>
-      <VexflowCanvas
-        onDraw={onDraw}
-        fontManager={fontManager}
-        defaultFont="Bravura"
-      />
-    </View>
-  );
-}
-```
-
-## Escape hatch: per-item hooks
-
-When the score model has no attachment for a mark you need, `ScoreRenderer`
-lets you reach the VexFlow note of every item without leaving the typed
-score. Both hooks are optional and keep the item's layout, style overrides
-and `onItemsLayout` entry intact.
-
-- `decorateItem(item, note, { clef, staff, measureIndex, attachments })` runs
-  once per drawable item (never for `hidden`/`spacer` rests) in **both** the
-  measurement and the drawing pass, right after the note is built and before
-  formatting — so any modifier you add (`Articulation`, `Ornament`,
-  `Annotation`, …) counts in the intrinsic width and in the vertical staff
-  bounds. It must be deterministic in its inputs and free of side effects:
-  the VexFlow objects are rebuilt on every pass, so never cache by note
-  identity.
-- `onDrawItem(ctx, item, note, layout)` runs in the drawing pass only, right
-  after the note and its modifiers are drawn and inside the item's color
-  group (so `itemStyleOverrides` apply to what you draw). `layout` is the
-  item's geometry in **content space** — the space `ctx` draws in, VexFlow
-  units before `options.render.scale`; `onItemsLayout` receives the same
-  entry multiplied by the scale.
-
-The VexFlow classes the hooks need are re-exported from
-`vexflow-native/renderer` (`StaveNote`, `Modifier`, `Articulation`,
-`Annotation`, `Ornament`, `RenderContext`); `vexflow` is a peer dependency,
-so these are your own copy of the classes and `instanceof` checks against
-them hold. Define the hooks outside the component (or wrap them in
-`useCallback` inside it) — a new function identity re-records the score.
-
-```tsx
-import {
-  Articulation,
-  ScoreRenderer,
-  type DecorateItem,
-  type DrawItem,
-} from 'vexflow-native/renderer';
-
-const decorateItem: DecorateItem = (item, note) => {
-  if (item.type === 'note' && item.id.startsWith('snap-')) {
-    note.addModifier(new Articulation('ao')); // snap pizzicato
-  }
-};
-
-const onDrawItem: DrawItem = (ctx, item, _note, layout) => {
-  if (item.id === 'target') {
-    ctx.beginPath();
-    ctx.arc(
-      layout.headCenterX,
-      layout.modifierBounds?.top ?? 0,
-      6,
-      0,
-      2 * Math.PI,
-      false
-    );
-    ctx.stroke();
-  }
-};
-
-<ScoreRenderer
-  score={score}
-  defaultFont="Bravura"
-  fontManager={fontManager}
-  decorateItem={decorateItem}
-  onDrawItem={onDrawItem}
-/>;
-```
-
-## ScoreRenderer props
-
-- `score`: typed score state to render.
-- `defaultFont`: font family name used as the default VexFlow font.
-- `fontManager`: Skia font provider returned by `useFonts`.
-- `colorScheme`: optional foreground, background, and ledger line colors.
-- `itemStyleOverrides`: optional Reanimated shared value mapping score item ids
-  to replay-time fill/stroke color, glow, and dash overrides.
-- `decorateItem`: optional per-item hook adding VexFlow modifiers to a note in
-  both passes; see [Escape hatch: per-item hooks](#escape-hatch-per-item-hooks).
-- `onDrawItem`: optional per-item drawing hook receiving the VexFlow render
-  context and the item's content-space layout; same section.
-- `rendererType`: `document`, `documentEven`, or `infiniteScore`.
-- `options`: optional renderer settings grouped by `insets`, `spacing`, and
-  `render`; `render.scale` uniformly scales the notation without quality loss.
-- `scrollEnabled`: enables or disables pan scrolling. Defaults to `true`.
-- `showScrollbars`: shows scrollbars when the score overflows. Defaults to
-  `true`.
-- `scrollOffset`: optional controlled Reanimated shared value for the scroll
-  position along the renderer's axis. The renderer reads and writes it (pan
-  gesture, clamping), and external writes move the content — the seam for
-  playback auto-scroll. Must stay the same shared value for the component's
-  lifetime.
-- `playhead`: optional Reanimated shared value positioning a playhead overlay
-  (`{ x, y, height }` in `onItemsLayout` coordinates, `null` hides it). The
-  overlay tracks scrolling on the UI thread without re-recording the score.
-- `playheadStyle`: optional playhead appearance (`color`, `width`,
-  `borderRadius`, `opacity`); defaults derive from the color scheme
-  foreground.
-- `onScrollGeometry`: optional callback fired when the scroll envelope
-  changes (`axis`, `viewportSize`, `contentSize`, `maxScroll`) — everything a
-  consumer needs to compute follow-scroll targets.
-- `onItemsLayout`: optional callback fired after each recording pass with the
-  view-space geometry (at scroll offset 0) of rendered items and measures,
-  including each measure's system band `y`/`height`.
-  - item `modifierBounds`: union box (`left`/`right`/`top`/`bottom`) of the
-    item's drawn modifiers — articulations, annotations, dynamics, lyrics,
-    grace notes, parentheses, accidentals, dots; absent without modifiers.
-  - measure `visibleLineYs`: stroke centre y of each drawn staff line, top
-    to bottom (5, 3 or 1 entries), so a one-line consumer reads the middle
-    line without knowing the geometry. `visibleLineYs[0]` is
-    `staveLineTopY`; the last entry is `staveLineBottomY - lineWidth`.
-    `staveLineTopY`/`staveLineBottomY` keep spanning the full five-line
-    geometry, hidden lines included.
-- `onReady`: optional callback fired once per mount, when the first score
-  picture has been rasterized for a non-empty viewport. Later re-records
-  (resize, option changes) do not re-fire it — the seam for hiding a loading
-  indicator once the score is actually on screen.
+Generate the API reference from the TypeScript sources with `yarn docs:api`
+(output in `docs/api/`, not committed).
 
 ## Contributing
 
 - [Development workflow](CONTRIBUTING.md#development-workflow)
 - [Sending a pull request](CONTRIBUTING.md#sending-a-pull-request)
 - [Code of conduct](CODE_OF_CONDUCT.md)
+
+Before sending changes run `yarn lint:fix`, `yarn format`, `yarn typecheck`,
+`yarn test` and `yarn prepare` (builds `lib/`). Public API changes update the
+matching `docs/` page in the same change.
 
 ## License
 
