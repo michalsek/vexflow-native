@@ -59,6 +59,13 @@ To run the example app on Web:
 yarn example web
 ```
 
+The web target applies a `patch-package` patch to
+`@shopify/react-native-skia@2.6.2`
+(`example/patches/@shopify+react-native-skia+2.6.2.patch`, applied with
+`yarn workspace vexflow-native-example apply-patches`) so Skia web resolves
+string asset sources and matches `useFonts` families by name. Native iOS and
+Android do not need it. Re-check it when upgrading Skia.
+
 Make sure your code passes TypeScript:
 
 ```sh

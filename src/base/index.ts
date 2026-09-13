@@ -1,4 +1,5 @@
 export { default as VexflowCanvas } from './VexflowCanvas';
+export { default as FontManager } from './FontManager';
 export { default as VexflowRecordingContext } from './VexflowRecordingContext';
 export { renderVexflowRecordingCommands } from './VexflowRecordingReplay';
 export {

@@ -88,3 +88,6 @@ nitrogen/
 prev-implementation
 
 AGENTS.md
+
+# TypeDoc output
+docs/api/

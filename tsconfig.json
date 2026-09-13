@@ -5,7 +5,8 @@
       "vexflow-native": ["./src/base/index"],
       "vexflow-native/state": ["./src/state/index"],
       "vexflow-native/renderer": ["./src/renderer/index"],
-      "vexflow-native/musicxml": ["./src/musicxml/index"]
+      "vexflow-native/musicxml": ["./src/musicxml/index"],
+      "vexflow-native/percussion": ["./src/percussion/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
