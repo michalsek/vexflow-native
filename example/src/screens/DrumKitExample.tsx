@@ -27,7 +27,7 @@ import {
 const HI_HAT: Pitch = { step: 'G', octave: 5, notehead: 'x' };
 const OPEN_HI_HAT: Pitch = { step: 'G', octave: 5, notehead: 'circle-x' };
 const SNARE: Pitch = { step: 'C', octave: 5 };
-const GHOST_SNARE: Pitch = { step: 'C', octave: 5, ghost: true };
+const GHOST_SNARE: Pitch = { step: 'C', octave: 5, parenthesized: true };
 const KICK: Pitch = { step: 'F', octave: 4 };
 
 const SIXTEENTH: DurationValue = { length: '16' };

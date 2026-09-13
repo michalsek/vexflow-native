@@ -64,7 +64,14 @@ const DYNAMICS: Dynamic[] = [
   'f',
   'ff',
   'fff',
+  'fp',
+  'sf',
+  'sfp',
   'sfz',
+  'rf',
+  'rfz',
+  'fz',
+  'n',
 ];
 
 export function mapClef(clef: XmlElement): Clef {

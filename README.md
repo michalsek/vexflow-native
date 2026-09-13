@@ -243,15 +243,14 @@ other value draws as a single line); `endBarline` renders every value except
 ## Drum Notation
 
 Percussion scores use the same score model: pick the `percussion` clef, set
-alternate noteheads and ghost flags on pitches, and attach articulations
-through `score.attachments`.
+alternate noteheads and parentheses on pitches, and attach every mark through
+`score.attachments`.
 
 ```tsx
 import type { NoteAttachment, Pitch } from 'vexflow-native/state';
 
 const hiHat: Pitch = { step: 'G', octave: 5, notehead: 'x' };
-const ghostSnare: Pitch = { step: 'C', octave: 5, ghost: true };
-const accentedSnare: Pitch = { step: 'C', octave: 5, accent: true };
+const ghostSnare: Pitch = { step: 'C', octave: 5, parenthesized: true };
 
 const accent: NoteAttachment = {
   id: 'accent-1',
@@ -294,21 +293,33 @@ const restSticking: NoteAttachment = {
 };
 ```
 
-- `pitch.notehead`: `x`, `circle-x`, `diamond`, `circle`, `square`, `triangle`,
-  `triangle-down`, or `slash`.
-- `pitch.ghost`: wraps the notehead in parentheses.
-- `pitch.accent`: draws one accent (`>`) above the note or chord, however many
-  of its pitches are flagged; skipped when the owner already has an `accent`
-  articulation attachment.
-- Annotation attachments draw their `text` in a bold sans font under the
-  owner (`placement: 'above'` puts it on top). The owner may be a note, a
-  chord or a visible rest, so a sticking lane can mark silent slots too.
-- Articulation attachments accept an optional `placement` of `above` (default)
-  or `below`.
-- Grace attachments draw their `notes` before the owner (a flam is one slashed
-  grace 8th, a drag two beamed grace 16ths); `slash` adds the acciaccatura
-  slash through the first stem. Grace notes stem up unless the owner's
-  `stemDirection` is `down`.
+`Pitch` carries only what VexFlow keys by pitch index and what describes how
+the notehead is drawn: `step`, `octave`, `accidental`, `notehead` (`x`,
+`circle-x`, `diamond`, `circle`, `square`, `triangle`, `triangle-down`,
+`slash`) and `parenthesized` (wraps that notehead in parentheses). Marks live
+in attachments and are engraved once per owner: one attachment is one glyph,
+whatever the owner's pitch count. An articulation's `pitchIndices` records
+which chord pitches it belongs to without changing how it is drawn.
+
+### Attachments
+
+| `type`         | Rendering                                                                                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `articulation` | VexFlow articulation glyph, `placement` `above` (default) or `below`.                                                                                                                                                          |
+| `annotation`   | `text` in a bold 10pt sans font, `placement` `below` (default) or `above`, e.g. a sticking letter or a fingering.                                                                                                              |
+| `lyric`        | `text` in a regular 10pt sans font, always below; several lyrics stack by `verse` (undefined first).                                                                                                                           |
+| `dynamic`      | The SMuFL dynamics glyph (`ppp` … `fff`, `fp`, `sf`, `sfp`, `sfz`, `rf`, `rfz`, `fz`, `n`) in the music font, `placement` `below` (default) or `above`.                                                                        |
+| `grace`        | `notes` drawn before the owner (a flam is one slashed grace 8th, a drag two beamed grace 16ths); `slash` adds the acciaccatura slash through the first stem. Grace notes stem up unless the owner's `stemDirection` is `down`. |
+
+The owner may be a note, a chord or a visible rest; a rest accepts every type
+but `grace`. Marks on the same side of a note stack outward in a fixed order
+regardless of attachment order: articulations nearest the note, then
+annotations, dynamics and lyrics.
+
+`measure.directions` text entries (`type: 'text'`) are drawn on the first
+drawn item of the measure's first voice, above by default or `below`, after
+that item's own marks; a measure whose first voice holds only spacer or hidden
+rests draws none. Tempo directions are not drawn.
 
 A single-drum part can use a one-line staff: set `lines: 1` on the staff and
 put every note on `ONE_LINE_STAFF_PITCH` (the staff keeps the 5-line pitch

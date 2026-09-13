@@ -4,7 +4,7 @@ import type { StaveNote } from 'vexflow';
 
 import { installVexflowReactNativeFallbacks } from '../../base/setupVexflowReactNative';
 import type { GraceNoteAttachment, Score, VoiceItem } from '../../state';
-import { applyFixedNoteSpacing } from '../render';
+import { applyFixedNoteSpacing } from '../fixedNoteSpacing';
 import { makeVFVoice } from '../scoreParsing';
 
 /* The fixed-note-spacing contract: with a spacer voice covering the lattice,

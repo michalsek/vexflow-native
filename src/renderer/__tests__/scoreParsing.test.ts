@@ -11,7 +11,6 @@ import * as VexFlow from 'vexflow';
 import {
   Annotation as VFAnnotation,
   AnnotationVerticalJustify,
-  Articulation as VFArticulation,
   Beam,
   Formatter,
   Fraction as VFFraction,
@@ -44,16 +43,15 @@ import type {
 } from '../../state';
 import { ONE_LINE_STAFF_PITCH } from '../../state';
 import { resolveItemHeadCenterX } from '../render';
+import { ARTICULATION_TO_VF_CODE } from '../noteModifiers';
 import {
-  ARTICULATION_TO_VF_CODE,
   beamGroupsToVF,
-  durationToVF,
   indexAttachmentsByOwner,
   makeVFVoice,
   noteheadWidth,
-  pitchToVFKey,
   voiceItemToStaveNote,
 } from '../scoreParsing';
+import { durationToVF, pitchToVFKey } from '../vfKeys';
 
 const TEST_SCORE: Score = {
   id: 'score-parsing-test',
@@ -186,15 +184,15 @@ describe('voiceItemToStaveNote noteheads', () => {
   });
 });
 
-describe('voiceItemToStaveNote ghosts', () => {
-  it('wraps the ghost pitch of a chord in parentheses at its key index', () => {
+describe('voiceItemToStaveNote parenthesized pitches', () => {
+  it('wraps the parenthesized pitch of a chord in parentheses at its key index', () => {
     const item: Chord = {
       id: 'ghost-chord',
       type: 'chord',
       voiceId: 'voice',
       pitches: [
         { step: 'G', octave: 5, notehead: 'x' },
-        { step: 'C', octave: 5, ghost: true },
+        { step: 'C', octave: 5, parenthesized: true },
       ],
       duration: { length: 'q' },
     };
@@ -209,12 +207,12 @@ describe('voiceItemToStaveNote ghosts', () => {
     ).toEqual([ModifierPosition.LEFT, ModifierPosition.RIGHT]);
   });
 
-  it('wraps a single ghost note in parentheses at key index 0', () => {
+  it('wraps a single parenthesized note in parentheses at key index 0', () => {
     const item: Note = {
       id: 'ghost-note',
       type: 'note',
       voiceId: 'voice',
-      pitch: { step: 'C', octave: 5, ghost: true },
+      pitch: { step: 'C', octave: 5, parenthesized: true },
       duration: { length: '8' },
     };
 
@@ -225,7 +223,7 @@ describe('voiceItemToStaveNote ghosts', () => {
     expect(parentheses.map((modifier) => modifier.getIndex())).toEqual([0, 0]);
   });
 
-  it('adds no parentheses without ghost pitches', () => {
+  it('adds no parentheses without parenthesized pitches', () => {
     const item: Note = {
       id: 'plain-note',
       type: 'note',
@@ -237,144 +235,6 @@ describe('voiceItemToStaveNote ghosts', () => {
     const note = voiceItemToStaveNote(item, 'treble') as StaveNote;
 
     expect(getModifiersByCategory(note, 'Parenthesis')).toHaveLength(0);
-  });
-});
-
-describe('voiceItemToStaveNote accents', () => {
-  function getArticulations(note: StaveNote) {
-    return getModifiersByCategory(note, 'Articulation') as VFArticulation[];
-  }
-
-  it('draws one accent above a single accented note', () => {
-    const item: Note = {
-      id: 'accent-note',
-      type: 'note',
-      voiceId: 'voice',
-      pitch: { step: 'C', octave: 5, accent: true },
-      duration: { length: 'q' },
-    };
-
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
-    const accents = getArticulations(note);
-
-    expect(accents).toHaveLength(1);
-    expect(accents[0]?.type).toBe(ARTICULATION_TO_VF_CODE.accent);
-    expect(accents[0]?.getPosition()).toBe(ModifierPosition.ABOVE);
-  });
-
-  it('draws exactly one accent for a chord with two accented pitches', () => {
-    const item: Chord = {
-      id: 'accent-chord',
-      type: 'chord',
-      voiceId: 'voice',
-      pitches: [
-        { step: 'G', octave: 5, notehead: 'x', accent: true },
-        { step: 'C', octave: 5, accent: true },
-      ],
-      duration: { length: 'q' },
-    };
-
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
-    const accents = getArticulations(note);
-
-    expect(accents).toHaveLength(1);
-    expect(accents[0]?.type).toBe(ARTICULATION_TO_VF_CODE.accent);
-  });
-
-  it('draws one accent for a chord with a single accented pitch', () => {
-    const item: Chord = {
-      id: 'accent-chord-partial',
-      type: 'chord',
-      voiceId: 'voice',
-      pitches: [
-        { step: 'G', octave: 5, notehead: 'x' },
-        { step: 'C', octave: 5, accent: true },
-        { step: 'F', octave: 4 },
-      ],
-      duration: { length: '8' },
-    };
-
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
-
-    expect(getArticulations(note)).toHaveLength(1);
-  });
-
-  it('adds no accent without accent flags', () => {
-    const item: Chord = {
-      id: 'plain-chord',
-      type: 'chord',
-      voiceId: 'voice',
-      pitches: [
-        { step: 'G', octave: 5, notehead: 'x' },
-        { step: 'C', octave: 5, ghost: true },
-      ],
-      duration: { length: 'q' },
-    };
-
-    const note = voiceItemToStaveNote(item, 'percussion') as StaveNote;
-
-    expect(getArticulations(note)).toHaveLength(0);
-  });
-
-  it('skips the pitch accent when the owner already has an accent attachment', () => {
-    const item: Note = {
-      id: 'accent-both',
-      type: 'note',
-      voiceId: 'voice',
-      pitch: { step: 'C', octave: 5, accent: true },
-      duration: { length: 'q' },
-    };
-    const attachments: NoteAttachment[] = [
-      {
-        id: 'artic-accent',
-        ownerId: 'accent-both',
-        type: 'articulation',
-        articulation: 'accent',
-        placement: 'below',
-      },
-    ];
-
-    const note = voiceItemToStaveNote(
-      item,
-      'percussion',
-      attachments
-    ) as StaveNote;
-    const accents = getArticulations(note);
-
-    expect(accents).toHaveLength(1);
-    expect(accents[0]?.type).toBe(ARTICULATION_TO_VF_CODE.accent);
-    expect(accents[0]?.getPosition()).toBe(ModifierPosition.BELOW);
-  });
-
-  it('keeps other articulation attachments alongside the pitch accent', () => {
-    const item: Note = {
-      id: 'accent-staccato',
-      type: 'note',
-      voiceId: 'voice',
-      pitch: { step: 'C', octave: 5, accent: true },
-      duration: { length: 'q' },
-    };
-    const attachments: NoteAttachment[] = [
-      {
-        id: 'artic-staccato',
-        ownerId: 'accent-staccato',
-        type: 'articulation',
-        articulation: 'staccato',
-      },
-    ];
-
-    const note = voiceItemToStaveNote(
-      item,
-      'percussion',
-      attachments
-    ) as StaveNote;
-    const articulations = getArticulations(note);
-
-    expect(
-      articulations.map((articulation) => articulation.type).sort()
-    ).toEqual(
-      [ARTICULATION_TO_VF_CODE.accent, ARTICULATION_TO_VF_CODE.staccato].sort()
-    );
   });
 });
 
@@ -491,8 +351,8 @@ describe('voiceItemToStaveNote annotations', () => {
       type: 'chord',
       voiceId: 'voice',
       pitches: [
-        { step: 'G', octave: 5, notehead: 'x', accent: true },
-        { step: 'C', octave: 5, ghost: true },
+        { step: 'G', octave: 5, notehead: 'x' },
+        { step: 'C', octave: 5, parenthesized: true },
       ],
       duration: { length: 'q' },
     };
@@ -687,7 +547,7 @@ describe('articulation attachments', () => {
     ).toHaveLength(0);
   });
 
-  it('skips articulation attachments on rests', () => {
+  it('draws every attachment but grace notes on a visible rest', () => {
     const restId = 'voice-artic-rest-r1';
     const rest: Rest = {
       id: restId,
@@ -700,19 +560,37 @@ describe('articulation attachments', () => {
       ...TEST_SCORE,
       attachments: [
         {
-          id: 'artic-rest-1',
+          id: 'r-1',
           ownerId: restId,
           type: 'articulation',
           articulation: 'accent',
+        },
+        {
+          id: 'r-2',
+          ownerId: restId,
+          type: 'articulation',
+          articulation: 'fermata',
+        },
+        { id: 'r-3', ownerId: restId, type: 'annotation', text: 'L' },
+        { id: 'r-4', ownerId: restId, type: 'lyric', text: 'la' },
+        { id: 'r-5', ownerId: restId, type: 'dynamic', dynamic: 'p' },
+        {
+          id: 'r-6',
+          ownerId: restId,
+          type: 'grace',
+          notes: [
+            { pitch: { step: 'C', octave: 5 }, duration: { length: '8' } },
+          ],
         },
       ],
     };
 
     const { notes } = makeVFVoice(score, score.defaults.meter, 'treble', voice);
+    const note = notes[0] as StaveNote;
 
-    expect(
-      getModifiersByCategory(notes[0] as StaveNote, 'Articulation')
-    ).toHaveLength(0);
+    expect(getModifiersByCategory(note, 'Articulation')).toHaveLength(2);
+    expect(getModifiersByCategory(note, 'Annotation')).toHaveLength(3);
+    expect(getModifiersByCategory(note, 'GraceNoteGroup')).toHaveLength(0);
   });
 });
 
