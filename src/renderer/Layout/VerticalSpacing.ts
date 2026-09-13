@@ -1,4 +1,4 @@
-import type { StaffVerticalBounds } from '../measure';
+import type { StaffVerticalBounds } from '../measureBounds';
 import type { MeasuredGroupMeasure } from '../layout';
 import {
   VEXFLOW_STAVE_BOTTOM_LINE_OFFSET,
