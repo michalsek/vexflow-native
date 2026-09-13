@@ -1,0 +1,66 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Upgrade npm for trusted publishing
+        # npm >= 11.5.1 is required for OIDC trusted publishing; Node 22 ships npm 10.
+        run: npm install -g npm@latest && npm --version
+
+      - name: Verify tag matches package version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        id: version
+
+      - name: Check whether version is already on npm
+        id: check
+        run: |
+          if npm view "vexflow-native@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+            echo "Version ${{ steps.version.outputs.version }} already published, skipping npm publish"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build package
+        if: steps.check.outputs.exists != 'true'
+        run: yarn prepare
+
+      - name: Publish to npm
+        if: steps.check.outputs.exists != 'true'
+        run: npm publish --provenance --access public --workspaces=false
+
+      - name: Create GitHub release
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists, skipping"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
