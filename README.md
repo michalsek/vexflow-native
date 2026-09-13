@@ -124,6 +124,13 @@ try {
 The MusicXML parser currently targets `score-partwise` documents. `score-timewise`
 input throws `MusicXmlParseError`.
 
+Per note it imports `<notehead>` (`x`, `circle-x`, `diamond`, `circled`,
+`square`, `triangle`, `inverted triangle`, `slash`; other shapes render as
+normal, the `filled` attribute is ignored) and its `parentheses` attribute, `<grace>`, and the `<technical>`
+`<open>` / `<stopped>` marks. `<staff-details><staff-lines>` sets
+`Staff.lines` for 1, 3 or 5 lines (`number` picks the staff, default 1).
+`<print>` is skipped: the score model has no system or page break field.
+
 ## Render a Plain Score Object
 
 Use `ScoreRenderer` directly when you already have score state or want to build

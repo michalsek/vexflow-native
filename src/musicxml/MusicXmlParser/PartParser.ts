@@ -44,6 +44,7 @@ export function parsePart(
       order: staff.order,
       defaultClef:
         staff.defaultClef ?? (staff.order % 2 === 0 ? 'treble' : 'bass'),
+      lines: staff.lines,
       measures: staff.measures,
     })
   );

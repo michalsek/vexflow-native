@@ -94,6 +94,8 @@ const SIMPLE_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
   </part>
 </score-partwise>`;
 
+const BASS_CLEF = '<clef number="2"><sign>F</sign><line>4</line></clef>';
+
 const BEAMED_STEMS_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="3.1">
   <part-list>
@@ -283,6 +285,62 @@ describe('parseMusicXmlToScore', () => {
       leftModifiers: { startBarline: 'repeat-begin' },
       rightModifiers: { endBarline: 'end' },
     });
+  });
+
+  it.each([
+    ['x', 'x'],
+    ['circle-x', 'circle-x'],
+    ['diamond', 'diamond'],
+    ['circled', 'circle'],
+    ['square', 'square'],
+    ['triangle', 'triangle'],
+    ['inverted triangle', 'triangle-down'],
+    ['slash', 'slash'],
+    ['normal', undefined],
+    ['cluster', undefined],
+  ])('imports <notehead>%s</notehead> as %s', (value, notehead) => {
+    const score = parseMusicXmlToScore(
+      SIMPLE_PARTWISE.replace(
+        '<notehead parentheses="yes">normal</notehead>',
+        `<notehead>${value}</notehead>`
+      )
+    );
+    const chord = score.staves[0]?.measures[0]?.voices[0]?.items[0];
+
+    expect(chord?.type === 'chord' && chord.pitches[1]?.notehead).toBe(
+      notehead
+    );
+  });
+
+  it.each([
+    ['1', 1],
+    ['3', 3],
+    ['5', 5],
+    ['4', undefined],
+  ])('imports <staff-lines>%s</staff-lines> as %s', (value, lines) => {
+    const score = parseMusicXmlToScore(
+      SIMPLE_PARTWISE.replace(
+        BASS_CLEF,
+        `${BASS_CLEF}<staff-details number="2"><staff-lines>${value}</staff-lines></staff-details>`
+      )
+    );
+
+    expect(score.staves[0]?.lines).toBeUndefined();
+    expect(score.staves[1]?.lines).toBe(lines);
+  });
+
+  it('keeps the opening <staff-lines> when a later measure redeclares it', () => {
+    const score = parseMusicXmlToScore(
+      SIMPLE_PARTWISE.replace(
+        BASS_CLEF,
+        `${BASS_CLEF}<staff-details number="2"><staff-lines>1</staff-lines></staff-details>`
+      ).replace(
+        '</measure>',
+        `</measure><measure number="2"><attributes><staff-details number="2"><staff-lines>3</staff-lines></staff-details></attributes></measure>`
+      )
+    );
+
+    expect(score.staves[1]?.lines).toBe(1);
   });
 
   it('preserves explicit stems on beamed MusicXML notes', () => {

@@ -6,6 +6,7 @@ import type {
   Dynamic,
   KeyMode,
   KeySignature,
+  Notehead,
   NoteLength,
   Pitch,
   Step,
@@ -155,6 +156,21 @@ export function mapPitch(pitch: XmlElement, accidental?: string): Pitch {
     octave: Number(requiredChildText(pitch, 'octave')),
     accidental: mapAccidental(childText(pitch, 'alter'), accidental),
   };
+}
+
+const NOTEHEADS: Record<string, Notehead> = {
+  'x': 'x',
+  'circle-x': 'circle-x',
+  'diamond': 'diamond',
+  'circled': 'circle',
+  'square': 'square',
+  'triangle': 'triangle',
+  'inverted triangle': 'triangle-down',
+  'slash': 'slash',
+};
+
+export function mapNotehead(value?: string): Notehead | undefined {
+  return value ? NOTEHEADS[value] : undefined;
 }
 
 export function mapStemDirection(value?: string) {

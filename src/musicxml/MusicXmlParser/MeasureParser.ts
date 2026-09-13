@@ -14,6 +14,7 @@ import {
   mapClef,
   mapDurationType,
   mapKeySignature,
+  mapNotehead,
   mapPitch,
   mapStemDirection,
 } from './mappers';
@@ -35,6 +36,7 @@ import {
   optionalChild,
   requiredChildText,
   requiredNumberText,
+  textOf,
   type XmlElement,
 } from './XmlOrder';
 
@@ -167,6 +169,15 @@ function applyAttributes(
     };
     state.defaults.meter = measureState.meter;
   }
+
+  childrenNamed(attributes, 'staff-details').forEach((details) => {
+    const staff = staves[Number(attr(details, 'number') ?? '1') - 1];
+    const lines = numberText(details, 'staff-lines');
+
+    if (staff && (lines === 1 || lines === 3 || lines === 5)) {
+      staff.lines ??= lines;
+    }
+  });
 
   childrenNamed(attributes, 'clef').forEach((clef) => {
     const staffIndex = Number(attr(clef, 'number') ?? '1') - 1;
@@ -407,6 +418,11 @@ function parsePitch(note: XmlElement): Pitch {
     childText(note, 'accidental')
   );
   const notehead = optionalChild(note, 'notehead');
+  const shape = notehead ? mapNotehead(textOf(notehead)) : undefined;
+
+  if (shape) {
+    pitch.notehead = shape;
+  }
 
   if (notehead && attr(notehead, 'parentheses') === 'yes') {
     pitch.parenthesized = true;

@@ -6,6 +6,7 @@ import type {
   ScoreDefaults,
   Slur,
   Staff,
+  StaffLines,
   Tie,
   TupletGroup,
 } from '../../state';
@@ -20,6 +21,7 @@ export type StaffBuild = {
   name?: string;
   order: number;
   defaultClef?: Staff['defaultClef'];
+  lines?: StaffLines;
   measures: Measure[];
 };
 
