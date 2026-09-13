@@ -517,6 +517,20 @@ describe('measureScore', () => {
       ).toEqual(plain.measures[0]!.staffBounds);
     });
 
+    it('widens a single-voice measure by its accidentals', () => {
+      const withAccidentals = measureScore(
+        makeStemsUpScore(undefined, 5, {
+          pitch: { step: 'C', octave: 5, accidental: '#' },
+        }),
+        TEST_OPTIONS
+      );
+      const withoutAccidentals = measureScore(makeStemsUpScore(), TEST_OPTIONS);
+
+      expect(withAccidentals.measures[0]!.intrinsicNoteWidth).toBeGreaterThan(
+        withoutAccidentals.measures[0]!.intrinsicNoteWidth
+      );
+    });
+
     it('adds the modifier block on top of the note width', () => {
       const withMeter = measureScore(
         makeSingleStaffScore({ showMeter: true }),
@@ -649,7 +663,10 @@ function makeStemsUpScore(
                   id: `stems-up-m1-v1-n${index + 1}`,
                   type: 'note' as const,
                   voiceId: 'stems-up-m1-v1',
-                  pitch: { step: step as Step, octave },
+                  pitch: {
+                    step: step as Step,
+                    octave,
+                  },
                   stemDirection: 'up' as const,
                   duration: { length: 'q' as const },
                   ...patch,

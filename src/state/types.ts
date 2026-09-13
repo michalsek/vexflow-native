@@ -128,6 +128,7 @@ export interface KeySignature {
 export interface Meter {
   beats: number;
   beatUnit: number;
+  /** Omitted = VexFlow's default for the meter: numerators divisible by 3 group in threes, else 2/beatUnit above a quarter (5/8 → 2/8), else 1/beatUnit (5/4 → 1/4). */
   beamGroups?: Fraction[];
 }
 
