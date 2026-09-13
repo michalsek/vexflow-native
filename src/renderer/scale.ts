@@ -1,4 +1,9 @@
-import type { RendererRect, RendererSize, ScoreItemsLayout } from './types';
+import type {
+  RendererRect,
+  RendererSize,
+  ScoreItemBounds,
+  ScoreItemsLayout,
+} from './types';
 
 /**
  * Scale rule for `options.render.scale`: layout runs in content space against
@@ -76,6 +81,9 @@ export function scaleItemsLayoutToViewSpace(
       x: item.x * scale,
       width: item.width * scale,
       headCenterX: item.headCenterX * scale,
+      ...(item.modifierBounds
+        ? { modifierBounds: scaleBounds(item.modifierBounds, scale) }
+        : {}),
     };
   }
 
@@ -91,7 +99,19 @@ export function scaleItemsLayoutToViewSpace(
       height: measure.height * scale,
       staveLineTopY: measure.staveLineTopY * scale,
       staveLineBottomY: measure.staveLineBottomY * scale,
+      ...(measure.visibleLineYs
+        ? { visibleLineYs: measure.visibleLineYs.map((y) => y * scale) }
+        : {}),
     })),
     contentSize: toViewSize(itemsLayout.contentSize, scale),
+  };
+}
+
+function scaleBounds(bounds: ScoreItemBounds, scale: number): ScoreItemBounds {
+  return {
+    left: bounds.left * scale,
+    right: bounds.right * scale,
+    top: bounds.top * scale,
+    bottom: bounds.bottom * scale,
   };
 }

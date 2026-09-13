@@ -25,8 +25,8 @@ jest.mock('@shopify/react-native-skia', () => ({
   Skia: { Font: jest.fn() },
 }));
 
-import { Beam, Element, Font } from 'vexflow';
-import type { GraceNoteGroup, Note } from 'vexflow';
+import { Beam, Element, Font, Modifier } from 'vexflow';
+import type { GraceNoteGroup, Note, StaveNote } from 'vexflow';
 
 import { __test__ as fontFallbacks } from '../../base/setupVexflowReactNative';
 import VexflowRecordingContext from '../../base/VexflowRecordingContext';
@@ -45,6 +45,7 @@ import { layoutScore } from '../layout';
 import { measureScore } from '../measure';
 import { renderScore } from '../render';
 import { createContentViewport, getRenderScale } from '../scale';
+import type { ScoreItemsLayout } from '../types';
 import { fakeFontProvider, measurementCanvasStub } from './stubs';
 
 const TEST_OPTIONS = {
@@ -94,6 +95,14 @@ const ITEMS: VoiceItem[] = [
   makeNote('graced', makePitch('B')),
   { id: 'spacer', type: 'rest', voiceId: 'v', kind: 'spacer', duration: q },
   { id: 'hidden', type: 'rest', voiceId: 'v', kind: 'hidden', duration: q },
+  {
+    id: 'parenthesized-chord',
+    type: 'chord',
+    voiceId: 'v',
+    pitches: [makePitch('C', { parenthesized: true }), makePitch('E')],
+    duration: { length: '8' },
+    stemDirection: 'up',
+  },
 ];
 
 const ATTACHMENTS: NoteAttachment[] = [
@@ -253,6 +262,29 @@ const signature = (note: Note): NoteSignature => [
     ),
 ];
 
+function renderTestScore(): ScoreItemsLayout {
+  const measured = measureScore(TEST_SCORE, TEST_OPTIONS);
+  const scale = getRenderScale(TEST_OPTIONS);
+  const viewport = createContentViewport(
+    { x: 0, y: 0, width: 800, height: 600 },
+    scale
+  );
+  const layoutPlan = layoutScore(
+    TEST_SCORE,
+    measured,
+    TEST_OPTIONS,
+    'documentEven',
+    viewport
+  );
+
+  return renderScore(
+    new VexflowRecordingContext(fakeFontProvider as never, 'Bravura'),
+    TEST_SCORE,
+    layoutPlan,
+    TEST_OPTIONS
+  );
+}
+
 beforeAll(() => {
   // Dot/Parenthesis.setNote parse the note font through Font.fromCSSString,
   // which needs a DOM; the 'web' Platform mock above skips the RN fallback.
@@ -319,5 +351,53 @@ describe('measurement and rendering voice parity', () => {
     );
 
     expect(signaturesOf()).toEqual(measuredSignatures);
+  });
+});
+
+describe('items layout modifier extents', () => {
+  let layout: ScoreItemsLayout;
+  let parenthesizedChord: StaveNote;
+
+  beforeAll(() => {
+    const spy = jest.spyOn(Beam, 'generateBeams');
+
+    layout = renderTestScore();
+    parenthesizedChord = spy.mock.calls
+      .flatMap(([notes]) => notes)
+      .filter(
+        (note) =>
+          note.getCategory() === 'StaveNote' &&
+          note.getKeys().join() === 'c/5,e/5' &&
+          note.getDuration() === '8'
+      )
+      .at(-1) as StaveNote;
+    spy.mockRestore();
+  });
+
+  it('boxes grace notes left of the head and annotations below the stave, omitting bare notes', () => {
+    const graced = layout.items.graced!;
+    const sticking = layout.items.sticking!;
+    const { staveLineBottomY } = layout.measures[0]!;
+
+    expect(graced.modifierBounds!.right).toBeLessThanOrEqual(
+      graced.headCenterX
+    );
+    expect(graced.modifierBounds!.left).toBeLessThan(
+      graced.modifierBounds!.right
+    );
+    expect(sticking.modifierBounds!.bottom).toBeGreaterThan(staveLineBottomY);
+    expect(layout.items['one-m1-n']).not.toHaveProperty('modifierBounds');
+  });
+
+  it('anchors a lower-pitch parenthesis right of the flag of a stem-up chord', () => {
+    const { RIGHT } = Modifier.Position;
+    const flagWidth =
+      parenthesizedChord.getModifierStartXY(RIGHT, 1).x -
+      parenthesizedChord.getModifierStartXY(RIGHT, 0).x;
+
+    expect(flagWidth).toBeGreaterThan(0);
+    expect(
+      layout.items['parenthesized-chord']!.modifierBounds!.right
+    ).toBeGreaterThanOrEqual(parenthesizedChord.getNoteHeadEndX() + flagWidth);
   });
 });

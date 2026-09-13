@@ -147,7 +147,13 @@ describe('createContentViewport / toViewSize', () => {
 describe('scaleItemsLayoutToViewSpace', () => {
   const contentLayout: ScoreItemsLayout = {
     items: {
-      'item-1': { x: 60, width: 12, headCenterX: 65, measureIndex: 0 },
+      'item-1': {
+        x: 60,
+        width: 12,
+        headCenterX: 65,
+        measureIndex: 0,
+        modifierBounds: { left: 50, right: 80, top: 10, bottom: 90 },
+      },
       'item-2': { x: 120, width: 24, headCenterX: 129, measureIndex: 0 },
     },
     measures: [
@@ -164,6 +170,7 @@ describe('scaleItemsLayoutToViewSpace', () => {
         height: 92,
         staveLineTopY: 30,
         staveLineBottomY: 70,
+        visibleLineYs: [30, 40, 50, 60, 70],
       },
       {
         groupId: 'staff:staff-1',
@@ -178,6 +185,7 @@ describe('scaleItemsLayoutToViewSpace', () => {
         height: 92,
         staveLineTopY: 30,
         staveLineBottomY: 70,
+        visibleLineYs: [50],
       },
     ],
     contentSize: { width: 393, height: 116 },
@@ -192,7 +200,13 @@ describe('scaleItemsLayoutToViewSpace', () => {
 
     expect(viewLayout).toEqual({
       items: {
-        'item-1': { x: 30, width: 6, headCenterX: 32.5, measureIndex: 0 },
+        'item-1': {
+          x: 30,
+          width: 6,
+          headCenterX: 32.5,
+          measureIndex: 0,
+          modifierBounds: { left: 25, right: 40, top: 5, bottom: 45 },
+        },
         'item-2': { x: 60, width: 12, headCenterX: 64.5, measureIndex: 0 },
       },
       measures: [
@@ -209,6 +223,7 @@ describe('scaleItemsLayoutToViewSpace', () => {
           height: 46,
           staveLineTopY: 15,
           staveLineBottomY: 35,
+          visibleLineYs: [15, 20, 25, 30, 35],
         },
         {
           groupId: 'staff:staff-1',
@@ -223,6 +238,7 @@ describe('scaleItemsLayoutToViewSpace', () => {
           height: 46,
           staveLineTopY: 15,
           staveLineBottomY: 35,
+          visibleLineYs: [25],
         },
       ],
       contentSize: { width: 196.5, height: 58 },
@@ -243,47 +259,63 @@ describe('scaleItemsLayoutToViewSpace', () => {
   });
 
   /* Structural guard for the hand-maintained field list in
-   * scaleItemsLayoutToViewSpace: a new coordinate field added to the types
-   * fails here until scale.ts learns to multiply it. */
+   * scaleItemsLayoutToViewSpace: a new coordinate field (number, number
+   * array or nested box) added to the types fails here until scale.ts learns
+   * to multiply it. */
   it('scales every numeric non-index field of items and measures (structural guard)', () => {
     const SCALE = 0.5;
     const INDEX_FIELDS = new Set(['measureIndex', 'systemIndex']);
     const viewLayout = scaleItemsLayoutToViewSpace(contentLayout, SCALE);
+    const scaleValue = (value: unknown): unknown => {
+      if (typeof value === 'number') {
+        return value * SCALE;
+      }
 
-    for (const [itemId, item] of Object.entries(contentLayout.items)) {
-      const scaled = viewLayout.items[itemId] as unknown as Record<
-        string,
-        unknown
-      >;
+      if (Array.isArray(value)) {
+        return value.map(scaleValue);
+      }
 
-      for (const [field, value] of Object.entries(item)) {
-        if (typeof value !== 'number' || INDEX_FIELDS.has(field)) {
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(
+          Object.entries(value).map(([key, entry]) => [key, scaleValue(entry)])
+        );
+      }
+
+      return undefined;
+    };
+    const expectScaled = (
+      source: object,
+      scaled: Record<string, unknown>,
+      where: Record<string, unknown>
+    ) => {
+      for (const [field, value] of Object.entries(source)) {
+        const expected = scaleValue(value);
+
+        if (expected === undefined || INDEX_FIELDS.has(field)) {
           continue;
         }
-        expect({ itemId, field, value: scaled[field] }).toEqual({
-          itemId,
+        expect({ ...where, field, value: scaled[field] }).toEqual({
+          ...where,
           field,
-          value: value * SCALE,
+          value: expected,
         });
       }
+    };
+
+    for (const [itemId, item] of Object.entries(contentLayout.items)) {
+      expectScaled(
+        item,
+        viewLayout.items[itemId] as unknown as Record<string, unknown>,
+        { itemId }
+      );
     }
 
     contentLayout.measures.forEach((measure, index) => {
-      const scaled = viewLayout.measures[index] as unknown as Record<
-        string,
-        unknown
-      >;
-
-      for (const [field, value] of Object.entries(measure)) {
-        if (typeof value !== 'number' || INDEX_FIELDS.has(field)) {
-          continue;
-        }
-        expect({ index, field, value: scaled[field] }).toEqual({
-          index,
-          field,
-          value: value * SCALE,
-        });
-      }
+      expectScaled(
+        measure,
+        viewLayout.measures[index] as unknown as Record<string, unknown>,
+        { index }
+      );
     });
   });
 });

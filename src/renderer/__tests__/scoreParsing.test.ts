@@ -31,6 +31,7 @@ const Glyphs = (VexFlow as unknown as { Glyphs: Record<string, string> })
 import { installVexflowReactNativeFallbacks } from '../../base/setupVexflowReactNative';
 import type {
   Chord,
+  Clef,
   GraceNote,
   GraceNoteAttachment,
   Note,
@@ -891,6 +892,46 @@ describe('grace note attachments', () => {
       getGraceNoteGroups(notes[0] as StaveNote)[0]!.getWidth()
     ).toBeGreaterThan(0);
   });
+});
+
+describe('rest staffLine', () => {
+  const rest = (staffLine?: Rest['staffLine']): Rest => ({
+    id: 'rest',
+    type: 'rest',
+    voiceId: 'voice',
+    duration: { length: 'q' },
+    staffLine,
+  });
+  const LINES = [0, 1, 2, 3, 4] as const;
+  const stave = new Stave(0, 0, 100);
+  const restY = (clef: Clef, staffLine?: Rest['staffLine']) => {
+    const note = voiceItemToStaveNote(rest(staffLine), clef) as StaveNote;
+    note.setStave(stave);
+    return note.getYs()[0];
+  };
+
+  const middleLineKeys: Array<[Clef, string]> = [
+    ['treble', 'b/4'],
+    ['bass', 'd/3'],
+    ['alto', 'c/4'],
+    ['tenor', 'a/3'],
+    ['percussion', 'b/4'],
+  ];
+
+  it.each(middleLineKeys)('keys a default %s rest as %s', (clef, key) => {
+    const note = voiceItemToStaveNote(rest(), clef) as StaveNote;
+
+    expect(note.getKeys()).toEqual([key]);
+  });
+
+  it.each(['treble', 'bass', 'alto', 'tenor', 'percussion'] as const)(
+    'places a %s rest on staff lines 0 (bottom) to 4 (top)',
+    (clef) => {
+      expect(LINES.map((line) => restY(clef, line))).toEqual(
+        [...LINES].reverse().map((line) => stave.getYForLine(line))
+      );
+    }
+  );
 });
 
 describe('dotted durations', () => {

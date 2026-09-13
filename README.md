@@ -326,6 +326,10 @@ put every note on `ONE_LINE_STAFF_PITCH` (the staff keeps the 5-line pitch
 geometry, so that pitch lands on the visible line). `showClef: false` hides
 the first measure's clef; `lines` accepts 1, 3 or 5 (default 5).
 
+A visible rest sits on the middle line of any clef by default; `staffLine`
+moves it (0 = bottom line … 4 = top line of the five-line geometry, resolved
+per clef).
+
 ```tsx
 import type { Staff } from 'vexflow-native/state';
 import { ONE_LINE_STAFF_PITCH } from 'vexflow-native/state';
@@ -450,6 +454,15 @@ export function DirectVexFlow() {
 - `onItemsLayout`: optional callback fired after each recording pass with the
   view-space geometry (at scroll offset 0) of rendered items and measures,
   including each measure's system band `y`/`height`.
+  - item `modifierBounds`: union box (`left`/`right`/`top`/`bottom`) of the
+    item's drawn modifiers — articulations, annotations, dynamics, lyrics,
+    grace notes, parentheses, accidentals, dots; absent without modifiers.
+  - measure `visibleLineYs`: stroke centre y of each drawn staff line, top
+    to bottom (5, 3 or 1 entries), so a one-line consumer reads the middle
+    line without knowing the geometry. `visibleLineYs[0]` is
+    `staveLineTopY`; the last entry is `staveLineBottomY - lineWidth`.
+    `staveLineTopY`/`staveLineBottomY` keep spanning the full five-line
+    geometry, hidden lines included.
 - `onReady`: optional callback fired once per mount, when the first score
   picture has been rasterized for a non-empty viewport. Later re-records
   (resize, option changes) do not re-fire it — the seam for hiding a loading
