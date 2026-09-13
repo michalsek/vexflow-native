@@ -19,7 +19,7 @@ import {
 } from './measureModifiers';
 import { mergeNoteBounds, mergeY } from './measureBounds';
 import { applyStaffLines } from './stave';
-import type { ScoreOptions } from './types';
+import type { ScoreItemHooks, ScoreOptions } from './types';
 import type { StaffVerticalBounds } from './measureBounds';
 import type { ResolvedMeasureModifiers } from './measureModifiers';
 import type { ResolvedMeasureState } from './scoreParsing';
@@ -57,7 +57,8 @@ interface StaffMeasurementContext {
  */
 export function measureScore(
   score: Score,
-  options: ScoreOptions
+  options: ScoreOptions,
+  { decorateItem }: Pick<ScoreItemHooks, 'decorateItem'> = {}
 ): MeasuredScore {
   const groups = buildMeasurementGroups(score);
   const attachmentsByOwner = indexAttachmentsByOwner(score);
@@ -107,6 +108,9 @@ export function measureScore(
               attachmentsByOwner,
               staff,
               directions: voiceIndex === 0 ? measure.directions : undefined,
+              itemContext: decorateItem
+                ? { decorateItem, staff, measureIndex }
+                : undefined,
               resolveClef: (item) =>
                 item.targetStaffId
                   ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??

@@ -34,6 +34,7 @@ import {
   restAttachments,
 } from './noteModifiers';
 import { durationToVF, pitchToVFKey, restKeyForStaffLine } from './vfKeys';
+import type { DecorateItem } from './types';
 
 export type StaffGroupLookup = {
   groupId: string;
@@ -61,7 +62,18 @@ export interface MakeVFVoiceOptions {
   staff?: Staff;
   /** Measure directions drawn on this voice's first drawn item. */
   directions?: Direction[];
+  itemContext?: {
+    decorateItem: DecorateItem;
+    staff: Staff;
+    measureIndex: number;
+  };
 }
+
+type ItemDecorator = (
+  item: VoiceItem,
+  note: StaveNote,
+  attachments: readonly NoteAttachment[]
+) => void;
 
 /**
  * Maps the library stem direction to the numeric VexFlow value.
@@ -123,47 +135,55 @@ function spacerTickWidth(): number {
 export function voiceItemToStaveNote(
   item: VoiceItem,
   clef: Clef,
-  attachments?: NoteAttachment[]
+  attachments?: NoteAttachment[],
+  decorate?: ItemDecorator
 ): VFVoiceNote {
-  if (item.type === 'rest') {
-    if (item.kind === 'hidden' || item.kind === 'spacer') {
-      const note = new GhostNote(durationToVF(item.duration));
-      if (item.kind === 'spacer') {
-        note.setWidth(spacerTickWidth());
-      }
-      return note;
+  if (
+    item.type === 'rest' &&
+    (item.kind === 'hidden' || item.kind === 'spacer')
+  ) {
+    const note = new GhostNote(durationToVF(item.duration));
+
+    if (item.kind === 'spacer') {
+      note.setWidth(spacerTickWidth());
     }
 
+    return note;
+  }
+
+  const note = buildStaveNote(item, clef);
+  const applied =
+    (item.type === 'rest' ? restAttachments(attachments) : attachments) ?? [];
+
+  applyNoteModifiers(note, clef, applied);
+  decorate?.(item, note, applied);
+
+  return note;
+}
+
+function buildStaveNote(item: VoiceItem, clef: Clef): StaveNote {
+  if (item.type === 'rest') {
     const note = new StaveNote({
       clef,
       keys: [restKeyForStaffLine(clef, item.staffLine)],
       duration: durationToVF(item.duration, true),
     });
+
     applyDots(note, item.duration.dots);
-    applyNoteModifiers(note, clef, restAttachments(attachments));
+
     return note;
   }
 
-  if (item.type === 'note') {
-    const note = new StaveNote({
-      clef,
-      keys: [pitchToVFKey(item.pitch)],
-      duration: durationToVF(item.duration),
-      stemDirection: toVFStemDirection(item.stemDirection),
-    });
-    decorateStaveNote(note, [item.pitch], item.duration);
-    applyNoteModifiers(note, clef, attachments);
-    return note;
-  }
-
+  const pitches = item.type === 'note' ? [item.pitch] : item.pitches;
   const note = new StaveNote({
     clef,
-    keys: item.pitches.map(pitchToVFKey),
+    keys: pitches.map(pitchToVFKey),
     duration: durationToVF(item.duration),
     stemDirection: toVFStemDirection(item.stemDirection),
   });
-  decorateStaveNote(note, item.pitches, item.duration);
-  applyNoteModifiers(note, clef, attachments);
+
+  decorateStaveNote(note, pitches, item.duration);
+
   return note;
 }
 
@@ -259,13 +279,26 @@ export function makeVFVoice(
 } {
   const attachmentsByOwner =
     options.attachmentsByOwner ?? indexAttachmentsByOwner(score);
-  const notes = voice.items.map((item) =>
-    voiceItemToStaveNote(
+  const { itemContext } = options;
+  const notes = voice.items.map((item) => {
+    const itemClef = options.resolveClef?.(item) ?? clef;
+    const decorate: ItemDecorator | undefined = itemContext
+      ? (decoratedItem, note, attachments) =>
+          itemContext.decorateItem(decoratedItem, note, {
+            clef: itemClef,
+            staff: itemContext.staff,
+            measureIndex: itemContext.measureIndex,
+            attachments,
+          })
+      : undefined;
+
+    return voiceItemToStaveNote(
       item,
-      options.resolveClef?.(item) ?? clef,
-      attachmentsByOwner.get(item.id)
-    )
-  );
+      itemClef,
+      attachmentsByOwner.get(item.id),
+      decorate
+    );
+  });
   applyMeasureDirections(notes, options.directions);
 
   const noteByItemId = new Map<string, VFVoiceNote>();

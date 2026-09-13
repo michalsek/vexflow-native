@@ -43,7 +43,7 @@ import type {
   VoiceItem,
 } from '../../state';
 import { ONE_LINE_STAFF_PITCH } from '../../state';
-import { resolveItemHeadCenterX } from '../render';
+import { resolveItemHeadCenterX } from '../itemLayout';
 import { ARTICULATION_TO_VF_CODE } from '../noteModifiers';
 import {
   beamGroupsToVF,

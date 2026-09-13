@@ -423,6 +423,73 @@ export function DirectVexFlow() {
 }
 ```
 
+## Escape hatch: per-item hooks
+
+When the score model has no attachment for a mark you need, `ScoreRenderer`
+lets you reach the VexFlow note of every item without leaving the typed
+score. Both hooks are optional and keep the item's layout, style overrides
+and `onItemsLayout` entry intact.
+
+- `decorateItem(item, note, { clef, staff, measureIndex, attachments })` runs
+  once per drawable item (never for `hidden`/`spacer` rests) in **both** the
+  measurement and the drawing pass, right after the note is built and before
+  formatting — so any modifier you add (`Articulation`, `Ornament`,
+  `Annotation`, …) counts in the intrinsic width and in the vertical staff
+  bounds. It must be deterministic in its inputs and free of side effects:
+  the VexFlow objects are rebuilt on every pass, so never cache by note
+  identity.
+- `onDrawItem(ctx, item, note, layout)` runs in the drawing pass only, right
+  after the note and its modifiers are drawn and inside the item's color
+  group (so `itemStyleOverrides` apply to what you draw). `layout` is the
+  item's geometry in **content space** — the space `ctx` draws in, VexFlow
+  units before `options.render.scale`; `onItemsLayout` receives the same
+  entry multiplied by the scale.
+
+The VexFlow classes the hooks need are re-exported from
+`vexflow-native/renderer` (`StaveNote`, `Modifier`, `Articulation`,
+`Annotation`, `Ornament`, `RenderContext`); `vexflow` is a peer dependency,
+so these are your own copy of the classes and `instanceof` checks against
+them hold. Define the hooks outside the component (or wrap them in
+`useCallback` inside it) — a new function identity re-records the score.
+
+```tsx
+import {
+  Articulation,
+  ScoreRenderer,
+  type DecorateItem,
+  type DrawItem,
+} from 'vexflow-native/renderer';
+
+const decorateItem: DecorateItem = (item, note) => {
+  if (item.type === 'note' && item.id.startsWith('snap-')) {
+    note.addModifier(new Articulation('ao')); // snap pizzicato
+  }
+};
+
+const onDrawItem: DrawItem = (ctx, item, _note, layout) => {
+  if (item.id === 'target') {
+    ctx.beginPath();
+    ctx.arc(
+      layout.headCenterX,
+      layout.modifierBounds?.top ?? 0,
+      6,
+      0,
+      2 * Math.PI,
+      false
+    );
+    ctx.stroke();
+  }
+};
+
+<ScoreRenderer
+  score={score}
+  defaultFont="Bravura"
+  fontManager={fontManager}
+  decorateItem={decorateItem}
+  onDrawItem={onDrawItem}
+/>;
+```
+
 ## ScoreRenderer props
 
 - `score`: typed score state to render.
@@ -431,6 +498,10 @@ export function DirectVexFlow() {
 - `colorScheme`: optional foreground, background, and ledger line colors.
 - `itemStyleOverrides`: optional Reanimated shared value mapping score item ids
   to replay-time fill/stroke color, glow, and dash overrides.
+- `decorateItem`: optional per-item hook adding VexFlow modifiers to a note in
+  both passes; see [Escape hatch: per-item hooks](#escape-hatch-per-item-hooks).
+- `onDrawItem`: optional per-item drawing hook receiving the VexFlow render
+  context and the item's content-space layout; same section.
 - `rendererType`: `document`, `documentEven`, or `infiniteScore`.
 - `options`: optional renderer settings grouped by `insets`, `spacing`, and
   `render`; `render.scale` uniformly scales the notation without quality loss.

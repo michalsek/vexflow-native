@@ -18,15 +18,12 @@ import {
   applyMeasureModifiers,
   resolveMeasureModifiers,
 } from './measureModifiers';
-import {
-  indexAttachmentsByOwner,
-  makeVFVoice,
-  noteheadWidth,
-} from './scoreParsing';
+import { indexAttachmentsByOwner, makeVFVoice } from './scoreParsing';
 import { applyFixedNoteSpacing } from './fixedNoteSpacing';
-import { computeModifierBounds } from './itemLayout';
+import { itemLayoutOf } from './itemLayout';
+import { hasNoteHeads } from './noteModifiers';
 import { applyStaffLines, visibleLineYs } from './stave';
-import type { ScoreItemsLayout, ScoreOptions } from './types';
+import type { ScoreItemHooks, ScoreItemsLayout, ScoreOptions } from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
 /**
@@ -37,7 +34,8 @@ export function renderScore(
   ctx: VexflowRecordingContext,
   score: Score,
   layoutPlan: ScoreLayoutPlan,
-  options: ScoreOptions
+  options: ScoreOptions,
+  hooks: ScoreItemHooks = {}
 ): ScoreItemsLayout {
   const groupsById = new Map(
     layoutPlan.groups.map((group) => [group.groupId, group])
@@ -74,6 +72,7 @@ export function renderScore(
           isFirstMeasureInSystem: measureIndex === 0,
           isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
           fixedNoteSpacing: options.render.fixedNoteSpacing,
+          ...hooks,
         },
         itemsLayout
       );
@@ -98,7 +97,7 @@ type StaffRenderArtifacts = {
   vfVoices: VFVoice[];
 };
 
-interface RenderMeasureOptions {
+interface RenderMeasureOptions extends ScoreItemHooks {
   isFirstMeasureInSystem: boolean;
   isLastMeasureInSystem: boolean;
   fixedNoteSpacing: boolean;
@@ -136,6 +135,13 @@ function renderMeasure(
           attachmentsByOwner,
           staff,
           directions: voiceIndex === 0 ? measure.directions : undefined,
+          itemContext: options.decorateItem
+            ? {
+                decorateItem: options.decorateItem,
+                staff,
+                measureIndex: measurePlan.measureIndex,
+              }
+            : undefined,
           resolveClef: (item) =>
             item.targetStaffId
               ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -226,20 +232,21 @@ function renderMeasure(
     ({ vfVoices, voiceArtifacts, beams, tuplets }) => {
       vfVoices.forEach((voice) => voice.setRendered());
       voiceArtifacts.forEach(({ items, notes }) => {
-        drawVoiceItems(ctx, items, notes);
+        drawVoiceItems(
+          ctx,
+          items,
+          notes,
+          measurePlan.measureIndex,
+          itemsLayout,
+          options.onDrawItem
+        );
       });
       beams.forEach((beam) => beam.setContext(ctx).draw());
       tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
     }
   );
 
-  collectMeasureItemsLayout(
-    itemsLayout,
-    measurePlan,
-    group.staves,
-    renderedStaves,
-    staffRenderArtifacts
-  );
+  collectMeasureLayout(itemsLayout, measurePlan, group.staves, renderedStaves);
 }
 
 /**
@@ -253,41 +260,15 @@ function getFormatReferenceStave(renderedStaves: Stave[]): Stave {
 }
 
 /**
- * Records the formatted geometry of one measure; must run after the items
- * are drawn because modifiers only take their position in `draw()`. Emits
- * one measure entry per rendered stave, since note bounds differ per stave.
+ * Emits one measure entry per rendered stave, since note bounds differ per
+ * stave.
  */
-function collectMeasureItemsLayout(
+function collectMeasureLayout(
   itemsLayout: ScoreItemsLayout,
   measurePlan: MeasureLayoutPlan,
   staves: GroupLayoutContext['staves'],
-  renderedStaves: Stave[],
-  staffRenderArtifacts: StaffRenderArtifacts[]
+  renderedStaves: Stave[]
 ) {
-  staffRenderArtifacts.forEach(({ voiceArtifacts }) => {
-    voiceArtifacts.forEach(({ items, notes }) => {
-      items.forEach((item, index) => {
-        const note = notes[index];
-
-        if (!note) {
-          return;
-        }
-
-        const x = note.getAbsoluteX();
-        const width = note.getWidth();
-        const modifierBounds = computeModifierBounds(note);
-
-        itemsLayout.items[item.id] = {
-          x,
-          width,
-          headCenterX: resolveItemHeadCenterX(note, x, width),
-          measureIndex: measurePlan.measureIndex,
-          ...(modifierBounds ? { modifierBounds } : {}),
-        };
-      });
-    });
-  });
-
   staves.forEach((staff, staffIndex) => {
     const stave = renderedStaves[staffIndex];
 
@@ -313,46 +294,17 @@ function collectMeasureItemsLayout(
   });
 }
 
-/** Detected structurally because `GhostNote`s lack these getters. */
-type NoteHeadSpan = {
-  getNoteHeadBeginX?: () => number;
-  getNoteHeadEndX?: () => number;
-};
-
 /**
- * Center of a formatted note's visual notehead span. When the getters are
- * missing (GhostNotes) the fallback is the center of a NOTIONAL notehead at
- * the block's left edge, capped by the block width — so a `spacer` rest
- * anchors where a real note's head would sit on the same tick, and external
- * UI aligned to it does not hop when the note appears. Zero-width `hidden`
- * rests keep anchoring at their tick x.
+ * Draws each item and records its formatted geometry; the layout entry is
+ * taken after `draw()` because modifiers only take their position there.
  */
-export function resolveItemHeadCenterX(
-  note: VFVoiceNote,
-  x: number,
-  width: number
-): number {
-  const { getNoteHeadBeginX, getNoteHeadEndX } = note as NoteHeadSpan;
-
-  if (
-    typeof getNoteHeadBeginX === 'function' &&
-    typeof getNoteHeadEndX === 'function'
-  ) {
-    const center =
-      (getNoteHeadBeginX.call(note) + getNoteHeadEndX.call(note)) / 2;
-
-    if (Number.isFinite(center) && center > x && center <= x + width) {
-      return center;
-    }
-  }
-
-  return x + Math.min(width, noteheadWidth()) / 2;
-}
-
 function drawVoiceItems(
   ctx: VexflowRecordingContext,
   items: VoiceItem[],
-  notes: VFVoiceNote[]
+  notes: VFVoiceNote[],
+  measureIndex: number,
+  itemsLayout: ScoreItemsLayout,
+  onDrawItem: ScoreItemHooks['onDrawItem']
 ) {
   items.forEach((item, index) => {
     const note = notes[index];
@@ -365,6 +317,14 @@ function drawVoiceItems(
 
     try {
       note.setContext(ctx).drawWithStyle();
+
+      const layout = itemLayoutOf(note, measureIndex);
+
+      itemsLayout.items[item.id] = layout;
+
+      if (onDrawItem && hasNoteHeads(note)) {
+        onDrawItem(ctx, item, note, layout);
+      }
     } finally {
       ctx.endColorGroup();
     }

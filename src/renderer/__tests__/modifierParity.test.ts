@@ -25,7 +25,7 @@ jest.mock('@shopify/react-native-skia', () => ({
   Skia: { Font: jest.fn() },
 }));
 
-import { Beam, Element, Font, Modifier } from 'vexflow';
+import { Articulation, Beam, Element, Font, Modifier, Ornament } from 'vexflow';
 import type { GraceNoteGroup, Note, StaveNote } from 'vexflow';
 
 import { __test__ as fontFallbacks } from '../../base/setupVexflowReactNative';
@@ -45,7 +45,7 @@ import { layoutScore } from '../layout';
 import { measureScore } from '../measure';
 import { renderScore } from '../render';
 import { createContentViewport, getRenderScale } from '../scale';
-import type { ScoreItemsLayout } from '../types';
+import type { ScoreItemHooks, ScoreItemsLayout } from '../types';
 import { fakeFontProvider, measurementCanvasStub } from './stubs';
 
 const TEST_OPTIONS = {
@@ -164,6 +164,18 @@ const measure = (
 });
 
 const SHOW_METER = { leftModifiers: { showMeter: true } };
+
+const HOOKS: ScoreItemHooks = {
+  decorateItem: (item, note) => {
+    if (item.id === 'sharp') {
+      note.addModifier(new Ornament('tr'));
+    }
+
+    if (item.id === 'rest') {
+      note.addModifier(new Articulation('a@a'));
+    }
+  },
+};
 
 const TEST_SCORE: Score = {
   id: 'modifier-parity',
@@ -311,7 +323,7 @@ describe('measurement and rendering voice parity', () => {
     const signaturesOf = () =>
       spy.mock.calls.map(([notes]) => notes.map(signature));
 
-    const measured = measureScore(TEST_SCORE, TEST_OPTIONS);
+    const measured = measureScore(TEST_SCORE, TEST_OPTIONS, HOOKS);
     const measuredSignatures = signaturesOf();
 
     const categories = measuredSignatures.flatMap((notes) =>
@@ -326,6 +338,7 @@ describe('measurement and rendering voice parity', () => {
       'Articulation',
       'Dot',
       'GraceNoteGroup',
+      'Ornament',
       'Parenthesis',
     ]);
     spy.mockClear();
@@ -347,7 +360,8 @@ describe('measurement and rendering voice parity', () => {
       new VexflowRecordingContext(fakeFontProvider as never, 'Bravura'),
       TEST_SCORE,
       layoutPlan,
-      TEST_OPTIONS
+      TEST_OPTIONS,
+      HOOKS
     );
 
     expect(signaturesOf()).toEqual(measuredSignatures);

@@ -751,6 +751,67 @@ describe('renderScore', () => {
     expect(mockStaveConnectorDraw).not.toHaveBeenCalled();
   });
 
+  it('calls onDrawItem once per drawn item after its draw, skipping spacer rests', () => {
+    const q = { length: 'q' as const };
+    const { score, layoutPlan } = makeShowMeterFixture(undefined, undefined, {
+      items: [
+        {
+          id: 'spacer',
+          type: 'rest',
+          voiceId: 'voice-1',
+          kind: 'spacer',
+          duration: q,
+        },
+        {
+          id: 'drawn',
+          type: 'note',
+          voiceId: 'voice-1',
+          pitch: { step: 'C', octave: 4 },
+          duration: q,
+        },
+      ],
+    });
+    const onDrawItem = jest.fn();
+    // The spacer is a GhostNote: no notehead-span getters.
+    mockMakeVFVoice.mockImplementationOnce((_score, _meter, _clef, voice) =>
+      makeMockVoiceResult(voice, (absX) =>
+        absX === MOCK_NOTE_FIRST_X
+          ? null
+          : {
+              begin: absX + MOCK_HEAD_BEGIN_OFFSET,
+              end: absX + MOCK_HEAD_END_OFFSET,
+            }
+      )
+    );
+
+    renderScore(
+      mockRecordingContext as never,
+      score,
+      layoutPlan,
+      TEST_OPTIONS,
+      {
+        onDrawItem,
+      }
+    );
+
+    expect(onDrawItem).toHaveBeenCalledTimes(1);
+    expect(onDrawItem.mock.calls[0]![0]).toBe(mockRecordingContext);
+    expect(onDrawItem.mock.calls[0]![1]).toMatchObject({ id: 'drawn' });
+    expect(onDrawItem.mock.calls[0]![3]).toEqual({
+      x: MOCK_NOTE_FIRST_X + MOCK_NOTE_X_STEP,
+      width: MOCK_NOTE_WIDTH,
+      headCenterX:
+        MOCK_NOTE_FIRST_X + MOCK_NOTE_X_STEP + MOCK_HEAD_CENTER_OFFSET,
+      measureIndex: 0,
+    });
+    expect(onDrawItem.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mockNoteDrawWithStyle.mock.invocationCallOrder[1]!
+    );
+    expect(onDrawItem.mock.invocationCallOrder[0]).toBeLessThan(
+      mockEndColorGroup.mock.invocationCallOrder[1]!
+    );
+  });
+
   it('adds the time signature when showMeter is set on the measure', () => {
     const { score, layoutPlan } = makeShowMeterFixture({ showMeter: true });
 
@@ -1306,7 +1367,11 @@ describe('renderScore', () => {
 function makeShowMeterFixture(
   leftModifiers: Measure['leftModifiers'],
   lines?: StaffLines,
-  extras: { rightModifiers?: Measure['rightModifiers']; keyed?: boolean } = {}
+  extras: {
+    rightModifiers?: Measure['rightModifiers'];
+    keyed?: boolean;
+    items?: VoiceItem[];
+  } = {}
 ): { score: Score; layoutPlan: ScoreLayoutPlan } {
   const score: Score = {
     id: 'show-meter-render',
@@ -1328,7 +1393,7 @@ function makeShowMeterFixture(
             ...(extras.rightModifiers
               ? { rightModifiers: extras.rightModifiers }
               : {}),
-            voices: [{ id: 'voice-1', index: 0, items: [] }],
+            voices: [{ id: 'voice-1', index: 0, items: extras.items ?? [] }],
           },
         ],
       },
