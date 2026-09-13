@@ -21,6 +21,7 @@ import type { ResolvedScoreColorScheme } from './colorScheme';
 import type {
   RendererRect,
   RendererType,
+  ScoreItemHooks,
   ScoreItemsLayout,
   ScoreOptions,
 } from './types';
@@ -43,15 +44,17 @@ export interface ScoreRecording {
 }
 
 export function useScoreRecording({
+  decorateItem,
   defaultFont,
   enabled = true,
   fontManager,
   colorScheme,
+  onDrawItem,
   options,
   rendererType,
   score,
   viewport,
-}: {
+}: ScoreItemHooks & {
   defaultFont: string;
   enabled?: boolean;
   fontManager: SkTypefaceFontProvider;
@@ -82,7 +85,7 @@ export function useScoreRecording({
       defaultFont,
       colorScheme
     );
-    const measuredScore = measureScore(score, options);
+    const measuredScore = measureScore(score, options, { decorateItem });
     const measureMs = nowMs() - measureStart;
 
     const layoutStart = nowMs();
@@ -97,7 +100,10 @@ export function useScoreRecording({
 
     const renderStart = nowMs();
     const itemsLayout = scaleItemsLayoutToViewSpace(
-      renderScore(ctx, score, layoutPlan, options),
+      renderScore(ctx, score, layoutPlan, options, {
+        decorateItem,
+        onDrawItem,
+      }),
       scale
     );
     const renderMs = nowMs() - renderStart;
@@ -130,9 +136,11 @@ export function useScoreRecording({
     };
   }, [
     colorScheme,
+    decorateItem,
     defaultFont,
     enabled,
     fontManager,
+    onDrawItem,
     options,
     rendererType,
     score,

@@ -1,8 +1,9 @@
 import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
 import type { SharedValue } from 'react-native-reanimated';
+import type { RenderContext, StaveNote } from 'vexflow';
 
 import type { VexflowStyleOverride } from '../base';
-import type { Score } from '../state';
+import type { Clef, NoteAttachment, Score, Staff, VoiceItem } from '../state';
 import type { ScoreColorScheme } from './colorScheme';
 
 export type RendererType = 'infiniteScore' | 'document' | 'documentEven';
@@ -47,7 +48,46 @@ export interface ScoreScrollGeometry {
   maxScroll: number;
 }
 
-export interface ScoreRendererProps {
+/** Where a voice item sits when its VexFlow note is built. */
+export interface ScoreItemContext {
+  clef: Clef;
+  staff: Staff;
+  measureIndex: number;
+  attachments: readonly NoteAttachment[];
+}
+
+/**
+ * Called once per drawable item (not hidden/spacer rests) in BOTH the
+ * measurement and the drawing pass, right after the note is fully built and
+ * before formatting, so added modifiers count in width and vertical bounds.
+ * Must be deterministic in its inputs; `note` is rebuilt on every pass.
+ */
+export type DecorateItem = (
+  item: VoiceItem,
+  note: StaveNote,
+  context: ScoreItemContext
+) => void;
+
+/**
+ * Called in the drawing pass only, right after the note and its modifiers
+ * are drawn, inside the item's color group. `layout` is the item's geometry
+ * in content space — the space `ctx` draws in (VexFlow units before
+ * `render.scale`); `onItemsLayout` receives the same entry scaled to view
+ * space.
+ */
+export type DrawItem = (
+  ctx: RenderContext,
+  item: VoiceItem,
+  note: StaveNote,
+  layout: ScoreItemLayout
+) => void;
+
+export interface ScoreItemHooks {
+  decorateItem?: DecorateItem;
+  onDrawItem?: DrawItem;
+}
+
+export interface ScoreRendererProps extends ScoreItemHooks {
   score: Score;
   defaultFont: string;
   fontManager: SkTypefaceFontProvider;

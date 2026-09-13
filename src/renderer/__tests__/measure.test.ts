@@ -311,6 +311,18 @@ describe('measureScore', () => {
         expect(accentBounds.bottom).toBeGreaterThanOrEqual(plainBounds.bottom);
       });
 
+      it('grows the top bound for an articulation added by decorateItem', () => {
+        const decorated = measureScore(makeStemsUpScore(), TEST_OPTIONS, {
+          decorateItem: (_item, note) =>
+            note.addModifier(new VFArticulation('a@a')),
+        });
+        const plain = measureScore(makeStemsUpScore(), TEST_OPTIONS);
+
+        expect(decorated.measures[0]!.staffBounds[0]!.top).toBeLessThan(
+          plain.measures[0]!.staffBounds[0]!.top
+        );
+      });
+
       it('grows the bottom bound for placement below', () => {
         // Octave 4 noteheads reach the bottom staff area, so a below-placed
         // accent must extend past the stave's bottom line.

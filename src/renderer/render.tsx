@@ -1,5 +1,5 @@
 import { Formatter, Stave, StaveConnector } from 'vexflow';
-import type { Voice as VFVoice } from 'vexflow';
+import type { StaveNote, Voice as VFVoice } from 'vexflow';
 import type { StaveConnectorType } from 'vexflow';
 
 import type { VexflowRecordingContext } from '../base';
@@ -26,7 +26,12 @@ import {
 import { applyFixedNoteSpacing } from './fixedNoteSpacing';
 import { computeModifierBounds } from './itemLayout';
 import { applyStaffLines, visibleLineYs } from './stave';
-import type { ScoreItemsLayout, ScoreOptions } from './types';
+import type {
+  ScoreItemHooks,
+  ScoreItemLayout,
+  ScoreItemsLayout,
+  ScoreOptions,
+} from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
 /**
@@ -37,7 +42,8 @@ export function renderScore(
   ctx: VexflowRecordingContext,
   score: Score,
   layoutPlan: ScoreLayoutPlan,
-  options: ScoreOptions
+  options: ScoreOptions,
+  hooks: ScoreItemHooks = {}
 ): ScoreItemsLayout {
   const groupsById = new Map(
     layoutPlan.groups.map((group) => [group.groupId, group])
@@ -74,6 +80,7 @@ export function renderScore(
           isFirstMeasureInSystem: measureIndex === 0,
           isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
           fixedNoteSpacing: options.render.fixedNoteSpacing,
+          ...hooks,
         },
         itemsLayout
       );
@@ -98,7 +105,7 @@ type StaffRenderArtifacts = {
   vfVoices: VFVoice[];
 };
 
-interface RenderMeasureOptions {
+interface RenderMeasureOptions extends ScoreItemHooks {
   isFirstMeasureInSystem: boolean;
   isLastMeasureInSystem: boolean;
   fixedNoteSpacing: boolean;
@@ -136,6 +143,8 @@ function renderMeasure(
           attachmentsByOwner,
           staff,
           directions: voiceIndex === 0 ? measure.directions : undefined,
+          decorateItem: options.decorateItem,
+          measureIndex: measurePlan.measureIndex,
           resolveClef: (item) =>
             item.targetStaffId
               ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??
@@ -226,20 +235,21 @@ function renderMeasure(
     ({ vfVoices, voiceArtifacts, beams, tuplets }) => {
       vfVoices.forEach((voice) => voice.setRendered());
       voiceArtifacts.forEach(({ items, notes }) => {
-        drawVoiceItems(ctx, items, notes);
+        drawVoiceItems(
+          ctx,
+          items,
+          notes,
+          measurePlan.measureIndex,
+          itemsLayout,
+          options.onDrawItem
+        );
       });
       beams.forEach((beam) => beam.setContext(ctx).draw());
       tuplets.forEach((tuplet) => tuplet.setContext(ctx).draw());
     }
   );
 
-  collectMeasureItemsLayout(
-    itemsLayout,
-    measurePlan,
-    group.staves,
-    renderedStaves,
-    staffRenderArtifacts
-  );
+  collectMeasureLayout(itemsLayout, measurePlan, group.staves, renderedStaves);
 }
 
 /**
@@ -253,41 +263,15 @@ function getFormatReferenceStave(renderedStaves: Stave[]): Stave {
 }
 
 /**
- * Records the formatted geometry of one measure; must run after the items
- * are drawn because modifiers only take their position in `draw()`. Emits
- * one measure entry per rendered stave, since note bounds differ per stave.
+ * Emits one measure entry per rendered stave, since note bounds differ per
+ * stave.
  */
-function collectMeasureItemsLayout(
+function collectMeasureLayout(
   itemsLayout: ScoreItemsLayout,
   measurePlan: MeasureLayoutPlan,
   staves: GroupLayoutContext['staves'],
-  renderedStaves: Stave[],
-  staffRenderArtifacts: StaffRenderArtifacts[]
+  renderedStaves: Stave[]
 ) {
-  staffRenderArtifacts.forEach(({ voiceArtifacts }) => {
-    voiceArtifacts.forEach(({ items, notes }) => {
-      items.forEach((item, index) => {
-        const note = notes[index];
-
-        if (!note) {
-          return;
-        }
-
-        const x = note.getAbsoluteX();
-        const width = note.getWidth();
-        const modifierBounds = computeModifierBounds(note);
-
-        itemsLayout.items[item.id] = {
-          x,
-          width,
-          headCenterX: resolveItemHeadCenterX(note, x, width),
-          measureIndex: measurePlan.measureIndex,
-          ...(modifierBounds ? { modifierBounds } : {}),
-        };
-      });
-    });
-  });
-
   staves.forEach((staff, staffIndex) => {
     const stave = renderedStaves[staffIndex];
 
@@ -349,10 +333,17 @@ export function resolveItemHeadCenterX(
   return x + Math.min(width, noteheadWidth()) / 2;
 }
 
+/**
+ * Draws each item and records its formatted geometry; the layout entry is
+ * taken after `draw()` because modifiers only take their position there.
+ */
 function drawVoiceItems(
   ctx: VexflowRecordingContext,
   items: VoiceItem[],
-  notes: VFVoiceNote[]
+  notes: VFVoiceNote[],
+  measureIndex: number,
+  itemsLayout: ScoreItemsLayout,
+  onDrawItem: ScoreItemHooks['onDrawItem']
 ) {
   items.forEach((item, index) => {
     const note = notes[index];
@@ -365,10 +356,41 @@ function drawVoiceItems(
 
     try {
       note.setContext(ctx).drawWithStyle();
+
+      const layout = itemLayoutOf(note, measureIndex);
+
+      itemsLayout.items[item.id] = layout;
+
+      if (onDrawItem && !isPlaceholderRest(item)) {
+        onDrawItem(ctx, item, note as StaveNote, layout);
+      }
     } finally {
       ctx.endColorGroup();
     }
   });
+}
+
+function isPlaceholderRest(item: VoiceItem): boolean {
+  return (
+    item.type === 'rest' && (item.kind === 'hidden' || item.kind === 'spacer')
+  );
+}
+
+function itemLayoutOf(
+  note: VFVoiceNote,
+  measureIndex: number
+): ScoreItemLayout {
+  const x = note.getAbsoluteX();
+  const width = note.getWidth();
+  const modifierBounds = computeModifierBounds(note);
+
+  return {
+    x,
+    width,
+    headCenterX: resolveItemHeadCenterX(note, x, width),
+    measureIndex,
+    ...(modifierBounds ? { modifierBounds } : {}),
+  };
 }
 
 function renderStaffConnectors(
