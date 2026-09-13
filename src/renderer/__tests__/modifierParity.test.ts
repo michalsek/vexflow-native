@@ -79,8 +79,14 @@ const ITEMS: VoiceItem[] = [
     pitches: [makePitch('C'), makePitch('E', { accidental: 'b' })],
     duration: q,
   },
-  makeNote('ghost', makePitch('D', { ghost: true })),
-  makeNote('accent', makePitch('E', { accent: true })),
+  makeNote('parenthesized', makePitch('D', { parenthesized: true })),
+  {
+    id: 'accented-chord',
+    type: 'chord',
+    voiceId: 'v',
+    pitches: [makePitch('C'), makePitch('E')],
+    duration: q,
+  },
   makeNote('above', makePitch('G')),
   makeNote('below', makePitch('G')),
   makeNote('sticking', makePitch('A')),
@@ -104,7 +110,16 @@ const ATTACHMENTS: NoteAttachment[] = [
     articulation: 'accent',
     placement: 'below',
   },
+  {
+    id: 'a2b',
+    ownerId: 'accented-chord',
+    type: 'articulation',
+    articulation: 'accent',
+    pitchIndices: [1],
+  },
   { id: 'a3', ownerId: 'sticking', type: 'annotation', text: 'R' },
+  { id: 'a3b', ownerId: 'sticking', type: 'lyric', text: 'la', verse: 1 },
+  { id: 'a3c', ownerId: 'sticking', type: 'dynamic', dynamic: 'mf' },
   {
     id: 'a4',
     ownerId: 'rest',
@@ -124,6 +139,7 @@ const ATTACHMENTS: NoteAttachment[] = [
   },
 ];
 
+/** `extra.voices` follow the voice built from `items`. */
 const measure = (
   id: string,
   items: VoiceItem[],
@@ -131,8 +147,11 @@ const measure = (
 ): Measure => ({
   id,
   number: Number(id.slice(-1)),
-  voices: [{ id: 'v', index: 0, timingMode: 'soft', items }],
   ...extra,
+  voices: [
+    { id: 'v', index: 0, timingMode: 'soft', items },
+    ...(extra.voices ?? []),
+  ],
 });
 
 const SHOW_METER = { leftModifiers: { showMeter: true } };
@@ -148,7 +167,23 @@ const TEST_SCORE: Score = {
       defaultClef: 'treble',
       measures: [
         measure('five-m1', ITEMS),
-        measure('five-m2', [makeNote('five-m2-n', makePitch('C'))], SHOW_METER),
+        measure('five-m2', [makeNote('five-m2-n', makePitch('C'))], {
+          ...SHOW_METER,
+          voices: [
+            {
+              id: 'v2',
+              index: 1,
+              timingMode: 'soft',
+              items: [
+                { ...makeNote('five-m2-v2-n', makePitch('A')), voiceId: 'v2' },
+              ],
+            },
+          ],
+          directions: [
+            { id: 'd1', type: 'text', text: 'Solo' },
+            { id: 'd2', type: 'text', text: 'rit.', placement: 'below' },
+          ],
+        }),
       ],
     },
     {

@@ -11,32 +11,55 @@ import {
   type XmlElement,
 } from './XmlOrder';
 
+/**
+ * `pitchIndex` is the chord-tone position of `note` inside its owner chord
+ * (undefined for a standalone note): a chord tone's articulation joins the
+ * owner's existing same-articulation attachment instead of adding a glyph.
+ */
 export function applyNoteAttachments(
   note: XmlElement,
   itemId: string,
   staffNumber: string,
   voiceId: string,
-  state: ParserState
+  state: ParserState,
+  pitchIndex?: number
 ) {
   const notations = optionalChild(note, 'notations');
   const pendingDynamics = state.pendingDynamics.get(staffNumber) ?? [];
 
-  pendingDynamics.forEach((dynamic, index) => {
+  pendingDynamics.forEach((pending, index) => {
     state.attachments.push({
       id: `${itemId}-dynamic-${index.toString()}`,
       ownerId: itemId,
       type: 'dynamic',
-      dynamic,
+      ...pending,
     });
   });
   state.pendingDynamics.delete(staffNumber);
 
   articulationsFromNotations(notations).forEach((articulation, index) => {
+    if (pitchIndex !== undefined) {
+      const existing = state.attachments.find(
+        (attachment) =>
+          attachment.ownerId === itemId &&
+          attachment.type === 'articulation' &&
+          attachment.articulation === articulation
+      );
+
+      if (existing?.type === 'articulation') {
+        existing.pitchIndices = [...(existing.pitchIndices ?? [0]), pitchIndex];
+        return;
+      }
+    }
+
     state.attachments.push({
-      id: `${itemId}-articulation-${index.toString()}`,
+      id: `${itemId}-articulation-${index.toString()}${
+        pitchIndex === undefined ? '' : `-${pitchIndex.toString()}`
+      }`,
       ownerId: itemId,
       type: 'articulation',
       articulation,
+      ...(pitchIndex === undefined ? {} : { pitchIndices: [pitchIndex] }),
     });
   });
 

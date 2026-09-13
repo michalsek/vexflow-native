@@ -77,7 +77,14 @@ export type Dynamic =
   | 'f'
   | 'ff'
   | 'fff'
-  | 'sfz';
+  | 'fp'
+  | 'sf'
+  | 'sfp'
+  | 'sfz'
+  | 'rf'
+  | 'rfz'
+  | 'fz'
+  | 'n';
 
 export type KeyMode =
   | 'major'
@@ -103,9 +110,8 @@ export interface Pitch {
   octave: number;
   accidental?: Accidental;
   notehead?: Notehead;
-  ghost?: boolean;
-  /** A note or chord with any accented pitch draws one accent (`>`) above it. */
-  accent?: boolean;
+  /** Draws the notehead in parentheses (a ghost note). */
+  parenthesized?: boolean;
 }
 
 export interface DurationValue {
@@ -198,9 +204,12 @@ export interface TextDirection {
   id: Id;
   type: 'text';
   text: string;
+  /** undefined = 'above'; drawn on the measure's first drawn item of its
+   * first voice. */
   placement?: 'above' | 'below';
 }
 
+/** Not drawn; the tempo reaches the renderer through `MeasureState`. */
 export interface TempoDirection {
   id: Id;
   type: 'tempo';
@@ -271,18 +280,25 @@ export interface AttachmentBase {
 export interface ArticulationAttachment extends AttachmentBase {
   type: 'articulation';
   articulation: Articulation;
+  /** undefined = 'above'. */
   placement?: 'above' | 'below';
+  /** Chord pitches the mark belongs to, as indices into `Chord.pitches`;
+   * undefined = the whole owner. Engraved once per owner either way; indices
+   * on a `note` owner or out of range are tolerated and ignored. */
+  pitchIndices?: number[];
 }
 
 export interface DynamicAttachment extends AttachmentBase {
   type: 'dynamic';
   dynamic: Dynamic;
+  /** undefined = 'below'. */
   placement?: 'above' | 'below';
 }
 
 export interface LyricAttachment extends AttachmentBase {
   type: 'lyric';
   text: string;
+  /** Verse order below the owner, ascending; undefined sorts first. */
   verse?: number;
 }
 

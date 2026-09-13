@@ -5,9 +5,9 @@ import { Formatter } from 'vexflow';
 
 import {
   buildResolvedMeasureStates,
-  durationToVF,
   makeVFVoice,
 } from '../../renderer/scoreParsing';
+import { durationToVF } from '../../renderer/vfKeys';
 import type { Clef, Score, VoiceItem } from '../../state';
 import { MusicXmlParseError, parseMusicXmlToScore } from '../MusicXmlParser';
 
@@ -62,7 +62,11 @@ const SIMPLE_PARTWISE = `<?xml version="1.0" encoding="UTF-8"?>
         <voice>1</voice>
         <type>quarter</type>
         <stem>up</stem>
+        <notehead parentheses="yes">normal</notehead>
         <staff>1</staff>
+        <notations>
+          <articulations><staccato/><accent/></articulations>
+        </notations>
       </note>
       <note>
         <pitch><step>C</step><octave>4</octave></pitch>
@@ -235,7 +239,7 @@ describe('parseMusicXmlToScore', () => {
       stemDirection: 'up',
       pitches: [
         { step: 'C', octave: 4 },
-        { step: 'E', octave: 4 },
+        { step: 'E', octave: 4, parenthesized: true },
       ],
     });
     expect(score.staves[1]?.measures[0]?.voices[0]?.items[0]).toMatchObject({
@@ -244,10 +248,10 @@ describe('parseMusicXmlToScore', () => {
     });
     expect(score.attachments).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ type: 'dynamic', dynamic: 'f' }),
         expect.objectContaining({
-          type: 'articulation',
-          articulation: 'staccato',
+          type: 'dynamic',
+          dynamic: 'f',
+          placement: 'below',
         }),
         expect.objectContaining({
           type: 'articulation',
@@ -256,6 +260,23 @@ describe('parseMusicXmlToScore', () => {
         expect.objectContaining({ type: 'lyric', text: 'la', verse: 1 }),
       ])
     );
+    expect(
+      score.attachments?.filter(
+        (attachment) =>
+          attachment.ownerId === trebleVoice?.items[0]?.id &&
+          attachment.type === 'articulation'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        articulation: 'staccato',
+        pitchIndices: [0, 1],
+      }),
+      expect.objectContaining({ articulation: 'accent', pitchIndices: [1] }),
+    ]);
+    expect(
+      score.staves[0]?.measures[0]?.directions?.map(({ type }) => type)
+    ).toEqual(['text', 'tempo']);
+    expect(score.staves[1]?.measures[0]?.directions).toBeUndefined();
     expect(score.ties).toHaveLength(1);
     expect(score.slurs).toHaveLength(1);
     expect(score.staves[0]?.measures[0]).toMatchObject({

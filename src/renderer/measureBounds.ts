@@ -5,6 +5,7 @@ import type {
   RenderContext,
 } from 'vexflow';
 
+import { hasNoteHeads } from './noteModifiers';
 import type { VFVoiceNote } from './scoreParsing';
 
 export interface StaffVerticalBounds {
@@ -38,11 +39,6 @@ function hasGraceNotes(
   modifier: Modifier
 ): modifier is Modifier & Pick<GraceNoteGroup, 'getGraceNotes'> {
   return 'getGraceNotes' in modifier;
-}
-
-/** `GhostNote`s have no glyphs, so their element box is the origin. */
-function hasNoteHeads(note: VFVoiceNote): boolean {
-  return 'getNoteHeadBeginX' in note;
 }
 
 /**

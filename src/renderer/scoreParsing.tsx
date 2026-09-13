@@ -1,17 +1,8 @@
 import {
-  Accidental as VFAccidental,
-  Annotation as VFAnnotation,
-  AnnotationVerticalJustify,
-  Articulation as VFArticulation,
   Beam,
-  Dot,
   Element,
   Fraction as VFFraction,
   GhostNote,
-  GraceNote as VFGraceNote,
-  GraceNoteGroup,
-  ModifierPosition,
-  Parenthesis,
   StaveNote,
   Stem,
   Tuplet,
@@ -20,15 +11,11 @@ import {
 import type { StemmableNote } from 'vexflow';
 
 import type {
-  Articulation,
   Clef,
+  Direction,
   KeySignature,
-  DurationValue,
-  GraceNoteAttachment,
   Meter,
   NoteAttachment,
-  Notehead,
-  Pitch,
   Score,
   Staff,
   StaffGroup,
@@ -39,6 +26,14 @@ import type {
   VoiceItem,
   VoiceTimingMode,
 } from '../state';
+import {
+  applyDots,
+  applyMeasureDirections,
+  applyNoteModifiers,
+  decorateStaveNote,
+  restAttachments,
+} from './noteModifiers';
+import { durationToVF, pitchToVFKey } from './vfKeys';
 
 export type StaffGroupLookup = {
   groupId: string;
@@ -64,35 +59,9 @@ export interface MakeVFVoiceOptions {
   attachmentsByOwner?: Map<string, NoteAttachment[]>;
   /** Owning staff; on a one-line staff auto stems point up. */
   staff?: Staff;
+  /** Measure directions drawn on this voice's first drawn item. */
+  directions?: Direction[];
 }
-
-/**
- * Maps library notehead names to VexFlow key glyph codes.
- */
-export const NOTEHEAD_TO_VF_CODE: Record<Notehead, string> = {
-  'x': 'x',
-  'circle-x': 'cx',
-  'diamond': 'h',
-  'circle': 'ci',
-  'square': 'sq',
-  'triangle': 'tu',
-  'triangle-down': 'td',
-  'slash': 'sf',
-};
-
-/**
- * Maps library articulation names to VexFlow articulation codes.
- */
-export const ARTICULATION_TO_VF_CODE: Record<Articulation, string> = {
-  staccato: 'a.',
-  staccatissimo: 'av',
-  tenuto: 'a-',
-  accent: 'a>',
-  marcato: 'a^',
-  fermata: 'a@',
-  open: 'ah',
-  stopped: 'a+',
-};
 
 /**
  * Maps the library stem direction to the numeric VexFlow value.
@@ -107,213 +76,6 @@ export function toVFStemDirection(dir?: StemDirection): number | undefined {
   }
 
   return undefined;
-}
-
-/**
- * Converts an internal pitch into the VexFlow key string format.
- */
-export function pitchToVFKey(pitch: Pitch): string {
-  const accidental =
-    pitch.accidental === 'quarter-flat'
-      ? 'db'
-      : pitch.accidental === 'quarter-sharp'
-      ? 'd#'
-      : pitch.accidental ?? '';
-
-  const key = `${pitch.step.toLowerCase()}${accidental}/${pitch.octave}`;
-
-  if (pitch.notehead) {
-    return `${key}/${NOTEHEAD_TO_VF_CODE[pitch.notehead]}`;
-  }
-
-  return key;
-}
-
-/**
- * Converts a duration into the VexFlow duration token, including rests.
- */
-export function durationToVF(duration: DurationValue, isRest = false): string {
-  const length =
-    duration.length === 'long' || duration.length === 'breve'
-      ? '1/2'
-      : duration.length;
-
-  // Dots drive VexFlow's tick math, so rests need them in the token too or
-  // strict voices come up short.
-  const dots = 'd'.repeat(duration.dots ?? 0);
-
-  return `${length}${dots}${isRest ? 'r' : ''}`;
-}
-
-/**
- * Applies the requested number of augmentation dots to a note.
- */
-export function applyDots(note: StaveNote, dots?: 0 | 1 | 2 | 3) {
-  for (let i = 0; i < (dots ?? 0); i++) {
-    Dot.buildAndAttach([note], { all: true });
-  }
-}
-
-/**
- * Adds pitch accidentals to the matching keys in a VexFlow note.
- */
-export function addPitchAccidentals(
-  note: StaveNote,
-  pitches: readonly Pitch[]
-) {
-  pitches.forEach((pitch, index) => {
-    if (!pitch.accidental) {
-      return;
-    }
-
-    const type =
-      pitch.accidental === 'quarter-flat'
-        ? 'db'
-        : pitch.accidental === 'quarter-sharp'
-        ? 'd#'
-        : pitch.accidental;
-
-    note.addModifier(new VFAccidental(type), index);
-  });
-}
-
-/**
- * Wraps each ghost pitch of a note in parentheses.
- */
-export function applyGhostParentheses(
-  note: StaveNote,
-  pitches: readonly Pitch[]
-) {
-  pitches.forEach((pitch, index) => {
-    if (!pitch.ghost) {
-      return;
-    }
-
-    note.addModifier(new Parenthesis(ModifierPosition.LEFT), index);
-    note.addModifier(new Parenthesis(ModifierPosition.RIGHT), index);
-  });
-}
-
-function hasAccentAttachment(attachments: NoteAttachment[] | undefined) {
-  return (
-    attachments?.some(
-      (attachment) =>
-        attachment.type === 'articulation' &&
-        attachment.articulation === 'accent'
-    ) ?? false
-  );
-}
-
-/**
- * Draws one accent above a note whose pitches carry the `accent` flag, unless
- * the owner already has an accent attachment.
- */
-export function applyPitchAccent(
-  note: StaveNote,
-  pitches: readonly Pitch[],
-  attachments?: NoteAttachment[]
-) {
-  if (!pitches.some((pitch) => pitch.accent)) {
-    return;
-  }
-
-  if (hasAccentAttachment(attachments)) {
-    return;
-  }
-
-  note.addModifier(new VFArticulation(ARTICULATION_TO_VF_CODE.accent), 0);
-}
-
-const ANNOTATION_FONT = {
-  family: 'Arial, Helvetica, sans-serif',
-  size: 10,
-  weight: 'bold',
-};
-
-/**
- * Attaches the owner's articulation, annotation and grace-note modifiers to
- * a VexFlow note; dynamics and lyrics are drawn elsewhere.
- */
-export function applyNoteModifiers(
-  note: StaveNote,
-  clef: Clef,
-  attachments: NoteAttachment[] | undefined
-) {
-  if (!attachments) {
-    return;
-  }
-
-  for (const attachment of attachments) {
-    if (attachment.type === 'articulation') {
-      const articulation = new VFArticulation(
-        ARTICULATION_TO_VF_CODE[attachment.articulation]
-      );
-
-      if (attachment.placement === 'below') {
-        articulation.setPosition(ModifierPosition.BELOW);
-      }
-
-      note.addModifier(articulation, 0);
-    } else if (attachment.type === 'annotation') {
-      const annotation = new VFAnnotation(attachment.text);
-
-      annotation.setFont(ANNOTATION_FONT);
-      annotation.setVerticalJustification(
-        attachment.placement === 'above'
-          ? AnnotationVerticalJustify.TOP
-          : AnnotationVerticalJustify.BOTTOM
-      );
-      note.addModifier(annotation, 0);
-    } else if (attachment.type === 'grace') {
-      applyGraceNoteGroup(note, clef, attachment);
-    }
-  }
-}
-
-/**
- * Grace notes stem up unless the owner was built stem-down (auto stems that
- * flip later in `Beam.generateBeams` are not followed); two or more are
- * beamed together, with the acciaccatura slash on the first stem only.
- */
-function applyGraceNoteGroup(
-  note: StaveNote,
-  clef: Clef,
-  attachment: GraceNoteAttachment
-) {
-  if (attachment.notes.length === 0) {
-    return;
-  }
-
-  const stemDirection =
-    note.getStemDirection() === Stem.DOWN ? Stem.DOWN : Stem.UP;
-  const graceNotes = attachment.notes.map((graceNote, index) => {
-    const vfGraceNote = new VFGraceNote({
-      clef,
-      keys: [pitchToVFKey(graceNote.pitch)],
-      duration: durationToVF(graceNote.duration),
-      slash: index === 0 && attachment.slash === true,
-      stemDirection,
-    });
-    decorateStaveNote(vfGraceNote, [graceNote.pitch], graceNote.duration);
-    return vfGraceNote;
-  });
-  const group = new GraceNoteGroup(graceNotes);
-
-  if (graceNotes.length > 1) {
-    group.beamNotes();
-  }
-
-  note.addModifier(group, 0);
-}
-
-function decorateStaveNote(
-  note: StaveNote,
-  pitches: readonly Pitch[],
-  duration: DurationValue
-) {
-  addPitchAccidentals(note, pitches);
-  applyGhostParentheses(note, pitches);
-  applyDots(note, duration.dots);
 }
 
 export function indexAttachmentsByOwner(
@@ -378,11 +140,7 @@ export function voiceItemToStaveNote(
       duration: durationToVF(item.duration, true),
     });
     applyDots(note, item.duration.dots);
-    applyNoteModifiers(
-      note,
-      clef,
-      attachments?.filter((attachment) => attachment.type === 'annotation')
-    );
+    applyNoteModifiers(note, clef, restAttachments(attachments));
     return note;
   }
 
@@ -394,7 +152,6 @@ export function voiceItemToStaveNote(
       stemDirection: toVFStemDirection(item.stemDirection),
     });
     decorateStaveNote(note, [item.pitch], item.duration);
-    applyPitchAccent(note, [item.pitch], attachments);
     applyNoteModifiers(note, clef, attachments);
     return note;
   }
@@ -406,7 +163,6 @@ export function voiceItemToStaveNote(
     stemDirection: toVFStemDirection(item.stemDirection),
   });
   decorateStaveNote(note, item.pitches, item.duration);
-  applyPitchAccent(note, item.pitches, attachments);
   applyNoteModifiers(note, clef, attachments);
   return note;
 }
@@ -510,6 +266,7 @@ export function makeVFVoice(
       attachmentsByOwner.get(item.id)
     )
   );
+  applyMeasureDirections(notes, options.directions);
 
   const noteByItemId = new Map<string, VFVoiceNote>();
   voice.items.forEach((item, index) =>

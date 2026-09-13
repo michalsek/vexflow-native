@@ -6,9 +6,15 @@ import {
   it,
   jest,
 } from '@jest/globals';
-import { Articulation as VFArticulation, Element, Stave } from 'vexflow';
+import {
+  Annotation as VFAnnotation,
+  Articulation as VFArticulation,
+  Element,
+  Stave,
+} from 'vexflow';
 
 import type {
+  Direction,
   Measure,
   Meter,
   Note,
@@ -24,6 +30,7 @@ import { measureScore } from '../measure';
 import { applyStaffLines } from '../stave';
 import type { ScoreOptions } from '../types';
 import { measurementCanvasStub } from './stubs';
+import type { Mark } from './stubs';
 
 const TEST_OPTIONS: ScoreOptions = {
   insets: { ...insets },
@@ -322,22 +329,24 @@ describe('measureScore', () => {
         expect(belowBounds.bottom).toBeGreaterThan(plainBounds.bottom);
       });
 
-      it('keeps no-articulation measurement untouched by the articulation pass', () => {
-        const drawSpy = jest.spyOn(VFArticulation.prototype, 'draw');
+      it('keeps bare measurement untouched by the mark passes', () => {
+        const articulationDraw = jest.spyOn(VFArticulation.prototype, 'draw');
+        const annotationDraw = jest.spyOn(VFAnnotation.prototype, 'draw');
 
-        const withoutAttachments = measureScore(
-          makeStemsUpScore(),
-          TEST_OPTIONS
-        );
+        const bare = measureScore(makeStemsUpScore(), TEST_OPTIONS);
         const withEmptyAttachments = measureScore(
           { ...makeStemsUpScore(), attachments: [] },
           TEST_OPTIONS
         );
+        const withEmptyDirections = measureScore(
+          withDirections(makeStemsUpScore(), []),
+          TEST_OPTIONS
+        );
 
-        // No articulation is placed, so output is identical with or without
-        // the empty attachments array.
-        expect(drawSpy).not.toHaveBeenCalled();
-        expect(withEmptyAttachments).toEqual(withoutAttachments);
+        expect(articulationDraw).not.toHaveBeenCalled();
+        expect(annotationDraw).not.toHaveBeenCalled();
+        expect(withEmptyAttachments).toEqual(bare);
+        expect(withEmptyDirections).toEqual(bare);
       });
 
       it('places the measured accent box fully above the stems-up note box', () => {
@@ -363,7 +372,10 @@ describe('measureScore', () => {
     describe('annotation vertical extents', () => {
       it('grows the bottom bound for an annotation below the staff', () => {
         const withAnnotations = measureScore(
-          makeStemsUpScore(annotationAttachments(), 4),
+          makeStemsUpScore(
+            markAttachments({ type: 'annotation', text: 'R' }),
+            4
+          ),
           TEST_OPTIONS
         );
         const plain = measureScore(
@@ -376,6 +388,46 @@ describe('measureScore', () => {
 
         expect(annotatedBounds.bottom).toBeGreaterThan(plainBounds.bottom);
         expect(annotatedBounds.top).toBeLessThanOrEqual(plainBounds.top);
+      });
+    });
+
+    describe('lyric, dynamic and direction vertical extents', () => {
+      const bounds = (score: Score) =>
+        measureScore(score, TEST_OPTIONS).measures[0]!.staffBounds[0]!;
+      const plain = () => bounds(makeStemsUpScore(undefined, 4));
+
+      const cases: Array<[string, Mark, 'top' | 'bottom']> = [
+        ['lyric', { type: 'lyric', text: 'la' }, 'bottom'],
+        ['dynamic', { type: 'dynamic', dynamic: 'f' }, 'bottom'],
+        [
+          'dynamic above',
+          { type: 'dynamic', dynamic: 'f', placement: 'above' },
+          'top',
+        ],
+      ];
+
+      it.each(cases)('grows the bound on the %s side', (_, mark, side) => {
+        const attachments = markAttachments(mark);
+        const marked = bounds(makeStemsUpScore(attachments, 4));
+
+        if (side === 'bottom') {
+          expect(marked.bottom).toBeGreaterThan(plain().bottom);
+          expect(marked.top).toBe(plain().top);
+        } else {
+          expect(marked.top).toBeLessThan(plain().top);
+          expect(marked.bottom).toBe(plain().bottom);
+        }
+      });
+
+      it('grows the top bound for a text direction above', () => {
+        const directed = bounds(
+          withDirections(makeStemsUpScore(undefined, 4), [
+            { id: 'd1', type: 'text', text: 'Solo' },
+          ])
+        );
+
+        expect(directed.top).toBeLessThan(plain().top);
+        expect(directed.bottom).toBe(plain().bottom);
       });
     });
 
@@ -413,7 +465,7 @@ describe('measureScore', () => {
       });
     });
 
-    it('keeps dotted, accidental and ghost notes level with the plain note top', () => {
+    it('keeps dotted, accidental and parenthesized notes level with the plain note top', () => {
       const plainTop = measureScore(
         makeStemsUpScore(undefined, 4),
         TEST_OPTIONS
@@ -421,7 +473,7 @@ describe('measureScore', () => {
       const patches: Partial<Note>[] = [
         { duration: { length: '8', dots: 1 } },
         { pitch: { step: 'C', octave: 4, accidental: '#' } },
-        { pitch: { step: 'C', octave: 4, ghost: true } },
+        { pitch: { step: 'C', octave: 4, parenthesized: true } },
       ];
 
       patches.forEach((patch) => {
@@ -510,15 +562,23 @@ function accentAttachments(placement?: 'above' | 'below'): NoteAttachment[] {
   }));
 }
 
-/** Alternating R/L sticking annotations on every note of `makeStemsUpScore`'s
- * voice. */
-function annotationAttachments(): NoteAttachment[] {
+/** `mark` on every note of `makeStemsUpScore`'s voice. */
+function markAttachments(mark: Mark): NoteAttachment[] {
   return [1, 2, 3, 4].map((index) => ({
-    id: `annotation-${index}`,
+    id: `mark-${index}`,
     ownerId: `stems-up-m1-v1-n${index}`,
-    type: 'annotation' as const,
-    text: index % 2 === 1 ? 'R' : 'L',
+    ...mark,
   }));
+}
+
+function withDirections(score: Score, directions: Direction[]): Score {
+  const [staff] = score.staves;
+  const [measure] = staff!.measures;
+
+  return {
+    ...score,
+    staves: [{ ...staff!, measures: [{ ...measure!, directions }] }],
+  };
 }
 
 /** A two-note slashed grace group on every note of `makeStemsUpScore`'s

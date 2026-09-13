@@ -1,3 +1,13 @@
+import type { NoteAttachment } from '../../state';
+
+/** An attachment without its identity, for fixtures that stamp `id`/`ownerId`. */
+export type Mark = {
+  [K in NoteAttachment['type']]: Omit<
+    Extract<NoteAttachment, { type: K }>,
+    'id' | 'ownerId'
+  >;
+}[NoteAttachment['type']];
+
 /* Proportional text-measurement stub so glyph boxes are non-zero under jest,
  * where VexFlow has no canvas and every glyph would otherwise measure 0. */
 export const measurementCanvasStub = {

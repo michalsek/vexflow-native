@@ -1,5 +1,5 @@
 import type {
-  Dynamic,
+  DynamicAttachment,
   GraceNote,
   Measure,
   NoteAttachment,
@@ -32,6 +32,8 @@ export type PendingGraceNotes = {
   slash: boolean;
 };
 
+export type PendingDynamic = Pick<DynamicAttachment, 'dynamic' | 'placement'>;
+
 export type ParserState = {
   scoreId: string;
   divisions: number;
@@ -40,7 +42,8 @@ export type ParserState = {
   ties: Tie[];
   slurs: Slur[];
   tuplets: TupletGroup[];
-  pendingDynamics: Map<string, Dynamic[]>;
+  /** Keyed by MusicXML staff number; consumed by that staff's next note. */
+  pendingDynamics: Map<string, PendingDynamic[]>;
   /** Keyed by MusicXML voice name; consumed by that voice's next note. */
   pendingGraceNotes: Map<string, PendingGraceNotes>;
   activeTies: Map<string, ActiveSpanner>;

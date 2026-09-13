@@ -1,5 +1,5 @@
-import type { Direction, Dynamic, Tempo } from '../../state';
-import type { ParserState } from './InternalTypes';
+import type { Direction, Tempo } from '../../state';
+import type { ParserState, PendingDynamic } from './InternalTypes';
 import { dynamicsFromElement, otherDynamicsText } from './mappers';
 import {
   attr,
@@ -10,12 +10,22 @@ import {
   type XmlElement,
 } from './XmlOrder';
 
+export type ParsedDirection = {
+  /** 0-based; unvalidated, NaN for a non-numeric `<staff>`. */
+  staffIndex: number;
+  directions: Direction[];
+};
+
 export function parseDirection(
   direction: XmlElement,
   state: ParserState
-): Direction[] {
-  const placement =
-    attr(direction, 'placement') === 'below' ? 'below' : 'above';
+): ParsedDirection {
+  const explicitPlacement = attr(direction, 'placement');
+  const dynamicPlacement =
+    explicitPlacement === 'above' || explicitPlacement === 'below'
+      ? explicitPlacement
+      : undefined;
+  const placement = dynamicPlacement ?? 'above';
   const staffNumber = childText(direction, 'staff') ?? '1';
   const directions: Direction[] = [];
   const soundTempo = optionalChild(direction, 'sound')?.attributes.tempo;
@@ -40,7 +50,14 @@ export function parseDirection(
       const otherText = otherDynamicsText(dynamics);
 
       if (parsedDynamics.length) {
-        addPendingDynamics(state, staffNumber, parsedDynamics);
+        addPendingDynamics(
+          state,
+          staffNumber,
+          parsedDynamics.map((dynamic) => ({
+            dynamic,
+            placement: dynamicPlacement,
+          }))
+        );
       }
 
       if (otherText) {
@@ -64,7 +81,7 @@ export function parseDirection(
     });
   }
 
-  return directions;
+  return { staffIndex: Number(staffNumber) - 1, directions };
 }
 
 function parseTempo(value: string): Tempo {
@@ -77,7 +94,7 @@ function parseTempo(value: string): Tempo {
 function addPendingDynamics(
   state: ParserState,
   staffNumber: string,
-  dynamics: Dynamic[]
+  dynamics: PendingDynamic[]
 ) {
   const pending = state.pendingDynamics.get(staffNumber) ?? [];
   state.pendingDynamics.set(staffNumber, [...pending, ...dynamics]);

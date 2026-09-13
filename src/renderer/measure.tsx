@@ -102,10 +102,11 @@ export function measureScore(
             resolvedStatesByStaff[staffIndex]![measureIndex]!;
           measureNumbers.push(measure.number);
 
-          const voiceArtifacts = measure.voices.map((voice) =>
+          const voiceArtifacts = measure.voices.map((voice, voiceIndex) =>
             makeVFVoice(score, resolvedState.meter, resolvedState.clef, voice, {
               attachmentsByOwner,
               staff,
+              directions: voiceIndex === 0 ? measure.directions : undefined,
               resolveClef: (item) =>
                 item.targetStaffId
                   ? resolvedStateByStaffId.get(item.targetStaffId)?.clef ??

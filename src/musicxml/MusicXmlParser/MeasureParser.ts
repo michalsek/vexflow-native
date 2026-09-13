@@ -60,7 +60,7 @@ export function parseMeasure(
   );
   const voiceMapsByStaff = staves.map(() => new Map<string, Voice>());
   const voiceCursors = new Map<string, VoiceCursor>();
-  const directions: Direction[] = [];
+  const directionsByStaff = new Map<number, Direction[]>();
   let currentPosition = 0;
 
   measure.children.forEach((child) => {
@@ -68,9 +68,21 @@ export function parseMeasure(
       case 'attributes':
         applyAttributes(child, measures, staves, state);
         break;
-      case 'direction':
-        directions.push(...parseDirection(child, state));
+      case 'direction': {
+        const { staffIndex, directions } = parseDirection(child, state);
+
+        if (!measures[staffIndex]) {
+          throw new MusicXmlParseError(
+            `Direction references unknown staff ${(staffIndex + 1).toString()}`
+          );
+        }
+
+        directionsByStaff.set(staffIndex, [
+          ...(directionsByStaff.get(staffIndex) ?? []),
+          ...directions,
+        ]);
         break;
+      }
       case 'note':
         currentPosition = parseNote(
           child,
@@ -114,8 +126,10 @@ export function parseMeasure(
   finalizeMeasureVoices(measures[0]!, voiceCursors, state);
 
   measures.forEach((staffMeasure, index) => {
-    if (directions.length) {
-      staffMeasure.directions = [...directions];
+    const directions = directionsByStaff.get(index);
+
+    if (directions?.length) {
+      staffMeasure.directions = directions;
     }
 
     staffMeasure.voices = [...voiceMapsByStaff[index]!.values()].sort(
@@ -246,9 +260,14 @@ function parseNote(
   const itemId = isChordTone
     ? mergeChordTone(voice, item, note)
     : pushItem(voice, item);
+  const owner = voice.items[voice.items.length - 1];
+  const pitchIndex =
+    isChordTone && owner?.type === 'chord'
+      ? owner.pitches.length - 1
+      : undefined;
 
   attachPendingGraceNotes(itemId, voiceName, state);
-  applyNoteAttachments(note, itemId, staffNumber, voice.id, state);
+  applyNoteAttachments(note, itemId, staffNumber, voice.id, state, pitchIndex);
 
   if (isChordTone) {
     return currentPosition;
@@ -383,7 +402,17 @@ function parseDuration(note: XmlElement, state: ParserState): DurationValue {
 }
 
 function parsePitch(note: XmlElement): Pitch {
-  return mapPitch(firstChild(note, 'pitch'), childText(note, 'accidental'));
+  const pitch = mapPitch(
+    firstChild(note, 'pitch'),
+    childText(note, 'accidental')
+  );
+  const notehead = optionalChild(note, 'notehead');
+
+  if (notehead && attr(notehead, 'parentheses') === 'yes') {
+    pitch.parenthesized = true;
+  }
+
+  return pitch;
 }
 
 /**
