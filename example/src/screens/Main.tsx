@@ -7,7 +7,10 @@ import { useColorScheme } from '../hooks/useColorScheme';
 import type { ExampleStackParamList } from '../navigation/ExampleStackParamList';
 
 type MainScreenProps = NativeStackScreenProps<ExampleStackParamList, 'Main'>;
-type DestinationRoute = Exclude<keyof ExampleStackParamList, 'Main'>;
+type DestinationRoute = Exclude<
+  keyof ExampleStackParamList,
+  'Main' | 'ParityCase'
+>;
 
 type ScreenLink = {
   route: DestinationRoute;
@@ -46,6 +49,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     route: 'Benchmark',
     title: 'Benchmark',
     description: 'Scripted render/scroll/playback/edit benchmarks.',
+  },
+  {
+    route: 'ParityGallery',
+    title: 'Parity Gallery',
+    description: 'Frozen renderer states for screenshot parity.',
   },
   // {
   //   route: 'VexflowTestSuite',

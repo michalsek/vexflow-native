@@ -10,4 +10,6 @@ export type ExampleStackParamList = {
   EvenDocumentRenderer: undefined;
   InfiniteScore: undefined;
   Benchmark: Record<string, string | undefined> | undefined;
+  ParityGallery: undefined;
+  ParityCase: { case: string; scheme?: string };
 };
