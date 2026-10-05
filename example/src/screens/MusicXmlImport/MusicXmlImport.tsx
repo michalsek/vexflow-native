@@ -1,5 +1,4 @@
 import { useFonts } from '@shopify/react-native-skia';
-import { Asset } from 'expo-asset';
 import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { ScoreRenderer } from 'vexflow-native/renderer';
@@ -17,6 +16,7 @@ import {
   SCORE_RENDERER_BACKGROUND,
 } from '../ScoreRendererColorScheme';
 import { MUSIC_XML_IMPORT_FIXTURES } from './fixtures';
+import { loadFixtureXml, type FixtureLoadResult } from './loadFixtureXml';
 
 type RendererMode = 'documentEven' | 'document' | 'infiniteScore';
 
@@ -41,17 +41,6 @@ type ImportSummary = {
   spannerCount: number;
   staffCount: number;
   title: string;
-};
-
-type FixtureLoadResult = {
-  timings: {
-    assetDownloadMs: number;
-    fetchMs: number;
-    textDecodeMs: number;
-    totalMs: number;
-  };
-  uri: string;
-  xml: string;
 };
 
 const RENDERER_OPTIONS = [
@@ -113,11 +102,11 @@ const MusicXmlImport: React.FC = () => {
           return;
         }
 
-        const parseStart = nowMs();
+        const parseStart = performance.now();
         const score = parseMusicXmlToScore(loadResult.xml, {
           scoreId: selectedFixture.value,
         });
-        const parseMs = nowMs() - parseStart;
+        const parseMs = performance.now() - parseStart;
         const summary = createImportSummary(score);
 
         logMusicXmlImportProfile({
@@ -293,41 +282,6 @@ function getImportErrorMessage(error: unknown): string {
   return 'Unknown MusicXML import error.';
 }
 
-async function loadFixtureXml(
-  fixtureAsset: number
-): Promise<FixtureLoadResult> {
-  const totalStart = nowMs();
-  const asset = Asset.fromModule(fixtureAsset);
-  const assetDownloadStart = nowMs();
-  const downloadedAsset = await asset.downloadAsync();
-  const assetDownloadMs = nowMs() - assetDownloadStart;
-  const uri = downloadedAsset.localUri ?? downloadedAsset.uri;
-  const fetchStart = nowMs();
-  const response = await fetch(uri);
-  const fetchMs = nowMs() - fetchStart;
-
-  if (!response.ok) {
-    throw new MusicXmlParseError(
-      `Could not load MusicXML fixture from ${uri}.`
-    );
-  }
-
-  const textDecodeStart = nowMs();
-  const xml = await response.text();
-  const textDecodeMs = nowMs() - textDecodeStart;
-
-  return {
-    timings: {
-      assetDownloadMs,
-      fetchMs,
-      textDecodeMs,
-      totalMs: nowMs() - totalStart,
-    },
-    uri,
-    xml,
-  };
-}
-
 function logMusicXmlImportProfile({
   fixture,
   load,
@@ -361,10 +315,6 @@ function logMusicXmlImportProfile({
     attachments: summary.attachmentCount,
     spanners: summary.spannerCount,
   });
-}
-
-function nowMs(): number {
-  return globalThis.performance?.now?.() ?? Date.now();
 }
 
 function roundMs(value: number): number {
