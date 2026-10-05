@@ -11,6 +11,7 @@ import { setVexflowNativeDebugEnabled } from 'vexflow-native';
 
 import { useColorScheme } from './hooks/useColorScheme';
 import type { ExampleStackParamList } from './navigation/ExampleStackParamList';
+import Benchmark from './screens/Benchmark';
 import DocumentRenderer from './screens/DocumentRenderer';
 import DrumKitExample from './screens/DrumKitExample';
 import EvenDocumentRenderer from './screens/EvenDocumentRenderer';
@@ -100,6 +101,11 @@ const App: React.FC = () => {
             name="MusicXmlImport"
             component={MusicXmlImport}
             options={{ title: 'MusicXML Import' }}
+          />
+          <Stack.Screen
+            name="Benchmark"
+            component={Benchmark}
+            options={{ title: 'Benchmark' }}
           />
           {/* <Stack.Screen
           name="VexflowTestSuite"
