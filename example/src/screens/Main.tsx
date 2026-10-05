@@ -95,6 +95,8 @@ const Main: React.FC<MainScreenProps> = ({ navigation }) => {
         {SCREEN_LINKS.map((item) => (
           <Pressable
             key={item.route}
+            testID={`main-link-${item.route}`}
+            accessibilityRole="button"
             onPress={() => navigation.navigate(item.route)}
             style={({ pressed }) => [
               styles.linkCard,
