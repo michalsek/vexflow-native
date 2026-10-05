@@ -42,6 +42,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     title: 'MusicXML Import',
     description: 'Parse a bundled MusicXML fixture and render the score.',
   },
+  {
+    route: 'Benchmark',
+    title: 'Benchmark',
+    description: 'Scripted render/scroll/playback/edit benchmarks.',
+  },
   // {
   //   route: 'VexflowTestSuite',
   //   title: 'VexFlow Test Suite',
