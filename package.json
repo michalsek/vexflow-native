@@ -151,13 +151,16 @@
     "testMatch": [
       "**/__tests__/**/*.test.[jt]s?(x)"
     ],
+    "moduleNameMapper": {
+      "^vexflow-native/percussion$": "<rootDir>/src/percussion/index"
+    },
     "modulePathIgnorePatterns": [
       "<rootDir>/example/node_modules",
       "<rootDir>/lib/",
       "<rootDir>/prev-implementation/"
     ],
     "testPathIgnorePatterns": [
-      "<rootDir>/example/",
+      "<rootDir>/example/(?!src/benchmark/)",
       "<rootDir>/prev-implementation/"
     ]
   },
