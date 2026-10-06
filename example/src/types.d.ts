@@ -3,7 +3,7 @@ declare module '*.otf' {
   export default value;
 }
 
-declare module '*.xml' {
+declare module '*.musicxml' {
   const value: number;
   export default value;
 }
