@@ -66,8 +66,10 @@ yarn example web
 ```
 
 react-native-skia 3.0.x does not implement `matchFamilyStyle` on web for
-`useFonts` providers, so scores do not render on web until the example ships a
-patch for it. iOS and Android are unaffected.
+`useFonts` providers. Until it ships upstream, the example applies
+[`example/patches/react-native-skia+3.0.3.patch`](example/patches/react-native-skia+3.0.3.patch)
+on `yarn install`. Consumers rendering on web need the same patch. iOS and
+Android are unaffected.
 
 Make sure your code passes TypeScript:
 
