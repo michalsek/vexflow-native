@@ -1,7 +1,7 @@
 {
   "name": "vexflow-native",
   "version": "1.9.0",
-  "description": "React native backend for rendering music notation using @shopify/react-native-skia",
+  "description": "React Native backend for rendering music notation using react-native-skia",
   "main": "./lib/module/base/index.js",
   "types": "./lib/typescript/src/base/index.d.ts",
   "exports": {
@@ -85,7 +85,6 @@
     "@react-native/babel-preset": "0.83.0",
     "@react-native/eslint-config": "0.83.0",
     "@release-it/conventional-changelog": "^10.0.1",
-    "@shopify/react-native-skia": "2.6.2",
     "@types/jest": "^29.5.14",
     "@types/react": "^19.1.12",
     "commitlint": "^19.8.1",
@@ -101,6 +100,7 @@
     "react-native-builder-bob": "^0.40.18",
     "react-native-gesture-handler": "^2.30.0",
     "react-native-reanimated": "^4.2.2",
+    "react-native-skia": "3.0.3",
     "react-native-worklets": "^0.7.4",
     "release-it": "^19.0.4",
     "turbo": "^2.5.6",
@@ -109,12 +109,12 @@
     "vexflow": "^5.0.0"
   },
   "peerDependencies": {
-    "@shopify/react-native-skia": "*",
     "react": "*",
     "react-native": "*",
     "react-native-gesture-handler": "*",
-    "react-native-reanimated": "*",
-    "react-native-worklets": "*",
+    "react-native-reanimated": ">=4.0.0",
+    "react-native-skia": ">=3.0.0",
+    "react-native-worklets": ">=0.7.0",
     "vexflow": "*"
   },
   "workspaces": [

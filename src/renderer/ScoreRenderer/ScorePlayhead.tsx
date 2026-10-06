@@ -1,5 +1,5 @@
 import React from 'react';
-import { RoundedRect, Skia, type SkRRect } from '@shopify/react-native-skia';
+import { RoundedRect, Skia, type SkRRect } from 'react-native-skia';
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
 
 import type {

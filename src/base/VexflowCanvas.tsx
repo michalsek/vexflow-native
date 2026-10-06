@@ -4,7 +4,7 @@ import {
   Skia,
   useCanvasRef,
   useCanvasSize,
-} from '@shopify/react-native-skia';
+} from 'react-native-skia';
 import React, { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 

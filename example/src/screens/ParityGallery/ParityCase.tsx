@@ -1,4 +1,4 @@
-import { useFonts } from '@shopify/react-native-skia';
+import { useFonts } from 'react-native-skia';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';

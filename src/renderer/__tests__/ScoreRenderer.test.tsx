@@ -105,7 +105,7 @@ function loadScoreRendererModule() {
     useState: jest.fn(() => [viewportState, mockSetViewportSize]),
   }));
 
-  jest.doMock('@shopify/react-native-skia', () => ({
+  jest.doMock('react-native-skia', () => ({
     Canvas: 'Canvas',
     Group: 'Group',
     Picture: 'Picture',

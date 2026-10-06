@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
+import type { SkTypefaceFontProvider } from 'react-native-skia';
 
 import type { VexflowRecordingCommand } from '../base';
 import VexflowRecordingContext from '../base/VexflowRecordingContext';
