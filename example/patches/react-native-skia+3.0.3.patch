@@ -1,0 +1,32 @@
+diff --git a/node_modules/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js b/node_modules/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
+index 42f1355..07fcc99 100644
+--- a/node_modules/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
++++ b/node_modules/react-native-skia/lib/module/skia/web/JsiSkTypefaceFontProvider.js
+@@ -1,10 +1,24 @@
+-import { HostObject, throwNotImplementedOnRNWeb } from "./Host";
++import { FontSlant, FontWeight, FontWidth } from "../types";
++import { HostObject } from "./Host";
++import { JsiSkTypeface } from "./JsiSkTypeface";
+ export class JsiSkTypefaceFontProvider extends HostObject {
+   constructor(CanvasKit, ref) {
+     super(CanvasKit, ref, "FontMgr");
+   }
+-  matchFamilyStyle(_name, _style) {
+-    return throwNotImplementedOnRNWeb();
++  matchFamilyStyle(name, style) {
++    if (!name || !style) {
++      throw new Error("matchFamilyStyle requires a name and a style");
++    }
++    const fontStyle = {
++      weight: style.weight ?? FontWeight.Normal,
++      width: style.width ?? FontWidth.Normal,
++      slant: style.slant ?? FontSlant.Upright
++    };
++    const typeface = this.ref.matchFamilyStyle(name, fontStyle);
++    if (!typeface) {
++      throw new Error(`Could not find font family ${name}`);
++    }
++    return new JsiSkTypeface(this.CanvasKit, typeface);
+   }
+   countFamilies() {
+     return this.ref.countFamilies();
