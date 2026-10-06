@@ -22,6 +22,7 @@ import MusicXmlImport from './screens/MusicXmlImport';
 import ScoreRendererStyleOverrides from './screens/ScoreRendererStyleOverrides';
 import SimpleExample from './screens/SimpleExample';
 import SimpleRenderer from './screens/SimpleRenderer';
+import WorkletDiagnostics from './screens/WorkletDiagnostics';
 // import VexflowTestSuite from './screens/VexflowTestSuite';
 
 enableScreens();
@@ -108,6 +109,11 @@ const App: React.FC = () => {
             component={Benchmark}
             getId={() => 'bench'}
             options={{ title: 'Benchmark' }}
+          />
+          <Stack.Screen
+            name="WorkletDiagnostics"
+            component={WorkletDiagnostics}
+            options={{ title: 'Worklet Diagnostics' }}
           />
           {/* <Stack.Screen
           name="VexflowTestSuite"
