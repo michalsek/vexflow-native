@@ -143,6 +143,12 @@ function loadScoreRendererModule() {
     GestureDetector: 'GestureDetector',
   }));
 
+  jest.doMock('react-native-worklets', () => ({
+    scheduleOnUI: jest.fn(
+      (fn: (...args: unknown[]) => unknown, ...args: unknown[]) => fn(...args)
+    ),
+  }));
+
   jest.doMock('react-native-reanimated', () => ({
     __esModule: true,
     default: {

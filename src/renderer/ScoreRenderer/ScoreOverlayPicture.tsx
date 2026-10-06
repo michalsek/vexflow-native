@@ -1,10 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Picture, type SkPicture } from '@shopify/react-native-skia';
-import {
-  runOnUI,
-  useDerivedValue,
-  useSharedValue,
-} from 'react-native-reanimated';
+import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
+import { scheduleOnUI } from 'react-native-worklets';
 
 import type { VexflowRecordingCommand } from '../../base';
 import { isVexflowNativeDebugEnabled } from '../../shared/debug';
@@ -110,7 +107,7 @@ export default function ScoreOverlayPicture({
 
   useEffect(() => {
     return () => {
-      runOnUI(disposeOverlayPictures)(disposal);
+      scheduleOnUI(disposeOverlayPictures, disposal);
     };
   }, [disposal]);
 
