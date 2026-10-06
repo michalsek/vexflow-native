@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     maxHeight: 240,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   option: {
     paddingHorizontal: 12,
