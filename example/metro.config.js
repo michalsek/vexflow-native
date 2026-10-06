@@ -13,20 +13,8 @@ const root = path.resolve(__dirname, '..');
 const config = withMetroConfig(getDefaultConfig(__dirname), {
   root,
   dirname: __dirname,
-  resolver: {
-    assetExts: ['wasm', 'xml'],
-    sourceExts: [
-      'ts',
-      'tsx',
-      'js',
-      'jsx',
-      'json',
-      'native.ts',
-      'native.tsx',
-      'web.ts',
-      'web.tsx',
-    ],
-  },
 });
+
+config.resolver.assetExts.push('musicxml');
 
 module.exports = config;

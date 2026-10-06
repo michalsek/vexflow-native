@@ -157,7 +157,7 @@
       "<rootDir>/prev-implementation/"
     ],
     "testPathIgnorePatterns": [
-      "<rootDir>/example/",
+      "<rootDir>/example/(?!src/benchmark/)",
       "<rootDir>/prev-implementation/"
     ]
   },

@@ -9,4 +9,5 @@ export type ExampleStackParamList = {
   DocumentRenderer: undefined;
   EvenDocumentRenderer: undefined;
   InfiniteScore: undefined;
+  Benchmark: Record<string, string | undefined> | undefined;
 };

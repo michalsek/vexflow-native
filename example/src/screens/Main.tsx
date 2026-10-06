@@ -42,6 +42,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     title: 'MusicXML Import',
     description: 'Parse a bundled MusicXML fixture and render the score.',
   },
+  {
+    route: 'Benchmark',
+    title: 'Benchmark',
+    description: 'Scripted render/scroll/playback/edit benchmarks.',
+  },
   // {
   //   route: 'VexflowTestSuite',
   //   title: 'VexFlow Test Suite',
@@ -82,6 +87,8 @@ const Main: React.FC<MainScreenProps> = ({ navigation }) => {
         {SCREEN_LINKS.map((item) => (
           <Pressable
             key={item.route}
+            testID={`main-link-${item.route}`}
+            accessibilityRole="button"
             onPress={() => navigation.navigate(item.route)}
             style={({ pressed }) => [
               styles.linkCard,
