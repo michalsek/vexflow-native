@@ -1,32 +1,11 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 
+import type * as SkiaMock from '../../__tests__/skiaMock';
+
 function loadScoreRendererModule() {
   jest.resetModules();
 
   const React = jest.requireActual<typeof import('react')>('react');
-  const mockCanvas = { kind: 'canvas' };
-  const mockPicture = { kind: 'picture' };
-  const mockBeginRecording = jest.fn(() => mockCanvas);
-  const mockFinishRecordingAsPicture = jest.fn(() => mockPicture);
-  const mockPictureRecorder = jest.fn(() => ({
-    beginRecording: mockBeginRecording,
-    finishRecordingAsPicture: mockFinishRecordingAsPicture,
-  }));
-  const mockXYWHRect = jest.fn(
-    (x: number, y: number, width: number, height: number) => ({
-      x,
-      y,
-      width,
-      height,
-    })
-  );
-  const mockRRectXY = jest.fn(
-    (rect: Record<string, number>, rx: number, ry: number) => ({
-      rect,
-      rx,
-      ry,
-    })
-  );
   const mockRenderVexflowRecordingCommands = jest.fn();
   const mockUseDerivedValue = jest.fn((factory: () => unknown) => ({
     value: factory(),
@@ -105,20 +84,6 @@ function loadScoreRendererModule() {
     useState: jest.fn(() => [viewportState, mockSetViewportSize]),
   }));
 
-  jest.doMock('react-native-skia', () => ({
-    Canvas: 'Canvas',
-    Group: 'Group',
-    Picture: 'Picture',
-    RoundedRect: 'RoundedRect',
-    Skia: {
-      PictureRecorder: mockPictureRecorder,
-      RRectXY: mockRRectXY,
-      XYWHRect: mockXYWHRect,
-    },
-    useCanvasRef: jest.fn(() => ({ current: null })),
-    useCanvasSize: jest.fn(() => ({ size: { height: 0, width: 0 } })),
-  }));
-
   jest.doMock('react-native', () => ({
     StyleSheet: {
       create: (styles: unknown) => styles,
@@ -177,6 +142,8 @@ function loadScoreRendererModule() {
     useScoreRecording: mockUseScoreRecording,
   }));
 
+  const { Skia, pictureRecorder } =
+    require('react-native-skia') as typeof SkiaMock;
   const module =
     require('../ScoreRenderer') as typeof import('../ScoreRenderer');
 
@@ -205,18 +172,14 @@ function loadScoreRendererModule() {
     getScrollOffsetFromThumbOffset: module.getScrollOffsetFromThumbOffset,
     getThumbOffsetFromScrollOffset: module.getThumbOffsetFromScrollOffset,
     ScoreRenderer: renderScoreRenderer,
-    mockBeginRecording,
-    mockCanvas,
-    mockFinishRecordingAsPicture,
-    mockPicture,
-    mockPictureRecorder,
+    mockBeginRecording: pictureRecorder.beginRecording,
+    mockFinishRecordingAsPicture: pictureRecorder.finishRecordingAsPicture,
+    mockPictureRecorder: Skia.PictureRecorder,
     mockRenderVexflowRecordingCommands,
     mockReplayFontManagerInstance,
-    mockRRectXY,
     mockSetViewportSize,
     mockUseDerivedValue,
     mockUseScoreRecording,
-    mockXYWHRect,
   };
 }
 
@@ -314,9 +277,10 @@ describe('ScoreRenderer picture cache helpers', () => {
       recordedCommands: commands as never,
     });
 
-    expect(picture).toBe(module.mockPicture);
+    expect(picture).toBe(
+      module.mockFinishRecordingAsPicture.mock.results[0]?.value
+    );
     expect(module.mockPictureRecorder).toHaveBeenCalledTimes(1);
-    expect(module.mockXYWHRect).toHaveBeenCalledWith(0, 0, 320, 180);
     expect(module.mockBeginRecording).toHaveBeenCalledWith({
       x: 0,
       y: 0,
@@ -324,7 +288,7 @@ describe('ScoreRenderer picture cache helpers', () => {
       height: 180,
     });
     expect(module.mockRenderVexflowRecordingCommands).toHaveBeenCalledWith(
-      module.mockCanvas,
+      module.mockBeginRecording.mock.results[0]?.value,
       commands,
       fontManager,
       'Bravura',
@@ -351,7 +315,7 @@ describe('ScoreRenderer picture cache helpers', () => {
     });
 
     expect(module.mockRenderVexflowRecordingCommands).toHaveBeenCalledWith(
-      module.mockCanvas,
+      module.mockBeginRecording.mock.results[0]?.value,
       commands,
       fontManager,
       'Bravura',
@@ -479,10 +443,7 @@ describe('ScoreRenderer picture cache helpers', () => {
 
   it('disposes overlay pictures two generations after supersession', () => {
     const module = loadScoreRendererModule();
-    type DisposablePicture = { kind: string; dispose: jest.Mock };
-    module.mockFinishRecordingAsPicture.mockImplementation(
-      () => ({ kind: 'picture', dispose: jest.fn() } as never)
-    );
+    type DisposablePicture = { dispose: jest.Mock };
     const cmdA = { type: 'fillPath', groupId: 'item-1' };
     const cmdB = { type: 'fillPath', groupId: 'item-2' };
     module.mockUseScoreRecording.mockReturnValue({
@@ -503,7 +464,9 @@ describe('ScoreRenderer picture cache helpers', () => {
       const overlayPictures: DisposablePicture[] = [];
       const captureNewPictures = () => {
         const results = module.mockFinishRecordingAsPicture.mock.results;
-        overlayPictures.push(results[results.length - 1]?.value as never);
+        overlayPictures.push(
+          results[results.length - 1]?.value as DisposablePicture
+        );
       };
 
       invokeComponent(overlay);

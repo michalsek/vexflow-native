@@ -93,6 +93,8 @@ Remember to add tests for your change if possible. Run the unit tests by:
 yarn test
 ```
 
+Under Jest, `react-native-skia` resolves to `src/__tests__/skiaMock.ts`; extend it when `src/` starts using a new Skia API.
+
 ### Benchmarks
 
 See [example/BENCHMARKS.md](example/BENCHMARKS.md) for the renderer benchmark in the example app.

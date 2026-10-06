@@ -1,31 +1,6 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 
-type MockPaint = {
-  setAntiAlias: ReturnType<typeof jest.fn>;
-  setBlendMode: ReturnType<typeof jest.fn>;
-  setColor: ReturnType<typeof jest.fn>;
-  setImageFilter: ReturnType<typeof jest.fn>;
-  setPathEffect: ReturnType<typeof jest.fn>;
-  setStrokeCap: ReturnType<typeof jest.fn>;
-  setStrokeWidth: ReturnType<typeof jest.fn>;
-  setStyle: ReturnType<typeof jest.fn>;
-};
-
-type MockPath = {
-  tag: string;
-};
-
-type MockPathBuilder = {
-  addArc: ReturnType<typeof jest.fn>;
-  addRect: ReturnType<typeof jest.fn>;
-  build: ReturnType<typeof jest.fn>;
-  close: ReturnType<typeof jest.fn>;
-  cubicTo: ReturnType<typeof jest.fn>;
-  lineTo: ReturnType<typeof jest.fn>;
-  moveTo: ReturnType<typeof jest.fn>;
-  quadTo: ReturnType<typeof jest.fn>;
-  builtPath: MockPath;
-};
+import type * as SkiaMock from '../../__tests__/skiaMock';
 
 type MockCanvas = {
   clear: ReturnType<typeof jest.fn>;
@@ -38,37 +13,6 @@ type MockCanvas = {
   scale: ReturnType<typeof jest.fn>;
   translate: ReturnType<typeof jest.fn>;
 };
-
-function createPaint(): MockPaint {
-  return {
-    setAntiAlias: jest.fn(),
-    setBlendMode: jest.fn(),
-    setColor: jest.fn(),
-    setImageFilter: jest.fn(),
-    setPathEffect: jest.fn(),
-    setStrokeCap: jest.fn(),
-    setStrokeWidth: jest.fn(),
-    setStyle: jest.fn(),
-  };
-}
-
-function createPathBuilder(index: number): MockPathBuilder {
-  const builtPath = {
-    tag: `path-${index}`,
-  };
-
-  return {
-    addArc: jest.fn(),
-    addRect: jest.fn(),
-    build: jest.fn(() => builtPath),
-    close: jest.fn(),
-    cubicTo: jest.fn(),
-    lineTo: jest.fn(),
-    moveTo: jest.fn(),
-    quadTo: jest.fn(),
-    builtPath,
-  };
-}
 
 function createCanvas(): MockCanvas {
   return {
@@ -84,118 +28,53 @@ function createCanvas(): MockCanvas {
   };
 }
 
+const returned = <T>(fn: jest.Mock<() => T>) =>
+  fn.mock.results.map((result) => result.value as T);
+
 function loadReplayModule() {
   jest.resetModules();
 
-  const BlendMode = { Clear: 'clear' };
-  const ClipOp = { Intersect: 'intersect' };
-  const PaintStyle = { Fill: 'fill', Stroke: 'stroke' };
-  const StrokeCap = {
-    Butt: 'butt',
-    Round: 'round',
-    Square: 'square',
-  };
-  const paints: MockPaint[] = [];
-  const pathBuilders: MockPathBuilder[] = [];
-  const XYWHRect = jest.fn(
-    (x: number, y: number, width: number, height: number) => ({
-      x,
-      y,
-      width,
-      height,
-    })
-  );
-  const MakeDropShadow = jest.fn(
-    (
-      dx: number,
-      dy: number,
-      sigmaX: number,
-      sigmaY: number,
-      color: string
-    ) => ({
-      kind: 'drop-shadow',
-      dx,
-      dy,
-      sigmaX,
-      sigmaY,
-      color,
-    })
-  );
-  const MakeDash = jest.fn((intervals: number[], phase?: number) => ({
-    kind: 'dash',
-    intervals,
-    phase,
-  }));
   const createSkFont = jest.fn((...args: unknown[]) => ({
     kind: 'font',
     args,
   }));
-  const SkiaColor = jest.fn((color: string) => `color:${color}`);
   const FontManagerMock = jest.fn().mockImplementation(() => ({
     createSkFont,
   }));
 
-  jest.doMock('react-native-skia', () => ({
-    BlendMode,
-    ClipOp,
-    PaintStyle,
-    Skia: {
-      Color: SkiaColor,
-      Paint: jest.fn(() => {
-        const paint = createPaint();
-        paints.push(paint);
-        return paint;
-      }),
-      PathBuilder: {
-        Make: jest.fn(() => {
-          const builder = createPathBuilder(pathBuilders.length + 1);
-          pathBuilders.push(builder);
-          return builder;
-        }),
-      },
-      ImageFilter: {
-        MakeDropShadow,
-      },
-      PathEffect: {
-        MakeDash,
-      },
-      XYWHRect,
-    },
-    StrokeCap,
-  }));
   jest.doMock('../FontManager', () => ({
     __esModule: true,
     default: FontManagerMock,
   }));
 
-  let renderVexflowRecordingCommands: (
+  const skia = require('react-native-skia') as typeof SkiaMock;
+  const renderVexflowRecordingCommands: (
     canvas: MockCanvas,
     commands: any[],
     fontProvider: unknown,
     defaultFont: string,
     styleOverrides?: Record<string, Record<string, unknown>>,
     replayFontManager?: unknown
-  ) => void;
-
-  jest.isolateModules(() => {
-    renderVexflowRecordingCommands =
-      require('../VexflowRecordingReplay').renderVexflowRecordingCommands;
-  });
+  ) => void =
+    require('../VexflowRecordingReplay').renderVexflowRecordingCommands;
 
   return {
-    BlendMode,
-    ClipOp,
+    BlendMode: skia.BlendMode,
+    ClipOp: skia.ClipOp,
     createSkFont,
     FontManagerMock,
-    SkiaColor,
-    MakeDash,
-    MakeDropShadow,
-    PaintStyle,
-    paints,
-    pathBuilders,
-    renderVexflowRecordingCommands: renderVexflowRecordingCommands!,
-    StrokeCap,
-    XYWHRect,
+    SkiaColor: skia.Skia.Color,
+    MakeDash: skia.Skia.PathEffect.MakeDash,
+    MakeDropShadow: skia.Skia.ImageFilter.MakeDropShadow,
+    PaintStyle: skia.PaintStyle,
+    get paints() {
+      return returned(skia.Skia.Paint);
+    },
+    get pathBuilders() {
+      return returned(skia.Skia.PathBuilder.Make);
+    },
+    renderVexflowRecordingCommands,
+    StrokeCap: skia.StrokeCap,
   };
 }
 
@@ -320,13 +199,13 @@ describe('renderVexflowRecordingCommands', () => {
     expect(fillPathBuilder.close).toHaveBeenCalledTimes(1);
     expect(canvas.drawPath).toHaveBeenNthCalledWith(
       1,
-      fillPathBuilder.builtPath,
+      fillPathBuilder.build.mock.results[0]?.value,
       module.paints[0]
     );
 
     expect(canvas.drawPath).toHaveBeenNthCalledWith(
       2,
-      module.pathBuilders[1]!.builtPath,
+      module.pathBuilders[1]!.build.mock.results[0]?.value,
       module.paints[1]
     );
     expect(module.paints[1]!.setStyle).toHaveBeenCalledWith(
@@ -393,14 +272,9 @@ describe('renderVexflowRecordingCommands', () => {
       4,
       'color:#00FF00'
     );
-    expect(module.paints[0]!.setImageFilter).toHaveBeenCalledWith({
-      kind: 'drop-shadow',
-      dx: 0,
-      dy: 0,
-      sigmaX: 4,
-      sigmaY: 4,
-      color: 'color:#00FF00',
-    });
+    expect(module.paints[0]!.setImageFilter).toHaveBeenCalledWith(
+      module.MakeDropShadow.mock.results[0]?.value
+    );
   });
 
   it('replays a recorded line dash as a stroke-only dash path effect', () => {
@@ -422,11 +296,9 @@ describe('renderVexflowRecordingCommands', () => {
 
     expect(module.MakeDash).toHaveBeenCalledWith([4, 2]);
     // paints[1] is the pooled stroke paint; dash is stroke-only.
-    expect(module.paints[1]!.setPathEffect).toHaveBeenCalledWith({
-      kind: 'dash',
-      intervals: [4, 2],
-      phase: undefined,
-    });
+    expect(module.paints[1]!.setPathEffect).toHaveBeenCalledWith(
+      module.MakeDash.mock.results[0]?.value
+    );
   });
 
   it('applies separate fill and stroke colour overrides to a tagged group', () => {
@@ -532,12 +404,14 @@ describe('renderVexflowRecordingCommands', () => {
     type DrawSnapshot = { color: unknown; imageFilter: unknown };
     const snapshots: DrawSnapshot[] = [];
     const canvas = createCanvas();
-    canvas.drawPath = jest.fn((_path: unknown, paint: MockPaint) => {
-      snapshots.push({
-        color: paint.setColor.mock.calls.at(-1)?.[0],
-        imageFilter: paint.setImageFilter.mock.calls.at(-1)?.[0],
-      });
-    }) as never;
+    canvas.drawPath = jest.fn(
+      (_path: unknown, paint: (typeof module.paints)[number]) => {
+        snapshots.push({
+          color: paint.setColor.mock.calls.at(-1)?.[0],
+          imageFilter: paint.setImageFilter.mock.calls.at(-1)?.[0],
+        });
+      }
+    ) as never;
 
     module.renderVexflowRecordingCommands(
       canvas,
@@ -561,7 +435,7 @@ describe('renderVexflowRecordingCommands', () => {
     expect(snapshots).toHaveLength(2);
     expect(snapshots[0]).toEqual({
       color: 'color:#111111',
-      imageFilter: expect.objectContaining({ kind: 'drop-shadow' }),
+      imageFilter: expect.objectContaining({ __typename__: 'ImageFilter' }),
     });
     // The second draw sees its own color and a cleared filter — nothing
     // bleeds from the glowing command before it.
