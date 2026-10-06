@@ -10,7 +10,7 @@ VexFlow directly.
 Install the library and its peer dependencies:
 
 ```sh
-npm install vexflow-native react react-native vexflow @shopify/react-native-skia react-native-gesture-handler react-native-reanimated react-native-worklets
+npm install vexflow-native react react-native vexflow react-native-skia react-native-gesture-handler react-native-reanimated react-native-worklets
 ```
 
 `ScoreRenderer` uses gesture handling and Reanimated worklets for scrolling,
@@ -20,11 +20,47 @@ so configure `react-native-gesture-handler`, `react-native-reanimated`, and
 Load a notation font with Skia; the `defaultFont` prop must match one of the
 family names passed to `useFonts`.
 
+### Requirements
+
+| Package                   | Version                       |
+| ------------------------- | ----------------------------- |
+| `react-native-skia`       | ≥ 3.0.0                       |
+| `react-native-reanimated` | ≥ 4.0.0                       |
+| `react-native-worklets`   | ≥ 0.7.0                       |
+| `react` / `react-native`  | React 19, React Native ≥ 0.78 |
+
+- iOS 15.1 or newer.
+- Android: minSdkVersion 26 (Android 8.0) or higher and a GPU with Vulkan.
+  react-native-skia 3 draws with Skia Graphite, which uses Vulkan on Android
+  and has no OpenGL fallback. The Android Emulator works with `-gpu auto` or
+  `-gpu host`, but may fall back to software (llvmpipe) Vulkan, so don't judge
+  performance there.
+- Colour: `ScoreRenderer` and `VexflowCanvas` draw into react-native-skia 3's
+  Graphite `<Canvas>`, which picks its colour space itself: Display P3 on
+  wide-gamut Apple screens, sRGB elsewhere (always sRGB on Android). Colours
+  are managed, so sRGB colours look the same either way; there is no
+  `colorSpace` option.
+
+With Expo, raise the Android minSdkVersion with `expo-build-properties`:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      ["expo-build-properties", { "android": { "minSdkVersion": 26 } }]
+    ]
+  }
+}
+```
+
+In a bare React Native app, set `minSdkVersion = 26` in `buildscript.ext` of
+`android/build.gradle`.
+
 ## Quick start
 
 ```tsx
 import { useMemo } from 'react';
-import { useFonts } from '@shopify/react-native-skia';
+import { useFonts } from 'react-native-skia';
 import { ScoreRenderer } from 'vexflow-native/renderer';
 import { parseMusicXmlToScore } from 'vexflow-native/musicxml';
 
