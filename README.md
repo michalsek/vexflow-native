@@ -40,6 +40,10 @@ family names passed to `useFonts`.
   wide-gamut Apple screens, sRGB elsewhere (always sRGB on Android). Colours
   are managed, so sRGB colours look the same either way; there is no
   `colorSpace` option.
+- Web: react-native-skia 3.0.x throws from `matchFamilyStyle` on `useFonts`
+  providers, so scores need
+  [this patch](example/patches/react-native-skia+3.0.3.patch) (apply it with
+  `patch-package`) until upstream ships the fix.
 
 With Expo, raise the Android minSdkVersion with `expo-build-properties`:
 
