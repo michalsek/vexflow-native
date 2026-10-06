@@ -11,17 +11,10 @@ import { beforeAll, describe, expect, it, jest } from '@jest/globals';
  * If VexFlow or render.tsx ever start recording differently, this fails
  * instead of the overlay silently mis-drawing. */
 
-// Platform 'web' routes VexflowRecordingContext to the Element text
-// measurement canvas installed below instead of the Skia-backed
-// TextMeasureContext (no Skia under jest).
+// Platform 'web' routes VexflowRecordingContext's text measurement to the
+// Element measurement canvas installed below instead of the Skia-backed
+// TextMeasureContext.
 jest.mock('react-native', () => ({ Platform: { OS: 'web' } }));
-
-jest.mock('react-native-skia', () => ({
-  FontWeight: { Normal: 'Normal', Bold: 'Bold' },
-  FontSlant: { Upright: 'Upright', Italic: 'Italic', Oblique: 'Oblique' },
-  FontWidth: { Normal: 'Normal' },
-  Skia: { Font: jest.fn() },
-}));
 
 import { Element } from 'vexflow';
 

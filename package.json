@@ -152,7 +152,8 @@
       "**/__tests__/**/*.test.[jt]s?(x)"
     ],
     "moduleNameMapper": {
-      "^vexflow-native/percussion$": "<rootDir>/src/percussion/index"
+      "^vexflow-native/percussion$": "<rootDir>/src/percussion/index",
+      "^react-native-skia$": "<rootDir>/src/__tests__/skiaMock"
     },
     "modulePathIgnorePatterns": [
       "<rootDir>/example/node_modules",

@@ -93,6 +93,8 @@ Remember to add tests for your change if possible. Run the unit tests by:
 yarn test
 ```
 
+Under Jest, `react-native-skia` resolves to `src/__tests__/skiaMock.ts`; extend it when `src/` starts using a new Skia API.
+
 ### Benchmarks
 
 The example app has a scripted renderer benchmark (initial render, scroll, playback, single-note edit) and a parity gallery of frozen renderer states for screenshot diffs, both reachable from the menu and by deep link. See [example/BENCHMARKS.md](example/BENCHMARKS.md) for the methodology, the log schema and the baseline numbers.
