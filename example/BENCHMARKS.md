@@ -17,15 +17,11 @@ Fixtures are `long` (208 measures × 2 staves), `short` (12 measures) and
 
 ## Running
 
-Use a Release build: Debug timings are not representative. When
-`expo run:ios` cannot drive the simulator (Xcode 27), build and install it
-by hand (on Android: `./gradlew :app:assembleRelease` after `expo prebuild`):
+Use a Release build: Debug timings are not representative.
 
 ```sh
-cd example && CI=1 npx expo prebuild -p ios && (cd ios && pod install)
-cd ios && xcodebuild -workspace VexflowNativeExample.xcworkspace -scheme VexflowNativeExample \
-  -configuration Release -sdk iphonesimulator -destination 'id=<udid>' -derivedDataPath build/dd build
-xcrun simctl install <udid> build/dd/Build/Products/Release-iphonesimulator/VexflowNativeExample.app
+cd example && npx expo run:ios --configuration Release
+cd example && npx expo run:android --variant release
 ```
 
 Press **Run** for the defaults, or open a deep link, which starts right away:
