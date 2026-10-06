@@ -11,6 +11,7 @@ import { setVexflowNativeDebugEnabled } from 'vexflow-native';
 
 import { useColorScheme } from './hooks/useColorScheme';
 import type { ExampleStackParamList } from './navigation/ExampleStackParamList';
+import { linking } from './navigation/linking';
 import Benchmark from './screens/Benchmark';
 import DocumentRenderer from './screens/DocumentRenderer';
 import DrumKitExample from './screens/DrumKitExample';
@@ -49,7 +50,7 @@ const App: React.FC = () => {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer theme={navigationTheme} linking={linking}>
         <Stack.Navigator
           initialRouteName="Main"
           screenOptions={{
@@ -105,6 +106,7 @@ const App: React.FC = () => {
           <Stack.Screen
             name="Benchmark"
             component={Benchmark}
+            getId={() => 'bench'}
             options={{ title: 'Benchmark' }}
           />
           {/* <Stack.Screen
