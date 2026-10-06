@@ -39,6 +39,12 @@ To run the example app on Android:
 yarn example android
 ```
 
+The Android example needs API 26 or newer and a device or emulator with
+Vulkan (check `adb shell getprop ro.hardware.vulkan`; start the emulator with
+`-gpu auto` or `-gpu host`). The `RNSkia` logcat line "Selected Dawn adapter"
+names the Vulkan device in use. After changing the react-native-skia version,
+run `npx expo prebuild --clean` in `example/`.
+
 To run the example app on iOS:
 
 ```sh
@@ -59,12 +65,9 @@ To run the example app on Web:
 yarn example web
 ```
 
-The web target applies a `patch-package` patch to
-`@shopify/react-native-skia@2.6.2`
-(`example/patches/@shopify+react-native-skia+2.6.2.patch`, applied with
-`yarn workspace vexflow-native-example apply-patches`) so Skia web resolves
-string asset sources and matches `useFonts` families by name. Native iOS and
-Android do not need it. Re-check it when upgrading Skia.
+react-native-skia 3.0.x does not implement `matchFamilyStyle` on web for
+`useFonts` providers, so scores do not render on web until the example ships a
+patch for it. iOS and Android are unaffected.
 
 Make sure your code passes TypeScript:
 

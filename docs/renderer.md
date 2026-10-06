@@ -9,7 +9,7 @@ overrides driven from the UI thread.
 - `score`: typed score state to render.
 - `defaultFont`: font family name used as the default VexFlow font; must
   match a family passed to `useFonts`.
-- `fontManager`: Skia font provider returned by `useFonts`.
+- `fontManager`: font provider returned by `useFonts` from react-native-skia.
 - `colorScheme`: optional `foreground`, `background` and `ledgerLine`
   colors. VexFlow's black strokes/fills map to `foreground`, its `#444`
   ledger lines to `ledgerLine` (falling back to `foreground`).
