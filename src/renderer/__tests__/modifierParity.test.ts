@@ -14,16 +14,9 @@ import {
  * through `makeVFVoice`, so the note arrays handed to `Beam.generateBeams`
  * (once per voice per pass) are compared modifier by modifier. */
 
-// Platform 'web' routes VexflowRecordingContext to the Element text
-// measurement canvas installed below (no Skia under jest).
+// Platform 'web' routes VexflowRecordingContext's text measurement to the
+// Element measurement canvas installed below.
 jest.mock('react-native', () => ({ Platform: { OS: 'web' } }));
-
-jest.mock('react-native-skia', () => ({
-  FontWeight: { Normal: 'Normal', Bold: 'Bold' },
-  FontSlant: { Upright: 'Upright', Italic: 'Italic', Oblique: 'Oblique' },
-  FontWidth: { Normal: 'Normal' },
-  Skia: { Font: jest.fn() },
-}));
 
 import { Articulation, Beam, Element, Font, Modifier, Ornament } from 'vexflow';
 import type { GraceNoteGroup, Note, StaveNote } from 'vexflow';

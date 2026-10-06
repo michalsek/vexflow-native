@@ -1,37 +1,15 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import type { FontInfo } from 'vexflow';
-
-jest.mock('react-native-skia', () => ({
-  FontWeight: {
-    Thin: 'Thin',
-    ExtraLight: 'ExtraLight',
-    Light: 'Light',
-    Normal: 'Normal',
-    Medium: 'Medium',
-    SemiBold: 'SemiBold',
-    Bold: 'Bold',
-    ExtraBold: 'ExtraBold',
-    Black: 'Black',
-  },
-  FontSlant: {
-    Upright: 'Upright',
-    Italic: 'Italic',
-    Oblique: 'Oblique',
-  },
-  FontWidth: {
-    Normal: 'Normal',
-  },
-  Skia: {
-    Font: jest.fn(),
-    FontMgr: { System: jest.fn() },
-  },
-}));
-
-import { FontSlant, FontWeight, FontWidth, Skia } from 'react-native-skia';
+import {
+  FontSlant,
+  FontWeight,
+  FontWidth,
+  Skia,
+} from '../../__tests__/skiaMock';
 import FontManager from '../FontManager';
 
-const mockSkiaFont = Skia.Font as jest.Mock;
-const mockSystemFontMgr = Skia.FontMgr.System as jest.Mock;
+const mockSkiaFont = Skia.Font;
+const mockSystemFontMgr = Skia.FontMgr.System;
 
 type MockFontProvider = {
   countFamilies: ReturnType<typeof jest.fn>;

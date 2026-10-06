@@ -1,3 +1,6 @@
+import type { SkTypefaceFontProvider } from 'react-native-skia';
+
+import type { Stub } from '../../__tests__/skiaMock';
 import type { NoteAttachment } from '../../state';
 
 /** An attachment without its identity, for fixtures that stamp `id`/`ownerId`. */
@@ -32,4 +35,4 @@ export const fakeFontProvider = {
   countFamilies: () => 1,
   getFamilyName: () => 'Bravura',
   matchFamilyStyle: () => ({}),
-};
+} satisfies Stub<SkTypefaceFontProvider>;

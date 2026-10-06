@@ -151,6 +151,9 @@
     "testMatch": [
       "**/__tests__/**/*.test.[jt]s?(x)"
     ],
+    "moduleNameMapper": {
+      "^react-native-skia$": "<rootDir>/src/__tests__/skiaMock"
+    },
     "modulePathIgnorePatterns": [
       "<rootDir>/example/node_modules",
       "<rootDir>/lib/",
