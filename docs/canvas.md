@@ -3,11 +3,12 @@
 The root entry point exports `VexflowCanvas`, the low-level bridge: a Skia
 canvas whose `onDraw` receives a VexFlow `RenderContext` (`ctx`) plus the
 canvas `width`/`height`. Use it when you want direct VexFlow control instead
-of the typed score model.
+of the typed score model. It needs react-native-skia 3; see the
+[requirements](../README.md#requirements) for the platform minimums.
 
 ```tsx
 import { useCallback } from 'react';
-import { useFonts } from '@shopify/react-native-skia';
+import { useFonts } from 'react-native-skia';
 import { Formatter, Stave, StaveNote, Voice } from 'vexflow';
 import { VexflowCanvas, type OnDrawParams } from 'vexflow-native';
 

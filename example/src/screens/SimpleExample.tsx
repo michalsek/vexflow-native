@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { StyleSheet } from 'react-native';
-import { useFonts } from '@shopify/react-native-skia';
+import { useFonts } from 'react-native-skia';
 
 import { Formatter, Stave, StaveNote, Voice } from 'vexflow';
 import { VexflowCanvas, type OnDrawParams } from 'vexflow-native';

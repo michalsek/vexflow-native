@@ -1,4 +1,4 @@
-import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
+import type { SkTypefaceFontProvider } from 'react-native-skia';
 import type { SharedValue } from 'react-native-reanimated';
 import type { RenderContext, StaveNote } from 'vexflow';
 

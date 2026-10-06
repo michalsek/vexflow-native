@@ -1,12 +1,6 @@
 import type React from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Canvas,
-  Group,
-  Picture,
-  Skia,
-  useCanvasRef,
-} from '@shopify/react-native-skia';
+import { Canvas, Group, Picture, Skia, useCanvasRef } from 'react-native-skia';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useDerivedValue } from 'react-native-reanimated';

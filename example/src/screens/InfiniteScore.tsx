@@ -1,5 +1,5 @@
 // import { StyleSheet } from 'react-native';
-// import { Skia, useFont } from '@shopify/react-native-skia';
+// import { Skia, useFont } from 'react-native-skia';
 // import React, { useCallback, useMemo } from 'react';
 // import {
 //   ScrollView,

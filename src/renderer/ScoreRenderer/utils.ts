@@ -3,7 +3,7 @@ import {
   type SkPicture,
   type SkTypefaceFontProvider,
   type Transforms3d,
-} from '@shopify/react-native-skia';
+} from 'react-native-skia';
 import type { SharedValue } from 'react-native-reanimated';
 
 import FontManager from '../../base/FontManager';

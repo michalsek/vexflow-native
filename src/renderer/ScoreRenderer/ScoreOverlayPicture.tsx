@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Picture, type SkPicture } from '@shopify/react-native-skia';
+import { Picture, type SkPicture } from 'react-native-skia';
 import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnUI } from 'react-native-worklets';
 

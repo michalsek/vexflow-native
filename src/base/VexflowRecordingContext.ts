@@ -1,7 +1,4 @@
-import {
-  type SkFont,
-  type SkTypefaceFontProvider,
-} from '@shopify/react-native-skia';
+import { type SkFont, type SkTypefaceFontProvider } from 'react-native-skia';
 import { Platform } from 'react-native';
 import { Element, RenderContext as VexflowRenderContext } from 'vexflow';
 import type { FontInfo } from 'vexflow';

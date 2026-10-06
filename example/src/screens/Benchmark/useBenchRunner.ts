@@ -1,4 +1,4 @@
-import skiaPackage from '@shopify/react-native-skia/package.json';
+import skiaPackage from 'react-native-skia/package.json';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppState,

@@ -9,7 +9,7 @@ import {
   type SkPaint,
   type SkPathBuilder,
   type SkTypefaceFontProvider,
-} from '@shopify/react-native-skia';
+} from 'react-native-skia';
 
 import FontManager from './FontManager';
 import type {

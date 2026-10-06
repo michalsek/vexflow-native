@@ -1,5 +1,5 @@
 import { registerRootComponent } from 'expo';
-import { LoadSkiaWeb } from '@shopify/react-native-skia/lib/module/web';
+import { LoadSkiaWeb } from 'react-native-skia/lib/module/web';
 import { version } from 'canvaskit-wasm/package.json';
 
 LoadSkiaWeb({
