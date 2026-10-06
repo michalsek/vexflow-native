@@ -126,7 +126,7 @@ Android GPU path: `-gpu auto` → host GPU (SurfaceFlinger RenderEngine "Android
    xcodebuild -workspace VexflowNativeExample.xcworkspace -scheme VexflowNativeExample \
      -configuration Release -sdk iphonesimulator -destination 'id=<udid>' \
      -derivedDataPath build/dd ONLY_ACTIVE_ARCH=YES build
-   # Android, in example (see Failures and anomalies for the MusicXML asset)
+   # Android, in example
    CI=1 npx expo prebuild -p android
    (cd android && ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a)
    adb shell cmd package compile -m speed -f vexflownative.example
@@ -224,13 +224,14 @@ and the dark captures stay at ≤ 27.2 mean luma below the status bar (light ≥
 
 ### Failures and anomalies
 
-- **Android Release build**: `:app:parseReleaseLocalResources` fails. Expo's `export:embed`
-  classifies the `.xml` MusicXML fixture (`src/musicxml/testfiles/lg-8102429.xml`) as a
-  drawable and copies it to `res/drawable-mdpi`, where aapt2 rejects it. Debug builds don't
-  hit this, because they load assets from Metro. The baseline APK was built with a local,
-  uncommitted change that maps `xml` to `raw` in
-  `@expo/cli/build/src/export/metroAssetLocalPath.js`, reverted after the build. At runtime,
-  expo-asset finds the bare resource name in `raw/`, and the `musicxml` fixture loads.
+- **Android Release build of the baseline**: `:app:parseReleaseLocalResources` failed. The
+  MusicXML fixture was then an `.xml` asset, which Expo's `export:embed` and the RN
+  assets-registry classify as a drawable, so it was copied to `res/drawable-mdpi` and aapt2
+  rejected it. Debug builds don't hit this, because they load assets from Metro. The baseline
+  APK was built with a local, uncommitted change that maps `xml` to `raw` in
+  `@expo/cli/build/src/export/metroAssetLocalPath.js`. The fixture now ships as
+  `src/musicxml/__fixtures__/lg-8102429.musicxml`, which lands in `res/raw` without the
+  workaround. The bytes and runtime loading are the same, so later builds are comparable.
 - **`edit` × `musicxml`** (both platforms): no data. Voice 0 of the middle measure of staff 0
   holds a whole-note chord, and `getEditTarget` only looks for `note` items, so every run is
   `invalid: no-edit-target`. On iOS, 5 launches are discarded. On Android, the cell was left

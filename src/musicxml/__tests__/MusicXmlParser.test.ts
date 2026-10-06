@@ -389,8 +389,8 @@ describe('parseMusicXmlToScore', () => {
     const fixturePath = path.join(
       __dirname,
       '..',
-      'testfiles',
-      'lg-8102429.xml'
+      '__fixtures__',
+      'lg-8102429.musicxml'
     );
     const xml = fs.readFileSync(fixturePath, 'utf8');
     const score = parseMusicXmlToScore(xml);
@@ -430,8 +430,8 @@ describe('parseMusicXmlToScore', () => {
     const fixturePath = path.join(
       __dirname,
       '..',
-      'testfiles',
-      'lg-8102429.xml'
+      '__fixtures__',
+      'lg-8102429.musicxml'
     );
     const xml = fs.readFileSync(fixturePath, 'utf8');
     const score = parseMusicXmlToScore(xml);
