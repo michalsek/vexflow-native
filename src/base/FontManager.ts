@@ -94,10 +94,8 @@ export default class FontManager {
   private fontProvider: SkTypefaceFontProvider;
   private defaultFontName: string;
   private familiesLower: string[];
-  // Each runtime's clone of a __workletClass instance owns its own caches
-  // from the moment of capture; entries only ever hold same-usage-pattern
-  // Skia host objects, which are shareable across reanimated runtimes (the
-  // provider itself already crosses the same way).
+  // Instances never cross runtimes; each runtime builds its own, so these
+  // caches are runtime-local.
   private familyMatchCache: Record<string, string> = {};
   private skFontCache: Record<string, SkFont> = {};
   private systemFontMgr: SkFontMgr | null | undefined;
