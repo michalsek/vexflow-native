@@ -55,6 +55,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     title: 'Parity Gallery',
     description: 'Frozen renderer states for screenshot parity.',
   },
+  {
+    route: 'WorkletDiagnostics',
+    title: 'Worklet Diagnostics',
+    description: 'FontManager / SkFont / SkPicture across worklet runtimes.',
+  },
   // {
   //   route: 'VexflowTestSuite',
   //   title: 'VexFlow Test Suite',

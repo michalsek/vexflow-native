@@ -23,6 +23,7 @@ import ParityGallery, { ParityCase } from './screens/ParityGallery';
 import ScoreRendererStyleOverrides from './screens/ScoreRendererStyleOverrides';
 import SimpleExample from './screens/SimpleExample';
 import SimpleRenderer from './screens/SimpleRenderer';
+import WorkletDiagnostics from './screens/WorkletDiagnostics';
 // import VexflowTestSuite from './screens/VexflowTestSuite';
 
 enableScreens();
@@ -120,6 +121,11 @@ const App: React.FC = () => {
             component={ParityCase}
             getId={() => 'parity-case'}
             options={{ headerShown: false, title: 'Parity case' }}
+          />
+          <Stack.Screen
+            name="WorkletDiagnostics"
+            component={WorkletDiagnostics}
+            options={{ title: 'Worklet Diagnostics' }}
           />
           {/* <Stack.Screen
           name="VexflowTestSuite"

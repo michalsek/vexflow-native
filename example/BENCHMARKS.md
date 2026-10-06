@@ -17,6 +17,7 @@ build for baseline numbers; debug builds show a `bench-dev-warning` banner.
 | `vexflownative://bench?scenario=scroll&fixture=long&runs=5` | Open and autostart                               |
 | `vexflownative://parity`                                    | Open the parity gallery                          |
 | `vexflownative://parity/<case>?scheme=dark`                 | Open one frozen case                             |
+| `vexflownative://diagnostics/worklets`                      | Run the worklet runtime diagnostics              |
 
 | Bench param       | Values                                                   | Default             |
 | ----------------- | -------------------------------------------------------- | ------------------- |

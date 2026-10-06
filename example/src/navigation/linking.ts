@@ -11,6 +11,7 @@ export const linking: LinkingOptions<ExampleStackParamList> = {
       Benchmark: 'bench',
       ParityGallery: 'parity',
       ParityCase: 'parity/:case',
+      WorkletDiagnostics: 'diagnostics/worklets',
     },
   },
 };
