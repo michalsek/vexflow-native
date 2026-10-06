@@ -10,4 +10,5 @@ export type ExampleStackParamList = {
   EvenDocumentRenderer: undefined;
   InfiniteScore: undefined;
   Benchmark: Record<string, string | undefined> | undefined;
+  WorkletDiagnostics: undefined;
 };

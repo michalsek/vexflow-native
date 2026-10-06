@@ -9,6 +9,7 @@ export const linking: LinkingOptions<ExampleStackParamList> = {
     screens: {
       Main: '',
       Benchmark: 'bench',
+      WorkletDiagnostics: 'diagnostics/worklets',
     },
   },
 };

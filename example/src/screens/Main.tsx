@@ -47,6 +47,11 @@ const SCREEN_LINKS: ScreenLink[] = [
     title: 'Benchmark',
     description: 'Scripted render/scroll/playback/edit benchmarks.',
   },
+  {
+    route: 'WorkletDiagnostics',
+    title: 'Worklet Diagnostics',
+    description: 'FontManager / SkFont / SkPicture across worklet runtimes.',
+  },
   // {
   //   route: 'VexflowTestSuite',
   //   title: 'VexFlow Test Suite',
