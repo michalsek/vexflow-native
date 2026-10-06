@@ -1,4 +1,4 @@
-import type { SkFont } from '@shopify/react-native-skia';
+import type { SkFont } from 'react-native-skia';
 import { Font } from 'vexflow';
 import type VexflowRecordingContext from './VexflowRecordingContext';
 

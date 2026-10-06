@@ -135,7 +135,7 @@ function loadReplayModule() {
     createSkFont,
   }));
 
-  jest.doMock('@shopify/react-native-skia', () => ({
+  jest.doMock('react-native-skia', () => ({
     BlendMode,
     ClipOp,
     PaintStyle,

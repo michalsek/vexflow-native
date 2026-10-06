@@ -16,7 +16,7 @@ import { beforeAll, describe, expect, it, jest } from '@jest/globals';
 // TextMeasureContext (no Skia under jest).
 jest.mock('react-native', () => ({ Platform: { OS: 'web' } }));
 
-jest.mock('@shopify/react-native-skia', () => ({
+jest.mock('react-native-skia', () => ({
   FontWeight: { Normal: 'Normal', Bold: 'Bold' },
   FontSlant: { Upright: 'Upright', Italic: 'Italic', Oblique: 'Oblique' },
   FontWidth: { Normal: 'Normal' },

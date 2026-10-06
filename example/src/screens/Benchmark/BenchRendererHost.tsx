@@ -1,4 +1,4 @@
-import type { SkTypefaceFontProvider } from '@shopify/react-native-skia';
+import type { SkTypefaceFontProvider } from 'react-native-skia';
 import React, { memo, useLayoutEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {

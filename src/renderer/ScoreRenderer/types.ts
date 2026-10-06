@@ -1,7 +1,4 @@
-import type {
-  SkPicture,
-  SkTypefaceFontProvider,
-} from '@shopify/react-native-skia';
+import type { SkPicture, SkTypefaceFontProvider } from 'react-native-skia';
 import type { GestureType } from 'react-native-gesture-handler';
 import type { SharedValue } from 'react-native-reanimated';
 

@@ -1,16 +1,11 @@
 import type { FontInfo } from 'vexflow';
-import {
-  FontWeight,
-  FontSlant,
-  FontWidth,
-  Skia,
-} from '@shopify/react-native-skia';
+import { FontWeight, FontSlant, FontWidth, Skia } from 'react-native-skia';
 import type {
   SkFont,
   SkFontMgr,
   SkTypeface,
   SkTypefaceFontProvider,
-} from '@shopify/react-native-skia';
+} from 'react-native-skia';
 
 // import Logger, { LogCategory } from '../shared/Logger';
 

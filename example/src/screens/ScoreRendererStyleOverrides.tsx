@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useFonts } from '@shopify/react-native-skia';
+import { useFonts } from 'react-native-skia';
 import { useSharedValue } from 'react-native-reanimated';
 
 import {

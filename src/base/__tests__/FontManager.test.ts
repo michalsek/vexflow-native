@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import type { FontInfo } from 'vexflow';
 
-jest.mock('@shopify/react-native-skia', () => ({
+jest.mock('react-native-skia', () => ({
   FontWeight: {
     Thin: 'Thin',
     ExtraLight: 'ExtraLight',
@@ -27,12 +27,7 @@ jest.mock('@shopify/react-native-skia', () => ({
   },
 }));
 
-import {
-  FontSlant,
-  FontWeight,
-  FontWidth,
-  Skia,
-} from '@shopify/react-native-skia';
+import { FontSlant, FontWeight, FontWidth, Skia } from 'react-native-skia';
 import FontManager from '../FontManager';
 
 const mockSkiaFont = Skia.Font as jest.Mock;
