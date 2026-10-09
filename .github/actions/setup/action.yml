@@ -9,28 +9,28 @@ runs:
       with:
         node-version-file: .nvmrc
 
-    - name: Restore dependencies
+    # Cache Yarn's package archives rather than node_modules: react-native-skia
+    # Graphite binaries install into every workspace's node_modules, while the
+    # cache holds a single compressed copy of each package.
+    - name: Get Yarn cache folder
+      id: yarn-cache-dir
+      run: echo "dir=$(yarn config get cacheFolder)" >> "$GITHUB_OUTPUT"
+      shell: bash
+
+    - name: Restore Yarn cache
       id: yarn-cache
       uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
-        path: |
-          **/node_modules
-          .yarn/install-state.gz
-        key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}-${{ hashFiles('**/package.json', '!node_modules/**') }}
-        restore-keys: |
-          ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock') }}
-          ${{ runner.os }}-yarn-
+        path: ${{ steps.yarn-cache-dir.outputs.dir }}
+        key: ${{ runner.os }}-yarn-cache-${{ hashFiles('yarn.lock') }}
 
     - name: Install dependencies
-      if: steps.yarn-cache.outputs.cache-hit != 'true'
       run: yarn install --immutable
       shell: bash
 
-    - name: Cache dependencies
+    - name: Save Yarn cache
       if: steps.yarn-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
       with:
-        path: |
-          **/node_modules
-          .yarn/install-state.gz
+        path: ${{ steps.yarn-cache-dir.outputs.dir }}
         key: ${{ steps.yarn-cache.outputs.cache-primary-key }}
