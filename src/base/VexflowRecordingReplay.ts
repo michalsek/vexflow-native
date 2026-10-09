@@ -6,8 +6,10 @@ import {
   StrokeCap,
   type SkCanvas,
   type SkColor,
+  type SkImageFilter,
   type SkPaint,
   type SkPathBuilder,
+  type SkPathEffect,
   type SkTypefaceFontProvider,
 } from 'react-native-skia';
 
@@ -18,7 +20,6 @@ import type {
   VexflowRecordingLineCap,
   VexflowRecordingPaint,
   VexflowRecordingPathCommand,
-  VexflowRecordingRect,
   VexflowStyleOverride,
 } from './VexflowRecordingTypes';
 
@@ -35,15 +36,27 @@ function shadowBlurToSigma(shadowBlur: number): number {
 }
 
 /**
- * Per-replay `css color -> SkColor` cache: a recording uses a handful of
- * distinct colors but references them thousands of times.
+ * Skia objects one replay call allocates once and reuses across its commands.
+ * A recording uses a handful of distinct colors, glows and dashes but
+ * references them thousands of times, so each is created on first use and
+ * cached by value. Everything here is disposed when the replay ends: under
+ * NativeState only GC would free it otherwise.
  */
-type SkColorCache = Record<string, SkColor>;
+type ReplayPool = {
+  colors: Record<string, SkColor>;
+  glows: Record<string, SkImageFilter>;
+  dashes: Record<string, SkPathEffect>;
+  fillPaint: SkPaint;
+  strokePaint: SkPaint;
+  /** Created on the first `clearRect`; most recordings never clear a rect. */
+  clearPaint: SkPaint | null;
+  pathBuilder: SkPathBuilder;
+};
 
-function getCachedColor(color: string, cache: SkColorCache): SkColor {
+function getCachedColor(color: string, pool: ReplayPool): SkColor {
   'worklet';
 
-  return (cache[color] ??= Skia.Color(color));
+  return (pool.colors[color] ??= Skia.Color(color));
 }
 
 /**
@@ -55,7 +68,7 @@ function getCachedColor(color: string, cache: SkColorCache): SkColor {
 function applyGlow(
   skPaint: SkPaint,
   paint: VexflowRecordingPaint,
-  colorCache: SkColorCache
+  pool: ReplayPool
 ) {
   'worklet';
 
@@ -67,22 +80,34 @@ function applyGlow(
   }
 
   const sigma = shadowBlurToSigma(paint.shadowBlur ?? 0);
+  const key = `${paint.shadowColor}|${sigma}`;
 
   skPaint.setImageFilter(
-    Skia.ImageFilter.MakeDropShadow(
+    (pool.glows[key] ??= Skia.ImageFilter.MakeDropShadow(
       0,
       0,
       sigma,
       sigma,
-      getCachedColor(paint.shadowColor, colorCache)
-    )
+      getCachedColor(paint.shadowColor, pool)
+    ))
   );
 }
 
-function toSkiaRect(rect: VexflowRecordingRect) {
+function applyDash(
+  skPaint: SkPaint,
+  lineDash: number[] | undefined,
+  pool: ReplayPool
+) {
   'worklet';
 
-  return Skia.XYWHRect(rect.x, rect.y, rect.width, rect.height);
+  if (lineDash == null || lineDash.length === 0) {
+    skPaint.setPathEffect(null);
+    return;
+  }
+
+  skPaint.setPathEffect(
+    (pool.dashes[lineDash.join(',')] ??= Skia.PathEffect.MakeDash(lineDash))
+  );
 }
 
 function mapRecordingLineCap(cap: VexflowRecordingLineCap): StrokeCap {
@@ -106,67 +131,86 @@ function mapRecordingLineCap(cap: VexflowRecordingLineCap): StrokeCap {
  * state (glow filter, dash effect) is explicitly reset on every configure so
  * nothing bleeds between commands.
  */
-function createPooledFillPaint(): SkPaint {
+function createReplayPool(): ReplayPool {
   'worklet';
 
-  const skPaint = Skia.Paint();
-  skPaint.setStyle(PaintStyle.Fill);
-  skPaint.setAntiAlias(true);
+  const fillPaint = Skia.Paint();
+  fillPaint.setStyle(PaintStyle.Fill);
+  fillPaint.setAntiAlias(true);
 
-  return skPaint;
+  const strokePaint = Skia.Paint();
+  strokePaint.setStyle(PaintStyle.Stroke);
+  strokePaint.setAntiAlias(true);
+
+  return {
+    colors: {},
+    glows: {},
+    dashes: {},
+    fillPaint,
+    strokePaint,
+    clearPaint: null,
+    pathBuilder: Skia.PathBuilder.Make(),
+  };
 }
 
-function createPooledStrokePaint(): SkPaint {
+/**
+ * Paints keep their own reference to an image filter / path effect, and a
+ * recorded picture copies the paint state it drew with, so disposing the JS
+ * handles here never invalidates what was drawn.
+ */
+function disposeReplayPool(pool: ReplayPool) {
   'worklet';
 
-  const skPaint = Skia.Paint();
-  skPaint.setStyle(PaintStyle.Stroke);
-  skPaint.setAntiAlias(true);
-
-  return skPaint;
+  for (const key in pool.glows) {
+    pool.glows[key]!.dispose();
+  }
+  for (const key in pool.dashes) {
+    pool.dashes[key]!.dispose();
+  }
+  pool.fillPaint.dispose();
+  pool.strokePaint.dispose();
+  pool.clearPaint?.dispose();
+  pool.pathBuilder.dispose();
 }
 
 function configureFillPaint(
-  skPaint: SkPaint,
   paint: VexflowRecordingPaint,
-  colorCache: SkColorCache
+  pool: ReplayPool
 ): SkPaint {
   'worklet';
 
-  skPaint.setColor(getCachedColor(paint.color, colorCache));
-  applyGlow(skPaint, paint, colorCache);
+  const skPaint = pool.fillPaint;
+  skPaint.setColor(getCachedColor(paint.color, pool));
+  applyGlow(skPaint, paint, pool);
 
   return skPaint;
 }
 
 function configureStrokePaint(
-  skPaint: SkPaint,
   paint: VexflowRecordingPaint,
-  colorCache: SkColorCache
+  pool: ReplayPool
 ): SkPaint {
   'worklet';
 
-  skPaint.setColor(getCachedColor(paint.color, colorCache));
+  const skPaint = pool.strokePaint;
+  skPaint.setColor(getCachedColor(paint.color, pool));
   skPaint.setStrokeWidth(paint.strokeWidth ?? 1);
   skPaint.setStrokeCap(mapRecordingLineCap(paint.strokeCap ?? 'butt'));
-  applyGlow(skPaint, paint, colorCache);
-
-  if (paint.lineDash != null && paint.lineDash.length > 0) {
-    skPaint.setPathEffect(Skia.PathEffect.MakeDash(paint.lineDash));
-  } else {
-    skPaint.setPathEffect(null);
-  }
+  applyGlow(skPaint, paint, pool);
+  applyDash(skPaint, paint.lineDash, pool);
 
   return skPaint;
 }
 
-function createClearPaint(): SkPaint {
+function getClearPaint(pool: ReplayPool): SkPaint {
   'worklet';
 
-  const clearPaint = Skia.Paint();
-  clearPaint.setBlendMode(BlendMode.Clear);
+  if (pool.clearPaint == null) {
+    pool.clearPaint = Skia.Paint();
+    pool.clearPaint.setBlendMode(BlendMode.Clear);
+  }
 
-  return clearPaint;
+  return pool.clearPaint;
 }
 
 type PaintKind = 'fill' | 'stroke';
@@ -261,14 +305,10 @@ function applyPathCommand(
       builder.quadTo(command.cpx, command.cpy, command.x, command.y);
       break;
     case 'addRect':
-      builder.addRect(toSkiaRect(command.rect));
+      builder.addRect(command.rect);
       break;
     case 'addArc':
-      builder.addArc(
-        toSkiaRect(command.rect),
-        command.startDegrees,
-        command.sweepDegrees
-      );
+      builder.addArc(command.rect, command.startDegrees, command.sweepDegrees);
       break;
     case 'close':
       builder.close();
@@ -278,16 +318,26 @@ function applyPathCommand(
   }
 }
 
-function buildPath(path: readonly VexflowRecordingPathCommand[]) {
+/**
+ * Build the recorded path in the pooled builder (`detach` hands over the path
+ * and resets the builder for the next command), draw it, and free it at once:
+ * the canvas copies the path at the draw call.
+ */
+function drawRecordedPath(
+  canvas: SkCanvas,
+  path: readonly VexflowRecordingPathCommand[],
+  skPaint: SkPaint,
+  builder: SkPathBuilder
+) {
   'worklet';
-
-  const builder = Skia.PathBuilder.Make();
 
   for (const command of path) {
     applyPathCommand(builder, command);
   }
 
-  return builder.build();
+  const skPath = builder.detach();
+  canvas.drawPath(skPath, skPaint);
+  skPath.dispose();
 }
 
 export function renderVexflowRecordingCommands(
@@ -314,98 +364,100 @@ export function renderVexflowRecordingCommands(
 
   const fontManager =
     replayFontManager ?? new FontManager(fontProvider, defaultFont);
-  const colorCache: SkColorCache = {};
-  const fillPaint = createPooledFillPaint();
-  const strokePaint = createPooledStrokePaint();
+  const pool = createReplayPool();
 
-  for (const command of commands) {
-    switch (command.type) {
-      case 'clear':
-        canvas.clear(getCachedColor(command.color, colorCache));
-        break;
-      case 'save':
-        canvas.save();
-        break;
-      case 'restore':
-        canvas.restore();
-        break;
-      case 'scale':
-        canvas.scale(command.x, command.y);
-        break;
-      case 'translate':
-        canvas.translate(command.x, command.y);
-        break;
-      case 'clipRect':
-        canvas.clipRect(toSkiaRect(command.rect), ClipOp.Intersect, true);
-        break;
-      case 'fillRect':
-        canvas.drawRect(
-          toSkiaRect(command.rect),
-          configureFillPaint(
-            fillPaint,
-            resolveStyle(
-              command.paint,
-              command.groupId,
-              'fill',
-              styleOverrides
+  try {
+    for (const command of commands) {
+      switch (command.type) {
+        case 'clear':
+          canvas.clear(getCachedColor(command.color, pool));
+          break;
+        case 'save':
+          canvas.save();
+          break;
+        case 'restore':
+          canvas.restore();
+          break;
+        case 'scale':
+          canvas.scale(command.x, command.y);
+          break;
+        case 'translate':
+          canvas.translate(command.x, command.y);
+          break;
+        case 'clipRect':
+          canvas.clipRect(command.rect, ClipOp.Intersect, true);
+          break;
+        case 'fillRect':
+          canvas.drawRect(
+            command.rect,
+            configureFillPaint(
+              resolveStyle(
+                command.paint,
+                command.groupId,
+                'fill',
+                styleOverrides
+              ),
+              pool
+            )
+          );
+          break;
+        case 'clearRect':
+          canvas.drawRect(command.rect, getClearPaint(pool));
+          break;
+        case 'fillPath':
+          drawRecordedPath(
+            canvas,
+            command.path,
+            configureFillPaint(
+              resolveStyle(
+                command.paint,
+                command.groupId,
+                'fill',
+                styleOverrides
+              ),
+              pool
             ),
-            colorCache
-          )
-        );
-        break;
-      case 'clearRect':
-        canvas.drawRect(toSkiaRect(command.rect), createClearPaint());
-        break;
-      case 'fillPath':
-        canvas.drawPath(
-          buildPath(command.path),
-          configureFillPaint(
-            fillPaint,
-            resolveStyle(
-              command.paint,
-              command.groupId,
-              'fill',
-              styleOverrides
+            pool.pathBuilder
+          );
+          break;
+        case 'strokePath':
+          drawRecordedPath(
+            canvas,
+            command.path,
+            configureStrokePaint(
+              resolveStyle(
+                command.paint,
+                command.groupId,
+                'stroke',
+                styleOverrides
+              ),
+              pool
             ),
-            colorCache
-          )
-        );
-        break;
-      case 'strokePath':
-        canvas.drawPath(
-          buildPath(command.path),
-          configureStrokePaint(
-            strokePaint,
-            resolveStyle(
-              command.paint,
-              command.groupId,
-              'stroke',
-              styleOverrides
+            pool.pathBuilder
+          );
+          break;
+        case 'fillText':
+          canvas.drawText(
+            command.text,
+            command.x,
+            command.y,
+            configureFillPaint(
+              resolveStyle(
+                command.paint,
+                command.groupId,
+                'fill',
+                styleOverrides
+              ),
+              pool
             ),
-            colorCache
-          )
-        );
-        break;
-      case 'fillText':
-        canvas.drawText(
-          command.text,
-          command.x,
-          command.y,
-          configureFillPaint(
-            fillPaint,
-            resolveStyle(
-              command.paint,
-              command.groupId,
-              'fill',
-              styleOverrides
-            ),
-            colorCache
-          ),
-          createFont(fontManager, command.font)
-        );
-        break;
-      default:
-        assertNever(command);
+            createFont(fontManager, command.font)
+          );
+          break;
+        default:
+          assertNever(command);
+      }
     }
+  } finally {
+    disposeReplayPool(pool);
   }
 }
