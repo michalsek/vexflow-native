@@ -180,6 +180,8 @@ describe('renderVexflowRecordingCommands', () => {
       module.BlendMode.Clear
     );
 
+    // One pooled builder serves every path command of the replay.
+    expect(module.pathBuilders).toHaveLength(1);
     const fillPathBuilder = module.pathBuilders[0]!;
     expect(fillPathBuilder.moveTo).toHaveBeenCalledWith(1, 2);
     expect(fillPathBuilder.lineTo).toHaveBeenCalledWith(3, 4);
@@ -199,13 +201,14 @@ describe('renderVexflowRecordingCommands', () => {
     expect(fillPathBuilder.close).toHaveBeenCalledTimes(1);
     expect(canvas.drawPath).toHaveBeenNthCalledWith(
       1,
-      fillPathBuilder.build.mock.results[0]?.value,
+      fillPathBuilder.detach.mock.results[0]?.value,
       module.paints[0]
     );
 
+    expect(fillPathBuilder.moveTo).toHaveBeenLastCalledWith(30, 31);
     expect(canvas.drawPath).toHaveBeenNthCalledWith(
       2,
-      module.pathBuilders[1]!.build.mock.results[0]?.value,
+      fillPathBuilder.detach.mock.results[1]?.value,
       module.paints[1]
     );
     expect(module.paints[1]!.setStyle).toHaveBeenCalledWith(
@@ -385,18 +388,18 @@ describe('renderVexflowRecordingCommands', () => {
       { 'note-1': { shadowColor: '#FFAA00', shadowBlur: 6 } }
     );
 
-    // Both paints glow; blur 6 -> sigma 3.
-    expect(module.MakeDropShadow).toHaveBeenCalledTimes(2);
-    expect(module.MakeDropShadow).toHaveBeenNthCalledWith(
-      1,
+    // Both paints glow; blur 6 -> sigma 3. Same glow, so one shared filter.
+    expect(module.MakeDropShadow).toHaveBeenCalledTimes(1);
+    expect(module.MakeDropShadow).toHaveBeenCalledWith(
       0,
       0,
       3,
       3,
       'color:#FFAA00'
     );
-    expect(module.paints[0]!.setImageFilter).toHaveBeenCalledTimes(1);
-    expect(module.paints[1]!.setImageFilter).toHaveBeenCalledTimes(1);
+    const glow = module.MakeDropShadow.mock.results[0]?.value;
+    expect(module.paints[0]!.setImageFilter).toHaveBeenCalledWith(glow);
+    expect(module.paints[1]!.setImageFilter).toHaveBeenCalledWith(glow);
   });
 
   it('resets pooled-paint glow and color between commands (state at draw time)', () => {
@@ -534,5 +537,102 @@ describe('renderVexflowRecordingCommands', () => {
       expect(call[0]).toBeNull();
     }
     expect(module.MakeDropShadow).not.toHaveBeenCalled();
+  });
+
+  it('disposes each drawn path and every pooled Skia object when the replay ends', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+    const disposedAtDraw: boolean[] = [];
+    canvas.drawPath = jest.fn((path: { dispose: jest.Mock }) => {
+      disposedAtDraw.push(path.dispose.mock.calls.length > 0);
+    }) as never;
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        {
+          type: 'fillPath',
+          path: [{ type: 'moveTo', x: 0, y: 0 }],
+          paint: { color: '#000000', shadowColor: '#00FF00', shadowBlur: 4 },
+        },
+        {
+          type: 'strokePath',
+          path: [{ type: 'moveTo', x: 1, y: 1 }],
+          paint: { color: '#000000', lineDash: [4, 2] },
+        },
+        {
+          type: 'clearRect',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+      ],
+      {},
+      'Bravura'
+    );
+
+    // Each path is still alive when drawn and freed right after.
+    expect(disposedAtDraw).toEqual([false, false]);
+    for (const result of module.pathBuilders[0]!.detach.mock.results) {
+      expect(
+        (result.value as { dispose: jest.Mock }).dispose
+      ).toHaveBeenCalledTimes(1);
+    }
+
+    // fill + stroke + clear paints, the builder, the glow and the dash.
+    const pooled = [
+      ...module.paints,
+      ...module.pathBuilders,
+      ...returned(module.MakeDropShadow),
+      ...returned(module.MakeDash),
+    ] as { dispose: jest.Mock }[];
+    expect(pooled).toHaveLength(6);
+    for (const object of pooled) {
+      expect(object.dispose).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('disposes pooled Skia objects even when a command throws', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+    canvas.save = jest.fn(() => {
+      throw new Error('canvas lost');
+    }) as never;
+
+    expect(() =>
+      module.renderVexflowRecordingCommands(
+        canvas,
+        [{ type: 'save' }],
+        {},
+        'Bravura'
+      )
+    ).toThrow('canvas lost');
+
+    for (const object of [...module.paints, ...module.pathBuilders]) {
+      expect(object.dispose).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('creates each distinct glow and dash once per replay', () => {
+    const module = loadReplayModule();
+    const canvas = createCanvas();
+    const glowing = { color: '#000000', shadowColor: '#00FF00', shadowBlur: 4 };
+    const dashed = { color: '#000000', lineDash: [4, 2] };
+    const path = [{ type: 'moveTo', x: 0, y: 0 }];
+
+    module.renderVexflowRecordingCommands(
+      canvas,
+      [
+        { type: 'fillPath', path, paint: glowing },
+        { type: 'fillPath', path, paint: glowing },
+        { type: 'fillPath', path, paint: { ...glowing, shadowBlur: 8 } },
+        { type: 'strokePath', path, paint: dashed },
+        { type: 'strokePath', path, paint: { ...dashed, lineDash: [4, 2] } },
+        { type: 'strokePath', path, paint: { ...dashed, lineDash: [1, 1] } },
+      ],
+      {},
+      'Bravura'
+    );
+
+    expect(module.MakeDropShadow).toHaveBeenCalledTimes(2);
+    expect(module.MakeDash).toHaveBeenCalledTimes(2);
   });
 });
