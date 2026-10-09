@@ -1,6 +1,6 @@
 {
   "name": "vexflow-native",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "React Native backend for rendering music notation using react-native-skia",
   "main": "./lib/module/base/index.js",
   "types": "./lib/typescript/src/base/index.d.ts",
