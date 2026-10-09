@@ -9,8 +9,12 @@ import {
 } from '../base/VexflowRecordingIndex';
 import type { Score } from '../state';
 import { isVexflowNativeDebugEnabled } from '../shared/debug';
-import { layoutScore, type ScoreLayoutPlan } from './layout';
-import { measureScore } from './measure';
+import {
+  layoutScore,
+  layoutUsesViewportHeight,
+  type ScoreLayoutPlan,
+} from './layout';
+import { measureScore, type MeasuredScore } from './measure';
 import { renderScore } from './render';
 import {
   createContentViewport,
@@ -64,34 +68,65 @@ export function useScoreRecording({
   score: Score;
   viewport: RendererRect;
 }): ScoreRecording {
-  return useMemo(() => {
+  // Measuring does not depend on the viewport and is the most expensive pass,
+  // so it is cached apart from layout and render.
+  const measurement = useMemo((): ScoreMeasurement | null => {
     if (!enabled) {
+      return null;
+    }
+
+    const measureStart = nowMs();
+    // On native, constructing a context installs it as VexFlow's text
+    // measurement canvas, so text is measured with this font setup.
+    // eslint-disable-next-line no-new
+    new VexflowRecordingContext(fontManager, defaultFont);
+    const measuredScore = measureScore(score, options, { decorateItem });
+
+    return { measuredScore, measureMs: nowMs() - measureStart };
+  }, [decorateItem, defaultFont, enabled, fontManager, options, score]);
+
+  // Height-only changes (a late safe-area inset, the keyboard) cannot move a
+  // layout that ignores the height, so the height is pinned to 0 for it and
+  // such a change keeps the recording.
+  const layoutHeight =
+    !measurement ||
+    layoutUsesViewportHeight(rendererType, measurement.measuredScore)
+      ? viewport.height
+      : 0;
+  const layoutViewport = useMemo(
+    (): RendererRect => ({
+      x: viewport.x,
+      y: viewport.y,
+      width: viewport.width,
+      height: layoutHeight,
+    }),
+    [layoutHeight, viewport.width, viewport.x, viewport.y]
+  );
+
+  return useMemo(() => {
+    if (!measurement) {
       return {
         commands: [],
         groupIndex: {},
-        layoutPlan: createEmptyLayoutPlan(rendererType, viewport),
-        itemsLayout: createEmptyItemsLayout(viewport),
+        layoutPlan: createEmptyLayoutPlan(rendererType, layoutViewport),
+        itemsLayout: createEmptyItemsLayout(layoutViewport),
       };
     }
 
-    // Layout, measure and render run in content space against the virtual
-    // viewport; see src/renderer/scale.ts.
+    // Layout and render run in content space against the virtual viewport;
+    // see src/renderer/scale.ts.
     const scale = getRenderScale(options);
-    const contentViewport = createContentViewport(viewport, scale);
-
-    const measureStart = nowMs();
+    const contentViewport = createContentViewport(layoutViewport, scale);
     const ctx = new VexflowRecordingContext(
       fontManager,
       defaultFont,
       colorScheme
     );
-    const measuredScore = measureScore(score, options, { decorateItem });
-    const measureMs = nowMs() - measureStart;
 
     const layoutStart = nowMs();
     const layoutPlan = layoutScore(
       score,
-      measuredScore,
+      measurement.measuredScore,
       options,
       rendererType,
       contentViewport
@@ -120,12 +155,12 @@ export function useScoreRecording({
       finishMs,
       layoutMs,
       measureCount: layoutPlan.measures.length,
-      measureMs,
+      measurement,
       renderMs,
       rendererType,
       scoreId: score.id,
       systemCount: layoutPlan.systems.length,
-      viewport,
+      viewport: layoutViewport,
     });
 
     return {
@@ -138,15 +173,27 @@ export function useScoreRecording({
     colorScheme,
     decorateItem,
     defaultFont,
-    enabled,
     fontManager,
+    layoutViewport,
+    measurement,
     onDrawItem,
     options,
     rendererType,
     score,
-    viewport,
   ]);
 }
+
+interface ScoreMeasurement {
+  measuredScore: MeasuredScore;
+  measureMs: number;
+}
+
+/**
+ * Measurements already counted by a profile line. A cached measurement is
+ * reported once, by the first recording built on it, so summed profiles
+ * count each measure pass once.
+ */
+const profiledMeasurements = new WeakSet<ScoreMeasurement>();
 
 function createEmptyItemsLayout(viewport: RendererRect): ScoreItemsLayout {
   return {
@@ -182,7 +229,7 @@ function logScoreRecordingProfile({
   finishMs,
   layoutMs,
   measureCount,
-  measureMs,
+  measurement,
   renderMs,
   rendererType,
   scoreId,
@@ -195,7 +242,7 @@ function logScoreRecordingProfile({
   finishMs: number;
   layoutMs: number;
   measureCount: number;
-  measureMs: number;
+  measurement: ScoreMeasurement;
   renderMs: number;
   rendererType: RendererType;
   scoreId: string;
@@ -205,6 +252,11 @@ function logScoreRecordingProfile({
   if (!isVexflowNativeDebugEnabled()) {
     return;
   }
+
+  const measureMs = profiledMeasurements.has(measurement)
+    ? 0
+    : measurement.measureMs;
+  profiledMeasurements.add(measurement);
 
   console.info('[ScoreRenderer] recording profile', {
     scoreId,

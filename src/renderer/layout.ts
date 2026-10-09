@@ -144,6 +144,21 @@ export function layoutScore(
   };
 }
 
+/**
+ * Whether `layoutScore` reads `viewport.height` for this score. Only the
+ * infinite score centers on it; document layouts use it solely for the
+ * content size of a score with no measures. Callers can skip a re-layout on
+ * height-only viewport changes when this is false.
+ */
+export function layoutUsesViewportHeight(
+  rendererType: RendererType,
+  measuredScore: MeasuredScore
+): boolean {
+  return (
+    rendererType === 'infiniteScore' || measuredScore.measures.length === 0
+  );
+}
+
 function buildGroupLayoutContext(
   score: Score,
   measuredScore: MeasuredScore
