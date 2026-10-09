@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import type { Meter, Score, Step, VoiceItem } from '../../state';
 import { insets, renderOptions, spacing } from '../constants';
-import { layoutScore } from '../layout';
+import { layoutScore, layoutUsesViewportHeight } from '../layout';
 import { measureScore } from '../measure';
 import type { ScoreOptions } from '../types';
 import { createVisibleViewport } from '../viewport';
@@ -482,6 +482,47 @@ describe('layoutScore', () => {
     ).toBeCloseTo(viewport.y + viewport.height / 2, 5);
     expect(plan.contentSize.width).toBeGreaterThan(viewport.width);
     expect(plan.contentSize.height).toBeCloseTo(viewport.height, 5);
+  });
+});
+
+describe('layoutUsesViewportHeight', () => {
+  const viewport = { x: 0, y: 0, width: 393, height: 420 };
+
+  it.each(['document', 'documentEven'] as const)(
+    'lets %s layouts with measures ignore the viewport height',
+    (rendererType) => {
+      const score = makePianoScore([1, 2, 3, 4, 5]);
+      const measuredScore = measureScore(score, TEST_OPTIONS);
+
+      expect(layoutUsesViewportHeight(rendererType, measuredScore)).toBe(false);
+      expect(
+        layoutScore(score, measuredScore, TEST_OPTIONS, rendererType, {
+          ...viewport,
+          height: 0,
+        })
+      ).toEqual(
+        layoutScore(score, measuredScore, TEST_OPTIONS, rendererType, viewport)
+      );
+    }
+  );
+
+  it('reports the height as used by the infinite score and by empty scores', () => {
+    const score = makePianoScore([1, 2]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+    const emptyScore = makePianoScore([]);
+    const emptyMeasuredScore = measureScore(emptyScore, TEST_OPTIONS);
+
+    expect(layoutUsesViewportHeight('infiniteScore', measuredScore)).toBe(true);
+    expect(layoutUsesViewportHeight('document', emptyMeasuredScore)).toBe(true);
+    expect(
+      layoutScore(
+        emptyScore,
+        emptyMeasuredScore,
+        TEST_OPTIONS,
+        'document',
+        viewport
+      ).contentSize.height
+    ).toBe(viewport.height);
   });
 });
 

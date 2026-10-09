@@ -2,11 +2,30 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import type { ScoreItemsLayout } from '../types';
 
-/* useScoreRecording is a plain useMemo hook — running the factory directly is
- * enough to exercise the recording pipeline without a React renderer. */
+/* useScoreRecording is built from useMemo only; a slot-stable, deps-aware mock
+ * is close enough to React to exercise the pipeline and its caching without a
+ * renderer. `useRecordingPass` runs one render pass. */
+const mockMemoSlots: Array<{ deps: readonly unknown[]; value: unknown }> = [];
+let mockMemoCursor = 0;
+
 jest.mock('react', () => ({
   ...(jest.requireActual('react') as object),
-  useMemo: (factory: () => unknown) => factory(),
+  useMemo: (factory: () => unknown, deps: readonly unknown[]) => {
+    const index = mockMemoCursor;
+    mockMemoCursor += 1;
+    const slot = mockMemoSlots[index];
+
+    if (
+      slot &&
+      deps.every((dep, depIndex) => Object.is(dep, slot.deps[depIndex]))
+    ) {
+      return slot.value;
+    }
+
+    const value = factory();
+    mockMemoSlots[index] = { deps, value };
+    return value;
+  },
 }));
 
 const mockFinish = jest.fn(() => ['command-1']);
@@ -55,6 +74,7 @@ jest.mock('../measure', () => ({
   measureScore: jest.fn(() => ({ measures: [] })),
 }));
 jest.mock('../layout', () => ({
+  ...(jest.requireActual('../layout') as object),
   layoutScore: jest.fn(() => mockMakeLayoutPlan()),
 }));
 jest.mock('../render', () => ({
@@ -76,13 +96,19 @@ const HOOK_ARGS = {
   viewport: { x: 0, y: 0, width: 393, height: 116 },
 };
 
+function useRecordingPass(args: Parameters<typeof useScoreRecording>[0]) {
+  mockMemoCursor = 0;
+  return useScoreRecording(args);
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
+  mockMemoSlots.length = 0;
 });
 
 describe('useScoreRecording items layout', () => {
   it('returns the geometry captured by renderScore in the same pass', () => {
-    const recording = useScoreRecording({ ...HOOK_ARGS, enabled: true });
+    const recording = useRecordingPass({ ...HOOK_ARGS, enabled: true });
 
     expect(renderScore).toHaveBeenCalledTimes(1);
     expect(recording.itemsLayout).toEqual(mockMakeItemsLayout());
@@ -92,7 +118,7 @@ describe('useScoreRecording items layout', () => {
   it('passes the exact renderScore output through at the default scale 1', () => {
     // At scale 1 the pipeline must behave exactly as before scaling existed:
     // same viewport, same itemsLayout object.
-    const recording = useScoreRecording({ ...HOOK_ARGS, enabled: true });
+    const recording = useRecordingPass({ ...HOOK_ARGS, enabled: true });
 
     expect(layoutScore).toHaveBeenCalledWith(
       expect.anything(),
@@ -108,7 +134,7 @@ describe('useScoreRecording items layout', () => {
   });
 
   it('lays out against the virtual viewport and emits view-space geometry at scale 0.5', () => {
-    const recording = useScoreRecording({
+    const recording = useRecordingPass({
       ...HOOK_ARGS,
       enabled: true,
       options: { render: { scale: 0.5 } } as never,
@@ -160,7 +186,7 @@ describe('useScoreRecording items layout', () => {
     const decorateItem = jest.fn();
     const onDrawItem = jest.fn();
 
-    useScoreRecording({
+    useRecordingPass({
       ...HOOK_ARGS,
       enabled: true,
       decorateItem,
@@ -182,7 +208,7 @@ describe('useScoreRecording items layout', () => {
   });
 
   it('returns an empty items layout in the disabled branch', () => {
-    const recording = useScoreRecording({ ...HOOK_ARGS, enabled: false });
+    const recording = useRecordingPass({ ...HOOK_ARGS, enabled: false });
 
     expect(renderScore).not.toHaveBeenCalled();
     expect(recording.commands).toEqual([]);
@@ -191,5 +217,71 @@ describe('useScoreRecording items layout', () => {
       measures: [],
       contentSize: { width: 393, height: 116 },
     });
+  });
+});
+
+describe('useScoreRecording caching', () => {
+  const measuredScore = { measures: [{}], maxIntrinsicNoteWidth: 1 };
+
+  beforeEach(() => {
+    (measureScore as jest.Mock).mockReturnValue(measuredScore);
+  });
+
+  it('keeps the whole recording on a height-only change of a document layout', () => {
+    const first = useRecordingPass(HOOK_ARGS);
+    const second = useRecordingPass({
+      ...HOOK_ARGS,
+      viewport: { ...HOOK_ARGS.viewport, height: 400 },
+    });
+
+    expect(second).toBe(first);
+    expect(measureScore).toHaveBeenCalledTimes(1);
+    expect(layoutScore).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-lays out on a width change without re-measuring', () => {
+    useRecordingPass(HOOK_ARGS);
+    useRecordingPass({
+      ...HOOK_ARGS,
+      viewport: { ...HOOK_ARGS.viewport, width: 800 },
+    });
+
+    expect(measureScore).toHaveBeenCalledTimes(1);
+    expect(layoutScore).toHaveBeenCalledTimes(2);
+    expect(layoutScore).toHaveBeenLastCalledWith(
+      expect.anything(),
+      measuredScore,
+      expect.anything(),
+      'document',
+      { x: 0, y: 0, width: 800, height: 0 }
+    );
+  });
+
+  it('re-lays out on a height change of the infinite score without re-measuring', () => {
+    const args = { ...HOOK_ARGS, rendererType: 'infiniteScore' as const };
+
+    useRecordingPass(args);
+    useRecordingPass({ ...args, viewport: { ...args.viewport, height: 400 } });
+
+    expect(measureScore).toHaveBeenCalledTimes(1);
+    expect(layoutScore).toHaveBeenCalledTimes(2);
+    expect(layoutScore).toHaveBeenLastCalledWith(
+      expect.anything(),
+      measuredScore,
+      expect.anything(),
+      'infiniteScore',
+      { x: 0, y: 0, width: 393, height: 400 }
+    );
+  });
+
+  it('re-measures when the score changes', () => {
+    useRecordingPass(HOOK_ARGS);
+    useRecordingPass({
+      ...HOOK_ARGS,
+      score: { id: 'score-2', defaults: {}, staves: [] } as never,
+    });
+
+    expect(measureScore).toHaveBeenCalledTimes(2);
+    expect(layoutScore).toHaveBeenCalledTimes(2);
   });
 });
