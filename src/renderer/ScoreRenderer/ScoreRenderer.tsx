@@ -18,9 +18,12 @@ import ScoreOverlayPicture from './ScoreOverlayPicture';
 import ScorePlayhead, { resolvePlayheadStyle } from './ScorePlayhead';
 import ScoreScrollbar from './ScoreScrollbar';
 import { getMaxScroll, getScrollAxis, useScoreScroll } from './useScoreScroll';
+import type { PictureDisposalState } from './types';
 import {
   createPictureTransform,
   createScorePicture,
+  disposeRetiredPictures,
+  retirePicture,
   withDefaultOptions,
 } from './utils';
 
@@ -201,13 +204,23 @@ const ScoreRenderer: React.FC<ScoreRendererProps> = ({
     replayFontManager,
   ]);
 
-  useEffect(() => {
-    if (!picture) {
-      return;
-    }
+  const pictureDisposalRef = useRef<PictureDisposalState>({
+    prev: null,
+    pending: [],
+  });
 
-    return () => picture.dispose();
+  useEffect(() => {
+    retirePicture(pictureDisposalRef.current, picture ?? null);
   }, [picture]);
+
+  useEffect(() => {
+    const disposal = pictureDisposalRef.current;
+
+    // Cleanup also runs when effects are torn down without unmounting
+    // (a hidden <Activity>, StrictMode), after which the memoized picture is
+    // drawn again — so the current picture is left to the GC.
+    return () => disposeRetiredPictures(disposal);
+  }, []);
 
   const onReadyRef = useRef(onReady);
 

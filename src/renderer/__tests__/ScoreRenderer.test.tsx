@@ -35,14 +35,15 @@ function loadScoreRendererModule() {
   /* Deps-aware useEffect and slot-stable useRef mocks, close enough to React
    * to verify effect dependency contracts. */
   const effectPrevDeps: Array<readonly unknown[] | undefined> = [];
+  const effectCleanups: Array<(() => void) | undefined> = [];
   let pendingEffects: Array<{
     index: number;
-    effect: () => void;
+    effect: () => void | (() => void);
     deps?: readonly unknown[];
   }> = [];
   let effectCursor = 0;
   const mockUseEffect = jest.fn(
-    (effect: () => void, deps?: readonly unknown[]) => {
+    (effect: () => void | (() => void), deps?: readonly unknown[]) => {
       pendingEffects.push({ index: effectCursor, effect, deps });
       effectCursor += 1;
     }
@@ -69,9 +70,16 @@ function loadScoreRendererModule() {
 
       if (shouldRun) {
         effectPrevDeps[index] = deps;
-        effect();
+        effectCleanups[index]?.();
+        effectCleanups[index] = effect() ?? undefined;
       }
     }
+  };
+  const unmountEffects = () => {
+    for (const cleanup of effectCleanups) {
+      cleanup?.();
+    }
+    effectCleanups.length = 0;
   };
 
   jest.doMock('react', () => ({
@@ -172,6 +180,7 @@ function loadScoreRendererModule() {
     getScrollOffsetFromThumbOffset: module.getScrollOffsetFromThumbOffset,
     getThumbOffsetFromScrollOffset: module.getThumbOffsetFromScrollOffset,
     ScoreRenderer: renderScoreRenderer,
+    unmountScoreRenderer: unmountEffects,
     mockBeginRecording: pictureRecorder.beginRecording,
     mockFinishRecordingAsPicture: pictureRecorder.finishRecordingAsPicture,
     mockPictureRecorder: Skia.PictureRecorder,
@@ -489,6 +498,37 @@ describe('ScoreRenderer picture cache helpers', () => {
     } finally {
       delete (globalThis as Record<string, unknown>)._WORKLET;
     }
+  });
+
+  it('disposes replaced main pictures two generations late, keeping the current one on cleanup', () => {
+    const module = loadScoreRendererModule();
+    type DisposablePicture = { dispose: jest.Mock };
+    const render = () =>
+      module.ScoreRenderer({
+        defaultFont: 'Bravura',
+        fontManager: { kind: 'font-manager' },
+        score: { id: 'score-renderer-main-disposal', staves: [] },
+      });
+
+    getScoreRendererGestureSurface(render()).props.onLayout({
+      nativeEvent: { layout: { height: 612, width: 393 } },
+    });
+    // The useMemo mock re-records on every render: one new picture each.
+    for (let i = 0; i < 4; i += 1) {
+      render();
+    }
+
+    const pictures = module.mockFinishRecordingAsPicture.mock.results.map(
+      (result) => result.value as DisposablePicture
+    );
+    const disposeCounts = () =>
+      pictures.map((picture) => picture.dispose.mock.calls.length);
+
+    expect(disposeCounts()).toEqual([1, 0, 0, 0]);
+
+    module.unmountScoreRenderer();
+
+    expect(disposeCounts()).toEqual([1, 1, 1, 0]);
   });
 
   it('fires onItemsLayout with the recorded geometry once the viewport has size', () => {
