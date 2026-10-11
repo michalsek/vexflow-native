@@ -6,9 +6,9 @@ import { scheduleOnUI } from 'react-native-worklets';
 import type { VexflowRecordingCommand } from '../../base';
 import { isVexflowNativeDebugEnabled } from '../../shared/debug';
 import type {
-  OverlayDisposalState,
   OverlayFontManagerSlot,
   OverlayProfileState,
+  PictureDisposalState,
   ScoreOverlayPictureProps,
 } from './types';
 import {
@@ -43,7 +43,7 @@ export default function ScoreOverlayPicture({
   const fontManagerSlot = useSharedValue<OverlayFontManagerSlot>({
     manager: null,
   });
-  const disposal = useSharedValue<OverlayDisposalState>({
+  const disposal = useSharedValue<PictureDisposalState>({
     prev: null,
     pending: [],
   });

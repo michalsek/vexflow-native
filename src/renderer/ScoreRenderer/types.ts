@@ -39,8 +39,8 @@ export interface ScoreOverlayPictureProps {
   itemStyleOverrides: NonNullable<ScoreRendererProps['itemStyleOverrides']>;
 }
 
-export interface OverlayDisposalState {
-  /** The last real (non-empty) overlay picture the mapper returned. */
+export interface PictureDisposalState {
+  /** The current picture; null while none is shown (or the shared blank one). */
   prev: SkPicture | null;
   /** Superseded pictures awaiting disposal, oldest first. */
   pending: SkPicture[];

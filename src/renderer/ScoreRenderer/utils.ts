@@ -20,9 +20,9 @@ import type {
 import { createVisibleViewport } from '../viewport';
 import type {
   CreateScorePictureParams,
-  OverlayDisposalState,
   OverlayFontManagerSlot,
   OverlayProfileState,
+  PictureDisposalState,
 } from './types';
 
 // The reanimated plugin rewrites 'worklet' function declarations into
@@ -185,25 +185,21 @@ export function getEmptyOverlayPicture(): SkPicture {
 }
 
 /**
- * Two-generation deferred disposal: the retiring picture may still be
- * referenced by the committed Picture node or a frame in flight, so only
- * pictures two supersessions old are disposed. The shared blank picture never
- * enters the ring (`next === null` marks an empty frame).
+ * Two-generation deferred disposal: react-native-skia commits the Canvas tree
+ * asynchronously, so a retiring picture may still be referenced by the
+ * committed Picture node or a commit in flight. Only pictures two
+ * supersessions old are disposed. `next === null` marks a frame without an
+ * owned picture (none, or the shared blank one), which never enters the ring.
  */
-export function retireOverlayPicture(
-  disposal: SharedValue<OverlayDisposalState>,
+export function retirePicture(
+  state: PictureDisposalState,
   next: SkPicture | null
 ) {
   'worklet';
 
-  if (typeof _WORKLET === 'undefined' || !_WORKLET) {
-    // The mapper's seed run happens on JS against a copy of the state; writes
-    // here would never be seen by the UI runtime, so skip tracking entirely
-    // (leaks at most one picture per mapper re-creation).
+  if (state.prev === next) {
     return;
   }
-
-  const state = disposal.value;
 
   if (state.prev != null) {
     state.pending.push(state.prev);
@@ -216,20 +212,47 @@ export function retireOverlayPicture(
   state.prev = next;
 }
 
-export function disposeOverlayPictures(
-  disposal: SharedValue<OverlayDisposalState>
-) {
+/** Disposes the superseded pictures only; the current one stays alive. */
+export function disposeRetiredPictures(state: PictureDisposalState) {
   'worklet';
-
-  const state = disposal.value;
 
   for (const pending of state.pending) {
     pending.dispose();
   }
   state.pending.length = 0;
+}
+
+export function disposePictures(state: PictureDisposalState) {
+  'worklet';
+
+  disposeRetiredPictures(state);
 
   state.prev?.dispose();
   state.prev = null;
+}
+
+export function retireOverlayPicture(
+  disposal: SharedValue<PictureDisposalState>,
+  next: SkPicture | null
+) {
+  'worklet';
+
+  if (typeof _WORKLET === 'undefined' || !_WORKLET) {
+    // The mapper's seed run happens on JS against a copy of the state; writes
+    // here would never be seen by the UI runtime, so skip tracking entirely
+    // (leaks at most one picture per mapper re-creation).
+    return;
+  }
+
+  retirePicture(disposal.value, next);
+}
+
+export function disposeOverlayPictures(
+  disposal: SharedValue<PictureDisposalState>
+) {
+  'worklet';
+
+  disposePictures(disposal.value);
 }
 
 /** Throttled (≤1/s) UI-thread record timing; debug flag only. */
