@@ -65,12 +65,6 @@ To run the example app on Web:
 yarn example web
 ```
 
-react-native-skia 3.0.x does not implement `matchFamilyStyle` on web for
-`useFonts` providers. Until it ships upstream, the example applies
-[`example/patches/react-native-skia+3.0.3.patch`](example/patches/react-native-skia+3.0.3.patch)
-on `yarn install`. Consumers rendering on web need the same patch. iOS and
-Android are unaffected.
-
 Make sure your code passes TypeScript:
 
 ```sh

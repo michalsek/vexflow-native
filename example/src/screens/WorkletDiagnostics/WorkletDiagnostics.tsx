@@ -41,7 +41,7 @@ function Diagnostics() {
       provider,
       slots: { shown, empty },
       token: current,
-      snapshot: () => canvasRef.current!.makeImageSnapshotAsync(),
+      snapshot: async () => canvasRef.current!.makeImageSnapshot(),
       onRow: setRows,
     });
     if (token.current === current) {

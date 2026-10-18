@@ -1,10 +1,4 @@
-import {
-  Canvas,
-  Picture,
-  Skia,
-  useCanvasRef,
-  useCanvasSize,
-} from 'react-native-skia';
+import { Canvas, Picture, Skia, useCanvasSize } from 'react-native-skia';
 import React, { useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 
@@ -22,8 +16,7 @@ const VexflowCanvas: React.FC<VexflowCanvasProps> = (props) => {
     // colorScheme = 'light',
   } = props;
 
-  const canvasRef = useCanvasRef();
-  const { size: canvasSize } = useCanvasSize(canvasRef);
+  const { size: canvasSize, onLayout } = useCanvasSize();
 
   const picture = useMemo(() => {
     const recorder = Skia.PictureRecorder();
@@ -45,7 +38,7 @@ const VexflowCanvas: React.FC<VexflowCanvasProps> = (props) => {
   }, [onDraw, canvasSize, fontManager, defaultFont]);
 
   return (
-    <Canvas style={styles.canvas} ref={canvasRef}>
+    <Canvas style={styles.canvas} onLayout={onLayout}>
       <Picture picture={picture} />
     </Canvas>
   );
