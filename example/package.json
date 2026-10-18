@@ -6,9 +6,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "apply-patches": "npx --yes patch-package --patch-dir patches",
-    "postinstall": "npx --yes patch-package --patch-dir patches"
+    "web": "expo start --web"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",
@@ -27,7 +25,7 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-skia": "3.0.3",
+    "react-native-skia": "3.6.3",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.10.1",
     "vexflow-native": "workspace:*"
