@@ -619,6 +619,115 @@ describe('layoutScore with uniformSystemPitch', () => {
   });
 });
 
+describe('layoutScore with systemGap', () => {
+  const DERIVED_SYSTEM_GAP = Math.max(82, TEST_OPTIONS.spacing.staffGap / 8);
+  // One measure per system, each with its own vertical extent, so a
+  // uniform pitch differs from each system's own height.
+  const STAFF_BOUNDS = [
+    [
+      { top: -30, bottom: 80 },
+      { top: 40, bottom: 80 },
+    ],
+    [
+      { top: 40, bottom: 80 },
+      { top: 40, bottom: 120 },
+    ],
+    [
+      { top: 40, bottom: 200 },
+      { top: 40, bottom: 130 },
+    ],
+  ];
+
+  function layoutSystems(
+    rendererType: 'document' | 'documentEven',
+    spacingOverrides: Partial<ScoreOptions['spacing']>
+  ) {
+    const score = makePianoScore([1, 1, 1]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+
+    measuredScore.measures.forEach((measure) => {
+      measure.staffBounds = STAFF_BOUNDS[measure.measureIndex]!;
+    });
+
+    const plan = layoutScore(
+      score,
+      measuredScore,
+      {
+        ...TEST_OPTIONS,
+        spacing: { ...TEST_OPTIONS.spacing, ...spacingOverrides },
+      },
+      rendererType,
+      {
+        x: 0,
+        y: 0,
+        width:
+          measuredScore.maxIntrinsicNoteWidth +
+          TEST_OPTIONS.insets.left +
+          TEST_OPTIONS.insets.right,
+        height: 420,
+      }
+    );
+
+    expect(plan.systems).toHaveLength(3);
+
+    return plan;
+  }
+
+  function getGaps(plan: ReturnType<typeof layoutScore>) {
+    return plan.systems.slice(1).map((system, index) => {
+      const previous = plan.systems[index]!;
+
+      return system.y - (previous.y + previous.height);
+    });
+  }
+
+  it.each(['document', 'documentEven'] as const)(
+    'keeps the gap derived from staffGap in %s when unset',
+    (rendererType) => {
+      expect(TEST_OPTIONS.spacing.systemGap).toBeUndefined();
+
+      getGaps(layoutSystems(rendererType, {})).forEach((gap) => {
+        expect(gap).toBeCloseTo(DERIVED_SYSTEM_GAP, 5);
+      });
+      expect(
+        layoutSystems(rendererType, { systemGap: Number.NaN }).systems
+      ).toEqual(layoutSystems(rendererType, {}).systems);
+    }
+  );
+
+  it.each(['document', 'documentEven'] as const)(
+    'separates %s systems by exactly the given gap',
+    (rendererType) => {
+      [24, 0].forEach((systemGap) => {
+        getGaps(layoutSystems(rendererType, { systemGap })).forEach((gap) => {
+          expect(gap).toBeCloseTo(systemGap, 5);
+        });
+      });
+    }
+  );
+
+  it('clamps negative gaps to 0', () => {
+    getGaps(layoutSystems('documentEven', { systemGap: -40 })).forEach(
+      (gap) => {
+        expect(gap).toBeCloseTo(0, 5);
+      }
+    );
+  });
+
+  it('uses the shared system height plus the gap as the uniform pitch', () => {
+    const plan = layoutSystems('documentEven', {
+      systemGap: 20,
+      uniformSystemPitch: true,
+    });
+    const pitch = plan.systems[0]!.height + 20;
+
+    plan.systems.forEach((system, systemIndex) => {
+      expect(system.height).toBeCloseTo(plan.systems[0]!.height, 5);
+      expect(system.y).toBeCloseTo(plan.systems[0]!.y + systemIndex * pitch, 5);
+    });
+  });
+});
+
 describe('layoutUsesViewportHeight', () => {
   const viewport = { x: 0, y: 0, width: 393, height: 420 };
 
