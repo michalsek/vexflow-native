@@ -24,7 +24,12 @@ overrides driven from the UI thread.
 - `options`: partial settings merged over the defaults —
   `insets` (`top`/`right`/`bottom`/`left`, default 24),
   `spacing` (`staffGap` between systems, default 96;
-  `minIntrinsicSizeMultiplier`, default 2) and `render`:
+  `minIntrinsicSizeMultiplier`, default 2; `uniformSystemPitch`, default
+  `false` — `documentEven` only: every system of a staff group shares the
+  tallest system's vertical extent and staff offsets, so staves sit on an
+  evenly spaced grid instead of each system advancing by its own height; use
+  it when rows of two renderers laid out side by side, such as a two-page
+  spread, must line up) and `render`:
   - `scale`: uniform notation scale, default 1. Lossless — the notation is
     re-rasterized at the final size; non-finite or non-positive values are
     treated as 1.

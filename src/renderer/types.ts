@@ -145,6 +145,13 @@ export interface ScoreInsets {
 export interface ScoreSpacing {
   staffGap: number;
   minIntrinsicSizeMultiplier: number;
+  /**
+   * `documentEven` only: place every system of a staff group at one uniform
+   * pitch. All systems share the tallest system's vertical extent, so staves
+   * sit on a fixed grid instead of each system advancing by its own height —
+   * rows of two renderers laid out side by side stay aligned. Default false.
+   */
+  uniformSystemPitch: boolean;
 }
 
 export interface RenderOptions {

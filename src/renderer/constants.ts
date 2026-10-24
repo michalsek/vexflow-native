@@ -10,6 +10,7 @@ export const insets: ScoreInsets = {
 export const spacing: ScoreSpacing = {
   staffGap: 96,
   minIntrinsicSizeMultiplier: 2,
+  uniformSystemPitch: false,
 };
 
 export const renderOptions: RenderOptions = {

@@ -485,6 +485,140 @@ describe('layoutScore', () => {
   });
 });
 
+describe('layoutScore with uniformSystemPitch', () => {
+  const SYSTEM_GAP = Math.max(82, TEST_OPTIONS.spacing.staffGap / 8);
+  // One measure per system, each with its own vertical extent: tall
+  // above-staff notation, tall below-staff notation, a grand-staff collision.
+  const STAFF_BOUNDS = [
+    [
+      { top: -30, bottom: 80 },
+      { top: 40, bottom: 80 },
+    ],
+    [
+      { top: 40, bottom: 80 },
+      { top: 40, bottom: 120 },
+    ],
+    [
+      { top: 40, bottom: 200 },
+      { top: 40, bottom: 130 },
+    ],
+  ];
+
+  function layoutSystems(uniformSystemPitch: boolean) {
+    const score = makePianoScore([1, 1, 1]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+
+    measuredScore.measures.forEach((measure) => {
+      measure.staffBounds = STAFF_BOUNDS[measure.measureIndex]!;
+    });
+
+    const plan = layoutScore(
+      score,
+      measuredScore,
+      {
+        ...TEST_OPTIONS,
+        spacing: { ...TEST_OPTIONS.spacing, uniformSystemPitch },
+      },
+      'documentEven',
+      {
+        x: 0,
+        y: 0,
+        width:
+          measuredScore.maxIntrinsicNoteWidth +
+          TEST_OPTIONS.insets.left +
+          TEST_OPTIONS.insets.right,
+        height: 420,
+      }
+    );
+
+    expect(plan.systems).toHaveLength(3);
+
+    return { plan, measuredScore };
+  }
+
+  function getStaffTops(plan: ReturnType<typeof layoutScore>, staffIndex = 0) {
+    return plan.systems.map(
+      (system) => system.y + system.staffYOffsets[staffIndex]!
+    );
+  }
+
+  it('advances each system by its own height when disabled', () => {
+    const { plan } = layoutSystems(false);
+    const [first, second, third] = getStaffTops(plan);
+
+    expect(TEST_OPTIONS.spacing.uniformSystemPitch).toBe(false);
+    expect(second! - first!).not.toBeCloseTo(third! - second!, 5);
+    plan.systems.slice(1).forEach((system, index) => {
+      const previous = plan.systems[index]!;
+
+      expect(system.y).toBeCloseTo(
+        previous.y + previous.height + SYSTEM_GAP,
+        5
+      );
+    });
+  });
+
+  it('places every staff on an evenly spaced grid', () => {
+    const { plan } = layoutSystems(true);
+    const pitch = plan.systems[0]!.height + SYSTEM_GAP;
+
+    plan.systems.forEach((system) => {
+      expect(system.height).toBeCloseTo(plan.systems[0]!.height, 5);
+      expect(system.staffYOffsets).toEqual(plan.systems[0]!.staffYOffsets);
+    });
+
+    [0, 1].forEach((staffIndex) => {
+      const staffTops = getStaffTops(plan, staffIndex);
+
+      staffTops.forEach((staffTop, systemIndex) => {
+        expect(staffTop).toBeCloseTo(staffTops[0]! + systemIndex * pitch, 5);
+      });
+    });
+
+    plan.measures.forEach((measure) => {
+      const system = plan.systems[measure.systemIndex]!;
+
+      expect(measure.y).toBeCloseTo(system.y, 5);
+      expect(measure.height).toBeCloseTo(system.height, 5);
+      expect(measure.staffYOffsets).toEqual(system.staffYOffsets);
+    });
+  });
+
+  it('keeps every system collision-free inside the shared slot', () => {
+    const { plan, measuredScore } = layoutSystems(true);
+    const unshifted = layoutSystems(false).plan;
+
+    plan.systems.forEach((system, systemIndex) => {
+      const visibleBounds = getVisibleSystemBounds(
+        measuredScore,
+        'piano',
+        system.measureIndices,
+        system.staffYOffsets
+      );
+      const ownLayout = unshifted.systems[systemIndex]!;
+
+      expect(visibleBounds.top).toBeGreaterThanOrEqual(0);
+      expect(visibleBounds.bottom).toBeLessThanOrEqual(system.height + 1e-6);
+      expect(
+        system.staffYOffsets[1]! - system.staffYOffsets[0]!
+      ).toBeGreaterThanOrEqual(
+        ownLayout.staffYOffsets[1]! - ownLayout.staffYOffsets[0]! - 1e-6
+      );
+    });
+
+    expect(plan.systems[0]!.height).toBeGreaterThanOrEqual(
+      Math.max(...unshifted.systems.map((system) => system.height))
+    );
+
+    const last = plan.systems[plan.systems.length - 1]!;
+
+    expect(plan.contentSize.height).toBeCloseTo(
+      last.y + last.height + TEST_OPTIONS.insets.bottom,
+      5
+    );
+  });
+});
+
 describe('layoutUsesViewportHeight', () => {
   const viewport = { x: 0, y: 0, width: 393, height: 420 };
 
