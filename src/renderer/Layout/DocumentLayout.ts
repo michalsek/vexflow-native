@@ -8,7 +8,10 @@ import type {
   SystemLayoutPlan,
 } from '../layout';
 import { getSystemGap } from './LayoutMetrics';
-import { resolveSystemVerticalLayout } from './VerticalSpacing';
+import {
+  resolveSystemVerticalLayout,
+  resolveUniformSystemVerticalLayout,
+} from './VerticalSpacing';
 
 type DocumentLine = {
   measures: MeasuredGroupMeasure[];
@@ -64,21 +67,36 @@ export function layoutDocumentEvenGroup(
 
   let cursorY = origin.y;
   const systemGap = getSystemGap(options.spacing.staffGap);
+  const chunks: MeasuredGroupMeasure[][] = [];
 
   for (
-    let systemIndex = 0, startIndex = 0;
+    let startIndex = 0;
     startIndex < group.measures.length;
-    systemIndex++, startIndex += measuresPerFullLine
+    startIndex += measuresPerFullLine
   ) {
-    const chunk = group.measures.slice(
-      startIndex,
-      startIndex + measuresPerFullLine
+    chunks.push(
+      group.measures.slice(startIndex, startIndex + measuresPerFullLine)
     );
-    const verticalLayout = resolveSystemVerticalLayout(
-      chunk,
-      group.staves.length,
-      options.spacing.staffGap
-    );
+  }
+
+  // One shared layout puts every staff on a fixed grid: system N's first
+  // staff sits exactly N pitches below system 0's.
+  const uniformVerticalLayout = options.spacing.uniformSystemPitch
+    ? resolveUniformSystemVerticalLayout(
+        chunks,
+        group.staves.length,
+        options.spacing.staffGap
+      )
+    : undefined;
+
+  for (const [systemIndex, chunk] of chunks.entries()) {
+    const verticalLayout =
+      uniformVerticalLayout ??
+      resolveSystemVerticalLayout(
+        chunk,
+        group.staves.length,
+        options.spacing.staffGap
+      );
     let cursorX = origin.x;
 
     systems.push({

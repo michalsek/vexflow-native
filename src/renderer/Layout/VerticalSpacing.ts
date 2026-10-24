@@ -21,8 +21,58 @@ export function resolveSystemVerticalLayout(
 ): SystemVerticalLayout {
   const staffBounds = resolveStaffBounds(measures, staffCount);
   const rawStaffYOffsets = resolveRawStaffYOffsets(staffBounds, staffGap);
-  const rawVisibleTop = getVisibleTop(staffBounds, rawStaffYOffsets);
-  const rawVisibleBottom = getVisibleBottom(staffBounds, rawStaffYOffsets);
+
+  return shiftBelowOrigin(
+    rawStaffYOffsets,
+    getVisibleTop(staffBounds, rawStaffYOffsets),
+    getVisibleBottom(staffBounds, rawStaffYOffsets)
+  );
+}
+
+/**
+ * Resolves one vertical layout shared by every system in `systems`. Each
+ * inter-staff distance is the largest any system needs and the top shift
+ * clears the tallest above-staff content of any system, so staves sit at the
+ * same offsets in every system and all systems share one height.
+ */
+export function resolveUniformSystemVerticalLayout(
+  systems: MeasuredGroupMeasure[][],
+  staffCount: number,
+  staffGap: number
+): SystemVerticalLayout {
+  if (systems.length === 0) {
+    return resolveSystemVerticalLayout([], staffCount, staffGap);
+  }
+
+  const staffBoundsBySystem = systems.map((measures) =>
+    resolveStaffBounds(measures, staffCount)
+  );
+  const rawStaffYOffsets = resolveWidestStaffYOffsets(
+    staffBoundsBySystem.map((staffBounds) =>
+      resolveRawStaffYOffsets(staffBounds, staffGap)
+    )
+  );
+
+  return shiftBelowOrigin(
+    rawStaffYOffsets,
+    Math.min(
+      ...staffBoundsBySystem.map((staffBounds) =>
+        getVisibleTop(staffBounds, rawStaffYOffsets)
+      )
+    ),
+    Math.max(
+      ...staffBoundsBySystem.map((staffBounds) =>
+        getVisibleBottom(staffBounds, rawStaffYOffsets)
+      )
+    )
+  );
+}
+
+function shiftBelowOrigin(
+  rawStaffYOffsets: number[],
+  rawVisibleTop: number,
+  rawVisibleBottom: number
+): SystemVerticalLayout {
   const topShift = rawVisibleTop < 0 ? -rawVisibleTop : 0;
   const staffYOffsets = rawStaffYOffsets.map((offset) => offset + topShift);
   const visibleTop = rawVisibleTop + topShift;
@@ -79,6 +129,31 @@ function resolveRawStaffYOffsets(
       currentBounds.top;
 
     offsets.push(Math.max(minimumOriginOffset, minimumCollisionFreeOffset));
+  }
+
+  return offsets;
+}
+
+function resolveWidestStaffYOffsets(
+  staffYOffsetsBySystem: number[][]
+): number[] {
+  const staffCount = staffYOffsetsBySystem[0]?.length ?? 0;
+  const offsets: number[] = [];
+
+  for (let staffIndex = 0; staffIndex < staffCount; staffIndex++) {
+    if (staffIndex === 0) {
+      offsets.push(0);
+      continue;
+    }
+
+    const widestDistance = Math.max(
+      ...staffYOffsetsBySystem.map(
+        (staffYOffsets) =>
+          staffYOffsets[staffIndex]! - staffYOffsets[staffIndex - 1]!
+      )
+    );
+
+    offsets.push(offsets[staffIndex - 1]! + widestDistance);
   }
 
   return offsets;
