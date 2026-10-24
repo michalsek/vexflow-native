@@ -243,8 +243,7 @@ function layoutInfiniteScoreGroup(
     groupId: group.groupId,
     systems,
     measures,
-    nextY:
-      origin.y + verticalLayout.height + getSystemGap(options.spacing.staffGap),
+    nextY: origin.y + verticalLayout.height + getSystemGap(options.spacing),
   };
 }
 

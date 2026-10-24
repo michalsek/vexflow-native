@@ -152,6 +152,14 @@ export interface ScoreSpacing {
    * rows of two renderers laid out side by side stay aligned. Default false.
    */
   uniformSystemPitch: boolean;
+  /**
+   * `document` and `documentEven`: vertical gap in points between
+   * consecutive systems, clamped to >= 0. Unset (or non-finite) keeps the
+   * gap derived from `staffGap`, at least 82. With `uniformSystemPitch`
+   * the pitch is the shared system height plus this gap. `infiniteScore`
+   * lays out a single system and ignores it. Default unset.
+   */
+  systemGap?: number;
 }
 
 export interface RenderOptions {

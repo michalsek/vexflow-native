@@ -1,4 +1,4 @@
-import type { RendererRect, ScoreOptions } from '../types';
+import type { RendererRect, ScoreOptions, ScoreSpacing } from '../types';
 
 const MIN_SYSTEM_GAP = 82;
 const SYSTEM_GAP_DIVISOR = 8;
@@ -16,6 +16,12 @@ export function getAvailableDocumentWidth(
   );
 }
 
-export function getSystemGap(staffGap: number): number {
+export function getSystemGap(spacing: ScoreSpacing): number {
+  const { systemGap, staffGap } = spacing;
+
+  if (systemGap !== undefined && Number.isFinite(systemGap)) {
+    return Math.max(0, systemGap);
+  }
+
   return Math.max(MIN_SYSTEM_GAP, staffGap / SYSTEM_GAP_DIVISOR);
 }

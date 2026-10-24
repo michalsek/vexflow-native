@@ -66,7 +66,7 @@ export function layoutDocumentEvenGroup(
   }
 
   let cursorY = origin.y;
-  const systemGap = getSystemGap(options.spacing.staffGap);
+  const systemGap = getSystemGap(options.spacing);
   const chunks: MeasuredGroupMeasure[][] = [];
 
   for (
@@ -160,7 +160,7 @@ export function layoutDocumentGroup(
 
   const lines = splitDocumentLines(group.measures, availableWidth);
   let cursorY = origin.y;
-  const systemGap = getSystemGap(options.spacing.staffGap);
+  const systemGap = getSystemGap(options.spacing);
 
   for (const [systemIndex, line] of lines.entries()) {
     const lineWidth = availableWidth > 0 ? availableWidth : line.intrinsicWidth;

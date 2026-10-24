@@ -29,7 +29,13 @@ overrides driven from the UI thread.
   tallest system's vertical extent and staff offsets, so staves sit on an
   evenly spaced grid instead of each system advancing by its own height; use
   it when rows of two renderers laid out side by side, such as a two-page
-  spread, must line up) and `render`:
+  spread, must line up; `systemGap`, default unset — `document` and
+  `documentEven`: vertical gap in points between consecutive systems, used
+  as-is and clamped to >= 0 (non-finite values count as unset); unset keeps
+  the gap derived from `staffGap`, at least 82. With `uniformSystemPitch`
+  the pitch becomes the shared system height plus `systemGap`. Lower it for
+  paged layouts that need to fit more systems on a page; `infiniteScore`
+  lays out a single system and ignores it) and `render`:
   - `scale`: uniform notation scale, default 1. Lossless — the notation is
     re-rasterized at the final size; non-finite or non-positive values are
     treated as 1.
