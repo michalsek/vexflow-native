@@ -159,8 +159,9 @@ export interface ScoreSpacing {
    */
   firstSystemIndent: number;
   /**
-   * Vertical gap between systems in content units; undefined = the built-in
-   * `max(82, staffGap / 8)`.
+   * Vertical gap between systems in content units, clamped to >= 0. With
+   * `uniformSystemPitch` the pitch is the shared system height plus this gap.
+   * Undefined or non-finite = the built-in `max(82, staffGap / 8)`.
    */
   systemGap?: number;
   /**
