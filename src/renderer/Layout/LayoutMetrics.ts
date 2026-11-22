@@ -20,5 +20,9 @@ export function getSystemGap({
   staffGap,
   systemGap,
 }: Pick<ScoreSpacing, 'staffGap' | 'systemGap'>): number {
-  return systemGap ?? Math.max(MIN_SYSTEM_GAP, staffGap / SYSTEM_GAP_DIVISOR);
+  if (systemGap !== undefined && Number.isFinite(systemGap)) {
+    return Math.max(0, systemGap);
+  }
+
+  return Math.max(MIN_SYSTEM_GAP, staffGap / SYSTEM_GAP_DIVISOR);
 }

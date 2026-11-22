@@ -70,7 +70,9 @@ Left unset, the output is unchanged.
 - `firstSystemIndent` (`document`; default 0): the first system of each staff
   group starts this much later and is narrower by the same amount.
 - `systemGap` (default: `max(82, staffGap / 8)`): vertical gap between
-  systems.
+  systems, clamped to >= 0; non-finite values count as unset. With
+  `uniformSystemPitch` the pitch becomes the shared system height plus
+  `systemGap`. Lower it for paged layouts that need more systems per page.
 - `lastSystemFill` (`document`; default `justify`): `natural` keeps the last
   system of each staff group at its intrinsic width instead of stretching it
   to the full line; a one-system score counts as its own last system.
