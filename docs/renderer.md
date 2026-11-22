@@ -29,7 +29,9 @@ overrides driven from the UI thread.
   tallest system's vertical extent and staff offsets, so staves sit on an
   evenly spaced grid instead of each system advancing by its own height; use
   it when rows of two renderers laid out side by side, such as a two-page
-  spread, must line up) and `render`:
+  spread, must line up; see [Page spacing](#page-spacing) for
+  `firstSystemIndent`, `systemGap`, `lastSystemFill` and `clefOnEachSystem`)
+  and `render`:
   - `scale`: uniform notation scale, default 1. Lossless — the notation is
     re-rasterized at the final size; non-finite or non-positive values are
     treated as 1.
@@ -58,6 +60,71 @@ overrides driven from the UI thread.
 - `onReady`: fired once per mount, when the first score picture has been
   rasterized for a non-empty viewport. Later re-records (resize, option
   changes) do not re-fire it — the seam for hiding a loading indicator.
+
+## Page spacing
+
+Opt-in `options.spacing` fields for page-like documents. Lengths are content
+units (VexFlow units before `render.scale`; a five-line staff is 40 tall).
+Left unset, the output is unchanged.
+
+- `firstSystemIndent` (`document`; default 0): the first system of each staff
+  group starts this much later and is narrower by the same amount.
+- `systemGap` (default: `max(82, staffGap / 8)`): vertical gap between
+  systems.
+- `lastSystemFill` (`document`; default `justify`): `natural` keeps the last
+  system of each staff group at its intrinsic width instead of stretching it
+  to the full line; a one-system score counts as its own last system.
+  `documentEven` never stretches a partial last system.
+- `clefOnEachSystem` (default `false`): draws the clef on the first measure
+  of every system, not only on the first measure of the score. Line breaking
+  reserves the clef's width; `leftModifiers.showClef: false` on a measure
+  still hides it.
+
+## Engraving without a view
+
+`engraveScore` runs the same pipeline as `ScoreRenderer` and returns its
+display list instead of drawing it — for print, export or a custom canvas. It
+is a plain function: no hooks, no mounted view, but the fonts in
+`fontManager` must be loaded.
+
+```ts
+import { renderVexflowRecordingCommands } from 'vexflow-native';
+import { engraveScore } from 'vexflow-native/renderer';
+
+const { commands, contentSize, systems, itemsLayout } = engraveScore({
+  score,
+  defaultFont: 'Bravura',
+  fontManager,
+  width: 595, // view space; the height follows from the content
+  options: {
+    insets: { top: 0, right: 0, bottom: 0, left: 0 },
+    spacing: { firstSystemIndent: 40, lastSystemFill: 'natural' },
+  },
+});
+
+// Inside a Skia drawing callback or picture recorder:
+renderVexflowRecordingCommands(canvas, commands, fontManager, 'Bravura');
+```
+
+Parameters: `score`, `defaultFont`, `fontManager`, `width`, and optionally
+`colorScheme`, `options`, `rendererType` (default `document`), `height` (read
+by `infiniteScore`, which centers on it, and by a score without measures;
+default 0), `decorateItem` and `onDrawItem` — all with the meaning of the
+`ScoreRenderer` props.
+
+Result:
+
+- `commands`: the display list, in **content space**. Scale the canvas by
+  `options.render.scale` before replaying to get the view-space picture.
+- `contentSize`: content space.
+- `systems`: one entry per system, top to bottom per staff group, in content
+  space — `groupId`, `systemIndex` (within the group), `x`, `width`, `y`,
+  `height`, `measureIndices`. `y`/`height` cover the system's layout band
+  **and everything drawn for it** (clefs, ledger lines, stems, modifiers,
+  text), so the list can be clipped to one system — to move systems across
+  pages, say — without cutting ink. Bands of neighbouring systems can
+  overlap when `systemGap` is smaller than what sticks out of a system.
+- `itemsLayout`: the value `onItemsLayout` receives, in view space.
 
 ## Layout contract
 

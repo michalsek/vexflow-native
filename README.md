@@ -91,7 +91,7 @@ export function MusicXmlScore({ xml }: { xml: string }) {
 | Entry point                 | Page                                     | Contents                                                           |
 | --------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
 | `vexflow-native/state`      | [docs/state.md](docs/state.md)           | Score model: staves, measures, voices, pitches, attachments, meter |
-| `vexflow-native/renderer`   | [docs/renderer.md](docs/renderer.md)     | `ScoreRenderer` props, layout contract, per-item hooks             |
+| `vexflow-native/renderer`   | [docs/renderer.md](docs/renderer.md)     | `ScoreRenderer` props, `engraveScore`, layout contract, item hooks |
 | `vexflow-native/musicxml`   | [docs/musicxml.md](docs/musicxml.md)     | `parseMusicXmlToScore` coverage and limitations                    |
 | `vexflow-native/percussion` | [docs/percussion.md](docs/percussion.md) | One-line staff, sticking, flams, drags, accents, ghost notes       |
 | `vexflow-native`            | [docs/canvas.md](docs/canvas.md)         | `VexflowCanvas` and the recording layer                            |

@@ -244,6 +244,20 @@ describe('measureScore', () => {
       );
     });
 
+    it('measures the system-start clef of a later measure only with clefOnEachSystem', () => {
+      const score = makeTwoMeasureScore({});
+      const [first, second] = measureScore(score, {
+        ...TEST_OPTIONS,
+        spacing: { ...TEST_OPTIONS.spacing, clefOnEachSystem: true },
+      }).measures;
+
+      expect(first!.systemStartClefWidth).toBeUndefined();
+      expect(second!.systemStartClefWidth).toBeGreaterThan(0);
+      expect(
+        measureScore(score, TEST_OPTIONS).measures[1]!.systemStartClefWidth
+      ).toBeUndefined();
+    });
+
     it('widens the measure for a repeat-begin start barline', () => {
       const plain = measureScore(makeSingleStaffScore(), TEST_OPTIONS);
       const repeated = measureScore(

@@ -16,6 +16,8 @@ import {
 type DocumentLine = {
   measures: MeasuredGroupMeasure[];
   intrinsicWidth: number;
+  availableWidth: number;
+  indent: number;
 };
 
 export function resolveDocumentEvenMeasureWidth(
@@ -34,10 +36,23 @@ export function resolveDocumentEvenMeasureWidth(
     };
   }
 
-  const measuresPerFullLine = Math.max(
+  let measuresPerFullLine = Math.max(
     1,
     Math.floor(availableWidth / widestMeasure)
   );
+
+  // A clef added at a system start has to fit the equal measure width too.
+  while (
+    measuresPerFullLine > 1 &&
+    measuredScore.measures.some(
+      (measure) =>
+        measure.measureIndex % measuresPerFullLine === 0 &&
+        measure.intrinsicNoteWidth + (measure.systemStartClefWidth ?? 0) >
+          availableWidth / measuresPerFullLine
+    )
+  ) {
+    measuresPerFullLine -= 1;
+  }
 
   return {
     measuresPerFullLine,
@@ -66,7 +81,7 @@ export function layoutDocumentEvenGroup(
   }
 
   let cursorY = origin.y;
-  const systemGap = getSystemGap(options.spacing.staffGap);
+  const systemGap = getSystemGap(options.spacing);
   const chunks: MeasuredGroupMeasure[][] = [];
 
   for (
@@ -158,24 +173,35 @@ export function layoutDocumentGroup(
     };
   }
 
-  const lines = splitDocumentLines(group.measures, availableWidth);
+  const { firstSystemIndent, lastSystemFill } = options.spacing;
+  const lines = splitDocumentLines(
+    group.measures,
+    availableWidth,
+    firstSystemIndent
+  );
   let cursorY = origin.y;
-  const systemGap = getSystemGap(options.spacing.staffGap);
+  const systemGap = getSystemGap(options.spacing);
 
   for (const [systemIndex, line] of lines.entries()) {
-    const lineWidth = availableWidth > 0 ? availableWidth : line.intrinsicWidth;
+    const fullWidth =
+      line.availableWidth > 0 ? line.availableWidth : line.intrinsicWidth;
+    const lineWidth =
+      lastSystemFill === 'natural' && systemIndex === lines.length - 1
+        ? Math.min(fullWidth, line.intrinsicWidth)
+        : fullWidth;
     const stretchRatio = lineWidth / line.intrinsicWidth;
     const verticalLayout = resolveSystemVerticalLayout(
       line.measures,
       group.staves.length,
       options.spacing.staffGap
     );
-    let cursorX = origin.x;
+    const systemX = origin.x + line.indent;
+    let cursorX = systemX;
 
     systems.push({
       groupId: group.groupId,
       systemIndex,
-      x: origin.x,
+      x: systemX,
       y: cursorY,
       width: lineWidth,
       height: verticalLayout.height,
@@ -184,8 +210,11 @@ export function layoutDocumentGroup(
       measureIndices: line.measures.map((measure) => measure.measureIndex),
     });
 
-    for (const measure of line.measures) {
-      const width = getMeasureLineWidth(measure) * stretchRatio;
+    for (const [lineIndex, measure] of line.measures.entries()) {
+      const width =
+        (lineIndex === 0
+          ? getSystemStartWidth(measure)
+          : getMeasureLineWidth(measure)) * stretchRatio;
 
       measures.push({
         groupId: group.groupId,
@@ -214,40 +243,39 @@ export function layoutDocumentGroup(
 
 function splitDocumentLines(
   measures: MeasuredGroupMeasure[],
-  availableWidth: number
+  availableWidth: number,
+  firstSystemIndent: number
 ): DocumentLine[] {
   const lines: DocumentLine[] = [];
-  let lineMeasures: MeasuredGroupMeasure[] = [];
-  let lineWidth = 0;
+  let line: DocumentLine | undefined;
 
   for (const measure of measures) {
     const measureWidth = getMeasureLineWidth(measure);
 
-    if (lineMeasures.length === 0) {
-      lineMeasures = [measure];
-      lineWidth = measureWidth;
+    if (
+      line &&
+      !(
+        line.availableWidth > 0 &&
+        line.intrinsicWidth + measureWidth > line.availableWidth
+      )
+    ) {
+      line.measures.push(measure);
+      line.intrinsicWidth += measureWidth;
       continue;
     }
 
-    if (availableWidth > 0 && lineWidth + measureWidth > availableWidth) {
-      lines.push({
-        measures: lineMeasures,
-        intrinsicWidth: lineWidth,
-      });
-      lineMeasures = [measure];
-      lineWidth = measureWidth;
-      continue;
-    }
+    const indent =
+      lines.length === 0 && firstSystemIndent < availableWidth
+        ? firstSystemIndent
+        : 0;
 
-    lineMeasures.push(measure);
-    lineWidth += measureWidth;
-  }
-
-  if (lineMeasures.length > 0) {
-    lines.push({
-      measures: lineMeasures,
-      intrinsicWidth: lineWidth,
-    });
+    line = {
+      measures: [measure],
+      intrinsicWidth: getSystemStartWidth(measure),
+      availableWidth: availableWidth - indent,
+      indent,
+    };
+    lines.push(line);
   }
 
   return lines;
@@ -255,4 +283,8 @@ function splitDocumentLines(
 
 function getMeasureLineWidth(measure: MeasuredGroupMeasure): number {
   return Math.max(measure.intrinsicWidth, 1);
+}
+
+function getSystemStartWidth(measure: MeasuredGroupMeasure): number {
+  return getMeasureLineWidth(measure) + (measure.systemStartClefWidth ?? 0);
 }

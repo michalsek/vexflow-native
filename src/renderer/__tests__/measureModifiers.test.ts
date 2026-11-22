@@ -51,6 +51,16 @@ describe('resolveMeasureModifiers', () => {
       resolved.endBarline,
     ]).toEqual(expected);
   });
+
+  it.each([
+    [{}, true],
+    [{ leftModifiers: { showClef: false } }, false],
+  ])(
+    'resolves the clef of %j at a system start with a clef',
+    (measure, showClef) => {
+      expect(resolveMeasureModifiers(measure, 3, true).showClef).toBe(showClef);
+    }
+  );
 });
 
 describe('applyMeasureModifiers', () => {
