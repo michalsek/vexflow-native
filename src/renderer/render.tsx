@@ -72,6 +72,7 @@ export function renderScore(
           isFirstMeasureInSystem: measureIndex === 0,
           isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
           fixedNoteSpacing: options.render.fixedNoteSpacing,
+          clefOnEachSystem: options.spacing.clefOnEachSystem,
           ...hooks,
         },
         itemsLayout
@@ -101,6 +102,7 @@ interface RenderMeasureOptions extends ScoreItemHooks {
   isFirstMeasureInSystem: boolean;
   isLastMeasureInSystem: boolean;
   fixedNoteSpacing: boolean;
+  clefOnEachSystem: boolean;
 }
 
 function renderMeasure(
@@ -187,7 +189,11 @@ function renderMeasure(
 
     applyMeasureModifiers(
       stave,
-      resolveMeasureModifiers(measure, measurePlan.measureIndex),
+      resolveMeasureModifiers(
+        measure,
+        measurePlan.measureIndex,
+        options.clefOnEachSystem && options.isFirstMeasureInSystem
+      ),
       resolvedState
     );
     stave.setContext(ctx).draw();

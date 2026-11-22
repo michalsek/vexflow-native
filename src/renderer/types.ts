@@ -152,6 +152,30 @@ export interface ScoreSpacing {
    * rows of two renderers laid out side by side stay aligned. Default false.
    */
   uniformSystemPitch: boolean;
+  /**
+   * `document` only: indent of the first system of each staff group, in
+   * content units (before `render.scale`). That system starts later and is
+   * narrower by the same amount. Default 0.
+   */
+  firstSystemIndent: number;
+  /**
+   * Vertical gap between systems in content units; undefined = the built-in
+   * `max(82, staffGap / 8)`.
+   */
+  systemGap?: number;
+  /**
+   * `document` only: `justify` stretches the last system of each staff group
+   * to the full width like every other system; `natural` keeps its intrinsic
+   * width (a one-system score counts as its own last system). `documentEven`
+   * never stretches a partial last system. Default `justify`.
+   */
+  lastSystemFill: 'justify' | 'natural';
+  /**
+   * Draw the clef on the first measure of every system instead of the first
+   * measure of the score only; line breaking reserves its width. A measure
+   * with `leftModifiers.showClef: false` still hides it. Default false.
+   */
+  clefOnEachSystem: boolean;
 }
 
 export interface RenderOptions {

@@ -67,17 +67,20 @@ const END_BARLINE_TYPES: Record<Barline, BarlineType> = {
 
 /**
  * Resolves the tri-state measure modifiers: `true` shows, `false` hides,
- * `undefined` falls back to the default (clef on the first measure only,
- * meter and key signature hidden, single barlines).
+ * `undefined` falls back to the default (clef on the first measure, and on
+ * a measure that `startsSystemWithClef`; meter and key signature hidden,
+ * single barlines).
  */
 export function resolveMeasureModifiers(
   measure: Pick<Measure, 'leftModifiers' | 'rightModifiers'>,
-  measureIndex: number
+  measureIndex: number,
+  startsSystemWithClef = false
 ): ResolvedMeasureModifiers {
   const { leftModifiers, rightModifiers } = measure;
 
   return {
-    showClef: leftModifiers?.showClef ?? measureIndex === 0,
+    showClef:
+      leftModifiers?.showClef ?? (measureIndex === 0 || startsSystemWithClef),
     showMeter: leftModifiers?.showMeter ?? false,
     showKeySignature: leftModifiers?.showKeySignature ?? false,
     startBarline: leftModifiers?.startBarline ?? 'single',

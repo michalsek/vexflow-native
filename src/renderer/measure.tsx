@@ -35,6 +35,11 @@ export interface MeasuredMeasure {
   staffIds: string[];
   staffBounds: StaffVerticalBounds[];
   intrinsicNoteWidth: number;
+  /**
+   * Extra width the measure needs when it starts a system and
+   * `spacing.clefOnEachSystem` adds its clef; absent = 0.
+   */
+  systemStartClefWidth?: number;
 }
 
 export interface MeasuredScore {
@@ -64,7 +69,7 @@ export function measureScore(
   const attachmentsByOwner = indexAttachmentsByOwner(score);
   const measures: MeasuredMeasure[] = [];
   const {
-    spacing: { minIntrinsicSizeMultiplier },
+    spacing: { minIntrinsicSizeMultiplier, clefOnEachSystem },
   } = options;
 
   if (Platform.OS === 'ios' || Platform.OS === 'android') {
@@ -139,11 +144,26 @@ export function measureScore(
         // Clef and time signature sit before the note area, so the intrinsic
         // width must include them or an empty measure with a time signature
         // measures ~0 wide and the signature clips.
+        const leftModifierWidth = measureLeftModifierWidth(
+          staffMeasurementContexts
+        );
         const intrinsicNoteWidth =
           (allVoices.length > 0
             ? formatter.preCalculateMinTotalWidth(allVoices) *
               Math.max(1, minIntrinsicSizeMultiplier)
-            : 0) + measureLeftModifierWidth(staffMeasurementContexts);
+            : 0) + leftModifierWidth;
+        const systemStartClefWidth =
+          clefOnEachSystem &&
+          measureLeftModifierWidth(
+            staffMeasurementContexts.map((context) => ({
+              ...context,
+              modifiers: resolveMeasureModifiers(
+                context.measure,
+                measureIndex,
+                true
+              ),
+            }))
+          ) - leftModifierWidth;
         const staffBounds = measureStaffVerticalBounds({
           allVoices,
           intrinsicNoteWidth,
@@ -158,6 +178,7 @@ export function measureScore(
           staffIds: group.staffIds,
           staffBounds,
           intrinsicNoteWidth,
+          ...(systemStartClefWidth ? { systemStartClefWidth } : {}),
         });
       } catch (error) {
         throw new Error(
@@ -186,7 +207,10 @@ const MODIFIER_PROBE_STAVE_WIDTH = 500;
  * between a bare probe stave and one carrying the resolved modifiers.
  */
 function measureLeftModifierWidth(
-  staffMeasurementContexts: StaffMeasurementContext[]
+  staffMeasurementContexts: Pick<
+    StaffMeasurementContext,
+    'resolvedState' | 'modifiers'
+  >[]
 ): number {
   return staffMeasurementContexts.reduce(
     (maxWidth, { resolvedState, modifiers }) => {

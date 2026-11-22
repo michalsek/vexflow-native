@@ -619,6 +619,142 @@ describe('layoutScore with uniformSystemPitch', () => {
   });
 });
 
+describe('layoutScore page spacing options', () => {
+  const LEFT = TEST_OPTIONS.insets.left;
+
+  // Six measures of intrinsic width 100; the default breaks them 3 + 3 at an
+  // available width of 300 and stretches every system to it.
+  function layoutSystems(
+    rendererType: 'document' | 'documentEven',
+    availableWidth: number,
+    pageSpacing: Partial<ScoreOptions['spacing']>,
+    systemStartClefWidth?: number
+  ) {
+    const score = makePianoScore([1, 1, 1, 1, 1, 1]);
+    const measuredScore = measureScore(score, TEST_OPTIONS);
+
+    measuredScore.maxIntrinsicNoteWidth = 100;
+    measuredScore.measures.forEach((measure) => {
+      measure.intrinsicNoteWidth = 100;
+
+      if (systemStartClefWidth && measure.measureIndex > 0) {
+        measure.systemStartClefWidth = systemStartClefWidth;
+      }
+    });
+
+    return layoutScore(
+      score,
+      measuredScore,
+      {
+        ...TEST_OPTIONS,
+        spacing: { ...TEST_OPTIONS.spacing, ...pageSpacing },
+      },
+      rendererType,
+      {
+        x: 0,
+        y: 0,
+        width: availableWidth + LEFT + TEST_OPTIONS.insets.right,
+        height: 0,
+      }
+    );
+  }
+
+  it.each<
+    [
+      string,
+      'document' | 'documentEven',
+      number,
+      Partial<ScoreOptions['spacing']>,
+      number | undefined,
+      [number, number, number[]][]
+    ]
+  >([
+    [
+      'firstSystemIndent narrows and shifts the first system only',
+      'document',
+      300,
+      { firstSystemIndent: 100 },
+      undefined,
+      [
+        [LEFT + 100, 200, [0, 1]],
+        [LEFT, 300, [2, 3, 4]],
+        [LEFT, 300, [5]],
+      ],
+    ],
+    [
+      'lastSystemFill natural keeps the last system at its intrinsic width',
+      'document',
+      250,
+      { lastSystemFill: 'natural' },
+      undefined,
+      [
+        [LEFT, 250, [0, 1]],
+        [LEFT, 250, [2, 3]],
+        [LEFT, 200, [4, 5]],
+      ],
+    ],
+    [
+      'clefOnEachSystem counts the clef of a system-initial measure when breaking',
+      'document',
+      300,
+      { clefOnEachSystem: true },
+      30,
+      [
+        [LEFT, 300, [0, 1, 2]],
+        [LEFT, 300, [3, 4]],
+        [LEFT, 300, [5]],
+      ],
+    ],
+    [
+      'clefOnEachSystem fits the clef into the documentEven measure width',
+      'documentEven',
+      300,
+      { clefOnEachSystem: true },
+      30,
+      [
+        [LEFT, 300, [0, 1]],
+        [LEFT, 300, [2, 3]],
+        [LEFT, 300, [4, 5]],
+      ],
+    ],
+  ])(
+    '%s',
+    (_name, rendererType, availableWidth, pageSpacing, clefWidth, expected) => {
+      const plan = layoutSystems(
+        rendererType,
+        availableWidth,
+        pageSpacing,
+        clefWidth
+      );
+
+      expect(
+        plan.systems.map((system) => [
+          system.x,
+          system.width,
+          system.measureIndices,
+        ])
+      ).toEqual(expected);
+    }
+  );
+
+  it('gives a system-initial measure its share of the stretched line for the clef', () => {
+    const plan = layoutSystems('document', 300, { clefOnEachSystem: true }, 30);
+
+    expect(plan.measures.slice(3, 5).map((measure) => measure.width)).toEqual([
+      (130 / 230) * 300,
+      (100 / 230) * 300,
+    ]);
+  });
+
+  it('separates systems by systemGap', () => {
+    const [first, second] = layoutSystems('document', 300, {
+      systemGap: 10,
+    }).systems;
+
+    expect(second!.y).toBe(first!.y + first!.height + 10);
+  });
+});
+
 describe('layoutUsesViewportHeight', () => {
   const viewport = { x: 0, y: 0, width: 393, height: 420 };
 

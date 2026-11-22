@@ -29,6 +29,7 @@ export interface MeasuredGroupMeasure {
   groupId: string;
   measureIndex: number;
   intrinsicWidth: number;
+  systemStartClefWidth?: number;
   measureNumbers: number[];
   staffBounds: StaffVerticalBounds[];
 }
@@ -180,6 +181,9 @@ function buildGroupLayoutContext(
         groupId: measure.groupId,
         measureIndex: measure.measureIndex,
         intrinsicWidth: measure.intrinsicNoteWidth,
+        ...(measure.systemStartClefWidth
+          ? { systemStartClefWidth: measure.systemStartClefWidth }
+          : {}),
         measureNumbers: measure.measureNumbers,
         staffBounds: measure.staffBounds,
       })),
@@ -243,8 +247,7 @@ function layoutInfiniteScoreGroup(
     groupId: group.groupId,
     systems,
     measures,
-    nextY:
-      origin.y + verticalLayout.height + getSystemGap(options.spacing.staffGap),
+    nextY: origin.y + verticalLayout.height + getSystemGap(options.spacing),
   };
 }
 

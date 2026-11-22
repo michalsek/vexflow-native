@@ -11,6 +11,9 @@ export const spacing: ScoreSpacing = {
   staffGap: 96,
   minIntrinsicSizeMultiplier: 2,
   uniformSystemPitch: false,
+  firstSystemIndent: 0,
+  lastSystemFill: 'justify',
+  clefOnEachSystem: false,
 };
 
 export const renderOptions: RenderOptions = {
