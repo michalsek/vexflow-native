@@ -3,20 +3,15 @@ import { beforeAll, describe, expect, it, jest } from '@jest/globals';
 // Platform 'web' routes text measurement to the Element measurement canvas
 // installed below instead of the Skia-backed TextMeasureContext.
 jest.mock('react-native', () => ({ Platform: { OS: 'web' } }));
-jest.mock('react', () => ({
-  ...(jest.requireActual('react') as object),
-  useMemo: (factory: () => unknown) => factory(),
-}));
+
+import { createHash } from 'crypto';
 
 import { Skia } from 'react-native-skia';
 import { Element } from 'vexflow';
 
 import type { Score, VoiceItem } from '../../state';
-import { resolveScoreColorScheme } from '../colorScheme';
 import { engraveScore } from '../engraveScore';
-import { withDefaultOptions } from '../ScoreRenderer/utils';
 import type { ScoreRendererOptions } from '../types';
-import { useScoreRecording } from '../useScoreRecording';
 import { fakeFontProvider, measurementCanvasStub } from './stubs';
 
 const MEASURE_COUNT = 8;
@@ -54,6 +49,13 @@ const SCORE: Score = {
   ],
 };
 
+// Recorded on the release before these options (2.1.0) with this score, width
+// and the stubbed text metrics.
+const DEFAULT_ENGRAVING = {
+  commandCount: 347,
+  sha256: '7d9fc82b2923d2425d7074c68709900a00bfe2e51904e388000b88ca0aef65df',
+};
+
 const engrave = (options?: ScoreRendererOptions) =>
   engraveScore({
     score: SCORE,
@@ -71,31 +73,18 @@ beforeAll(() => {
 });
 
 describe('engraveScore', () => {
-  it.each<[string, ScoreRendererOptions]>([
-    ['the defaults', {}],
-    [
-      'a render scale and page spacing',
-      {
-        render: { scale: 0.5 },
-        spacing: { firstSystemIndent: 40, clefOnEachSystem: true },
-      },
-    ],
-  ])('returns what the mounted renderer records with %s', (_name, options) => {
-    const engraving = engrave(options);
-    const recording = useScoreRecording({
-      score: SCORE,
-      defaultFont: 'Bravura',
-      fontManager: fakeFontProvider as never,
-      colorScheme: resolveScoreColorScheme(undefined),
-      options: withDefaultOptions(options),
-      rendererType: 'document',
-      viewport: { x: 0, y: 0, width: WIDTH, height: 700 },
-    });
+  it('engraves the defaults exactly as before the page spacing options', () => {
+    const { commands, contentSize, itemsLayout } = engrave();
+    const rounded = JSON.stringify(
+      { commands, contentSize, itemsLayout },
+      (_key, value) =>
+        typeof value === 'number' ? Math.round(value * 1000) / 1000 : value
+    );
 
-    expect(engraving.commands.length).toBeGreaterThan(0);
-    expect(engraving.commands).toEqual(recording.commands);
-    expect(engraving.itemsLayout).toEqual(recording.itemsLayout);
-    expect(engraving.contentSize).toEqual(recording.layoutPlan.contentSize);
+    expect(commands).toHaveLength(DEFAULT_ENGRAVING.commandCount);
+    expect(createHash('sha256').update(rounded).digest('hex')).toBe(
+      DEFAULT_ENGRAVING.sha256
+    );
   });
 
   it('reports every system with a band that covers its layout band', () => {

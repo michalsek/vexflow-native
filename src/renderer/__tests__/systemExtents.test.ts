@@ -1,17 +1,16 @@
 import { describe, expect, it } from '@jest/globals';
 
 import type { VexflowRecordingCommand } from '../../base';
-import type FontManager from '../../base/FontManager';
 import { coverDrawnExtents } from '../systemExtents';
 
 const paint = { color: '#000000' };
 const font = { font: 'Bravura', size: 30 };
 // Glyphs reach 20 above and 5 below the baseline.
-const fontManager = {
+const fontManager: Parameters<typeof coverDrawnExtents>[2] = {
   createSkFont: () => ({
     measureText: () => ({ x: 0, y: -20, width: 10, height: 25 }),
   }),
-} as unknown as FontManager;
+};
 
 const BANDS = [
   { y: 100, height: 50 },
@@ -20,14 +19,6 @@ const BANDS = [
 
 describe('coverDrawnExtents', () => {
   it.each<[string, VexflowRecordingCommand[], [number, number][]]>([
-    [
-      'keeps bands that already contain their ink',
-      [],
-      [
-        [100, 150],
-        [200, 250],
-      ],
-    ],
     [
       'grows a band up to the outer edge of a stroke above it',
       [

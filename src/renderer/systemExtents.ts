@@ -4,6 +4,15 @@ import type { VexflowRecordingCommand } from '../base';
 import type FontManager from '../base/FontManager';
 import type { VexflowRecordingPathCommand } from '../base/VexflowRecordingTypes';
 
+type MeasuringFont = Pick<SkFont, 'measureText'>;
+
+/** The part of `FontManager` the extents need. */
+interface TextMeasurer {
+  createSkFont: (
+    ...descriptor: Parameters<FontManager['createSkFont']>
+  ) => MeasuringFont;
+}
+
 interface VerticalExtent {
   top: number;
   bottom: number;
@@ -23,12 +32,12 @@ interface VerticalBand {
 export function coverDrawnExtents<Band extends VerticalBand>(
   bands: readonly Band[],
   commands: readonly VexflowRecordingCommand[],
-  fontManager: FontManager
+  fontManager: TextMeasurer
 ): Band[] {
   const extents = bands.map(
     (band): VerticalExtent => ({ top: band.y, bottom: band.y + band.height })
   );
-  const textExtents = new Map<SkFont, Map<string, VerticalExtent>>();
+  const textExtents = new Map<MeasuringFont, Map<string, VerticalExtent>>();
 
   for (const command of commands) {
     const drawn = commandExtent(command, fontManager, textExtents);
@@ -70,8 +79,8 @@ function nearestExtent(
 
 function commandExtent(
   command: VexflowRecordingCommand,
-  fontManager: FontManager,
-  textExtents: Map<SkFont, Map<string, VerticalExtent>>
+  fontManager: TextMeasurer,
+  textExtents: Map<MeasuringFont, Map<string, VerticalExtent>>
 ): VerticalExtent | undefined {
   switch (command.type) {
     case 'fillRect':

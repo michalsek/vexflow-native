@@ -266,7 +266,7 @@ function splitDocumentLines(
 
     const indent =
       lines.length === 0 && firstSystemIndent < availableWidth
-        ? firstSystemIndent
+        ? Math.max(0, firstSystemIndent)
         : 0;
 
     line = {
