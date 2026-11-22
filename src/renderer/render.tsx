@@ -73,6 +73,7 @@ export function renderScore(
           isLastMeasureInSystem: measureIndex === measurePlans.length - 1,
           fixedNoteSpacing: options.render.fixedNoteSpacing,
           clefOnEachSystem: options.spacing.clefOnEachSystem,
+          textFontFamily: options.render.textFontFamily,
           ...hooks,
         },
         itemsLayout
@@ -103,6 +104,7 @@ interface RenderMeasureOptions extends ScoreItemHooks {
   isLastMeasureInSystem: boolean;
   fixedNoteSpacing: boolean;
   clefOnEachSystem: boolean;
+  textFontFamily: string;
 }
 
 function renderMeasure(
@@ -137,6 +139,7 @@ function renderMeasure(
           attachmentsByOwner,
           staff,
           directions: voiceIndex === 0 ? measure.directions : undefined,
+          textFontFamily: options.textFontFamily,
           itemContext: options.decorateItem
             ? {
                 decorateItem: options.decorateItem,

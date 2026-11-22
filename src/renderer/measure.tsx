@@ -113,6 +113,7 @@ export function measureScore(
               attachmentsByOwner,
               staff,
               directions: voiceIndex === 0 ? measure.directions : undefined,
+              textFontFamily: options.render.textFontFamily,
               itemContext: decorateItem
                 ? { decorateItem, staff, measureIndex }
                 : undefined,

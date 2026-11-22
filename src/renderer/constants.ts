@@ -21,4 +21,5 @@ export const renderOptions: RenderOptions = {
   scale: 1,
   debug: false,
   fixedNoteSpacing: false,
+  textFontFamily: 'Arial, Helvetica, sans-serif',
 };

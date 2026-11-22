@@ -62,6 +62,8 @@ export interface MakeVFVoiceOptions {
   staff?: Staff;
   /** Measure directions drawn on this voice's first drawn item. */
   directions?: Direction[];
+  /** `RenderOptions.textFontFamily`; absent = its default. */
+  textFontFamily?: string;
   itemContext?: {
     decorateItem: DecorateItem;
     staff: Staff;
@@ -136,7 +138,8 @@ export function voiceItemToStaveNote(
   item: VoiceItem,
   clef: Clef,
   attachments?: NoteAttachment[],
-  decorate?: ItemDecorator
+  decorate?: ItemDecorator,
+  textFontFamily?: string
 ): VFVoiceNote {
   if (
     item.type === 'rest' &&
@@ -155,7 +158,7 @@ export function voiceItemToStaveNote(
   const applied =
     (item.type === 'rest' ? restAttachments(attachments) : attachments) ?? [];
 
-  applyNoteModifiers(note, clef, applied);
+  applyNoteModifiers(note, clef, applied, textFontFamily);
   decorate?.(item, note, applied);
 
   return note;
@@ -296,10 +299,11 @@ export function makeVFVoice(
       item,
       itemClef,
       attachmentsByOwner.get(item.id),
-      decorate
+      decorate,
+      options.textFontFamily
     );
   });
-  applyMeasureDirections(notes, options.directions);
+  applyMeasureDirections(notes, options.directions, options.textFontFamily);
 
   const noteByItemId = new Map<string, VFVoiceNote>();
   voice.items.forEach((item, index) =>
