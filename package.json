@@ -158,7 +158,8 @@
     "modulePathIgnorePatterns": [
       "<rootDir>/example/node_modules",
       "<rootDir>/lib/",
-      "<rootDir>/prev-implementation/"
+      "<rootDir>/prev-implementation/",
+      "<rootDir>/.claude/"
     ],
     "testPathIgnorePatterns": [
       "<rootDir>/example/(?!src/benchmark/)",
