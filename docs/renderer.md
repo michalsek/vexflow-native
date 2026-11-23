@@ -39,6 +39,11 @@ overrides driven from the UI thread.
     time-proportional x inside the note area instead of VexFlow's
     duration-weighted spacing, so with a `spacer` voice covering each lattice
     tick engraved x positions are a pure function of time. Default `false`.
+  - `textFontFamily`: font family list for the text drawn on a score —
+    annotations, lyrics and text directions. A family the font provider holds
+    is taken from it; otherwise the system font manager resolves the list, so
+    name a provider family where there are no system fonts (CanvasKit on the
+    web). Default `Arial, Helvetica, sans-serif`.
 - `scrollEnabled` / `showScrollbars`: pan scrolling and overflow scrollbars,
   both default `true`.
 - `scrollOffset`: optional controlled Reanimated shared value for the scroll

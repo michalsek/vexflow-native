@@ -24,6 +24,7 @@ import type {
   NoteAttachment,
   Pitch,
 } from '../state';
+import { renderOptions } from './constants';
 import { durationToVF, pitchToVFKey } from './vfKeys';
 
 /**
@@ -62,23 +63,11 @@ const DYNAMIC_GLYPHS: Record<Dynamic, string> = {
 
 const DYNAMIC_FONT_SIZE = 30;
 
-const ANNOTATION_FONT = {
-  family: 'Arial, Helvetica, sans-serif',
-  size: 10,
-  weight: 'bold',
-};
+const ANNOTATION_FONT = { size: 10, weight: 'bold' };
 
-const LYRIC_FONT = {
-  family: ANNOTATION_FONT.family,
-  size: 10,
-  weight: 'normal',
-};
+const LYRIC_FONT = { size: 10, weight: 'normal' };
 
-const DIRECTION_FONT = {
-  family: ANNOTATION_FONT.family,
-  size: 11,
-  weight: 'bold',
-};
+const DIRECTION_FONT = { size: 11, weight: 'bold' };
 
 /** `GhostNote`s have no glyphs, so their element box is the origin. */
 export function hasNoteHeads(note: StemmableNote): note is StaveNote {
@@ -163,7 +152,8 @@ function byVerse(left: LyricAttachment, right: LyricAttachment) {
 export function applyNoteModifiers(
   note: StaveNote,
   clef: Clef,
-  attachments: NoteAttachment[] | undefined
+  attachments: NoteAttachment[] | undefined,
+  textFontFamily: string = renderOptions.textFontFamily
 ) {
   if (!attachments) {
     return;
@@ -187,7 +177,7 @@ export function applyNoteModifiers(
     if (attachment.type === 'annotation') {
       const annotation = new VFAnnotation(attachment.text);
 
-      annotation.setFont(ANNOTATION_FONT);
+      annotation.setFont({ family: textFontFamily, ...ANNOTATION_FONT });
       annotation.setVerticalJustification(
         verticalJustification(attachment.placement ?? 'below')
       );
@@ -215,7 +205,7 @@ export function applyNoteModifiers(
     .forEach((attachment) => {
       const lyric = new VFAnnotation(attachment.text);
 
-      lyric.setFont(LYRIC_FONT);
+      lyric.setFont({ family: textFontFamily, ...LYRIC_FONT });
       lyric.setVerticalJustification(AnnotationVerticalJustify.BOTTOM);
       note.addModifier(lyric, 0);
     });
@@ -270,7 +260,8 @@ function applyGraceNoteGroup(
  */
 export function applyMeasureDirections(
   notes: readonly StemmableNote[],
-  directions: readonly Direction[] | undefined
+  directions: readonly Direction[] | undefined,
+  textFontFamily: string = renderOptions.textFontFamily
 ) {
   if (!directions?.length) {
     return;
@@ -289,7 +280,7 @@ export function applyMeasureDirections(
 
     const annotation = new VFAnnotation(direction.text);
 
-    annotation.setFont(DIRECTION_FONT);
+    annotation.setFont({ family: textFontFamily, ...DIRECTION_FONT });
     annotation.setVerticalJustification(
       verticalJustification(direction.placement ?? 'above')
     );

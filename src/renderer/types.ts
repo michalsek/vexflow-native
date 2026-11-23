@@ -197,6 +197,13 @@ export interface RenderOptions {
    * step-editor previews; default false (classic engraving spacing).
    */
   fixedNoteSpacing: boolean;
+  /**
+   * Font family list for the text drawn on a score: annotations, lyrics and
+   * text directions. A family the font provider holds is taken from it;
+   * otherwise the system font manager resolves the list. Default
+   * `Arial, Helvetica, sans-serif`.
+   */
+  textFontFamily: string;
 }
 
 export interface ScoreOptions {
