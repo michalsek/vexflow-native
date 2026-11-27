@@ -108,6 +108,7 @@ const makeMockVoiceResult = (
   notes: makeMockNotes(voice.items.length, headSpan, withModifier),
   beams: [
     {
+      postFormat: jest.fn(),
       setContext: mockBeamSetContext.mockReturnValue({ draw: mockBeamDraw }),
     },
   ],
