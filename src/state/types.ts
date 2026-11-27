@@ -214,11 +214,13 @@ export interface TextDirection {
   placement?: 'above' | 'below';
 }
 
-/** Not drawn; the tempo reaches the renderer through `MeasureState`. */
+/** Drawn above its staff as a metronome mark; only a measure's first tempo
+ * direction is drawn. `MeasureState.tempo` stays data only. */
 export interface TempoDirection {
   id: Id;
   type: 'tempo';
   tempo: Tempo;
+  /** Not read by the renderer: the mark is always drawn above. */
   placement?: 'above' | 'below';
 }
 

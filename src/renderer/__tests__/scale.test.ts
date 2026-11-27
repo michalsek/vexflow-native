@@ -189,6 +189,16 @@ describe('scaleItemsLayoutToViewSpace', () => {
       },
     ],
     contentSize: { width: 393, height: 116 },
+    tempoMarks: [
+      {
+        directionId: 'tempo-1',
+        staffId: 'staff-1',
+        measureIndex: 0,
+        systemIndex: 0,
+        bounds: { left: 34, right: 94, top: 2, bottom: 26 },
+        bpmBounds: { left: 74, right: 94, top: 10, bottom: 26 },
+      },
+    ],
   };
 
   it('returns the identical object at scale 1 (default byte-identical)', () => {
@@ -242,6 +252,16 @@ describe('scaleItemsLayoutToViewSpace', () => {
         },
       ],
       contentSize: { width: 196.5, height: 58 },
+      tempoMarks: [
+        {
+          directionId: 'tempo-1',
+          staffId: 'staff-1',
+          measureIndex: 0,
+          systemIndex: 0,
+          bounds: { left: 17, right: 47, top: 1, bottom: 13 },
+          bpmBounds: { left: 37, right: 47, top: 5, bottom: 13 },
+        },
+      ],
     });
     // Input untouched.
     expect(contentLayout.items['item-1']?.x).toBe(60);
@@ -262,7 +282,7 @@ describe('scaleItemsLayoutToViewSpace', () => {
    * scaleItemsLayoutToViewSpace: a new coordinate field (number, number
    * array or nested box) added to the types fails here until scale.ts learns
    * to multiply it. */
-  it('scales every numeric non-index field of items and measures (structural guard)', () => {
+  it('scales every numeric non-index field of items, measures and tempo marks (structural guard)', () => {
     const SCALE = 0.5;
     const INDEX_FIELDS = new Set(['measureIndex', 'systemIndex']);
     const viewLayout = scaleItemsLayoutToViewSpace(contentLayout, SCALE);
@@ -315,6 +335,17 @@ describe('scaleItemsLayoutToViewSpace', () => {
         measure,
         viewLayout.measures[index] as unknown as Record<string, unknown>,
         { index }
+      );
+    });
+
+    contentLayout.tempoMarks!.forEach((mark, markIndex) => {
+      expectScaled(
+        mark,
+        viewLayout.tempoMarks?.[markIndex] as unknown as Record<
+          string,
+          unknown
+        >,
+        { markIndex }
       );
     });
   });

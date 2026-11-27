@@ -32,6 +32,7 @@ export interface MeasuredGroupMeasure {
   systemStartClefWidth?: number;
   measureNumbers: number[];
   staffBounds: StaffVerticalBounds[];
+  tempoMarkBaselines?: Record<string, number>;
 }
 
 export interface GroupLayoutContext {
@@ -186,6 +187,9 @@ function buildGroupLayoutContext(
           : {}),
         measureNumbers: measure.measureNumbers,
         staffBounds: measure.staffBounds,
+        ...(measure.tempoMarkBaselines
+          ? { tempoMarkBaselines: measure.tempoMarkBaselines }
+          : {}),
       })),
   }));
 }

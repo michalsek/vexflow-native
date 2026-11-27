@@ -455,6 +455,23 @@ describe('measureScore', () => {
         expect(directed.top).toBeLessThan(plain().top);
         expect(directed.bottom).toBe(plain().bottom);
       });
+
+      it('reserves a tempo mark baseline above the text directions', () => {
+        const solo: Direction = { id: 'd1', type: 'text', text: 'Solo' };
+        const texted = bounds(withDirections(makeStemsUpScore(), [solo]));
+        const measured = measureScore(
+          withDirections(makeStemsUpScore(), [
+            solo,
+            { id: 't1', type: 'tempo', tempo: { bpm: 92 } },
+          ]),
+          TEST_OPTIONS
+        ).measures[0]!;
+        const baseline = measured.tempoMarkBaselines?.['stems-up'];
+
+        expect(baseline).toBeLessThan(texted.top);
+        expect(measured.staffBounds[0]!.top).toBeLessThan(baseline!);
+        expect(measured.staffBounds[0]!.bottom).toBe(texted.bottom);
+      });
     });
 
     describe('grace note extents', () => {

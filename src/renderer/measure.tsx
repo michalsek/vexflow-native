@@ -19,6 +19,7 @@ import {
 } from './measureModifiers';
 import { mergeNoteBounds, mergeY } from './measureBounds';
 import { applyStaffLines } from './stave';
+import { firstTempoDirection, reserveTempoMark } from './tempoMark';
 import type { ScoreItemHooks, ScoreOptions } from './types';
 import type { StaffVerticalBounds } from './measureBounds';
 import type { ResolvedMeasureModifiers } from './measureModifiers';
@@ -34,6 +35,11 @@ export interface MeasuredMeasure {
   measureNumbers: number[];
   staffIds: string[];
   staffBounds: StaffVerticalBounds[];
+  /**
+   * Baseline y of each staff's tempo mark relative to its stave origin, keyed
+   * by staff id; absent = no tempo direction on that staff.
+   */
+  tempoMarkBaselines?: Record<string, number>;
   intrinsicNoteWidth: number;
   /**
    * Extra width the measure needs when it starts a system and
@@ -165,11 +171,12 @@ export function measureScore(
               ),
             }))
           ) - leftModifierWidth;
-        const staffBounds = measureStaffVerticalBounds({
+        const { staffBounds, tempoMarkBaselines } = measureStaffVerticalBounds({
           allVoices,
           intrinsicNoteWidth,
           staves,
           staffMeasurementContexts,
+          textFontFamily: options.render.textFontFamily,
         });
 
         measures.push({
@@ -178,6 +185,7 @@ export function measureScore(
           measureNumbers,
           staffIds: group.staffIds,
           staffBounds,
+          ...(tempoMarkBaselines ? { tempoMarkBaselines } : {}),
           intrinsicNoteWidth,
           ...(systemStartClefWidth ? { systemStartClefWidth } : {}),
         });
@@ -247,12 +255,14 @@ function measureStaffVerticalBounds({
   intrinsicNoteWidth,
   staves,
   staffMeasurementContexts,
+  textFontFamily,
 }: {
   allVoices: VFVoice[];
   intrinsicNoteWidth: number;
   staves: Staff[];
   staffMeasurementContexts: StaffMeasurementContext[];
-}): StaffVerticalBounds[] {
+  textFontFamily: string;
+}): Pick<MeasuredMeasure, 'staffBounds' | 'tempoMarkBaselines'> {
   const width = Math.max(intrinsicNoteWidth, 1);
   const renderedStaves = staffMeasurementContexts.map(
     ({ resolvedState, modifiers, staff }) =>
@@ -347,5 +357,46 @@ function measureStaffVerticalBounds({
     }
   );
 
-  return bounds;
+  return {
+    staffBounds: bounds,
+    tempoMarkBaselines: reserveTempoMarks(
+      staffMeasurementContexts,
+      renderedStaves,
+      bounds,
+      textFontFamily
+    ),
+  };
+}
+
+/** Grows each staff's top bound by its tempo mark, measured last so the mark
+ * clears everything else above the staff. */
+function reserveTempoMarks(
+  staffMeasurementContexts: StaffMeasurementContext[],
+  renderedStaves: Stave[],
+  bounds: StaffVerticalBounds[],
+  textFontFamily: string
+): Record<string, number> | undefined {
+  const baselines: Record<string, number> = {};
+
+  staffMeasurementContexts.forEach(({ measure, staff, staffIndex }) => {
+    const direction = firstTempoDirection(measure.directions);
+    const stave = renderedStaves[staffIndex];
+    const staffBounds = bounds[staffIndex];
+
+    if (!direction || !stave || !staffBounds) {
+      return;
+    }
+
+    const { baseline, top } = reserveTempoMark(
+      stave,
+      staffBounds.top,
+      direction.tempo,
+      textFontFamily
+    );
+
+    staffBounds.top = Math.min(staffBounds.top, top);
+    baselines[staff.id] = baseline;
+  });
+
+  return Object.keys(baselines).length > 0 ? baselines : undefined;
 }

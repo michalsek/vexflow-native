@@ -23,6 +23,7 @@ import { applyFixedNoteSpacing } from './fixedNoteSpacing';
 import { itemLayoutOf } from './itemLayout';
 import { hasNoteHeads } from './noteModifiers';
 import { applyStaffLines, visibleLineYs } from './stave';
+import { drawTempoMarks } from './tempoMark';
 import type { ScoreItemHooks, ScoreItemsLayout, ScoreOptions } from './types';
 import type { VFVoiceNote } from './scoreParsing';
 
@@ -42,10 +43,11 @@ export function renderScore(
   );
   const measuresByGroup = groupMeasuresByIndex(layoutPlan.measures);
   const attachmentsByOwner = indexAttachmentsByOwner(score);
-  const itemsLayout: ScoreItemsLayout = {
+  const itemsLayout: Required<ScoreItemsLayout> = {
     items: {},
     measures: [],
     contentSize: layoutPlan.contentSize,
+    tempoMarks: [],
   };
 
   for (const system of layoutPlan.systems) {
@@ -115,7 +117,7 @@ function renderMeasure(
   measurePlan: MeasureLayoutPlan,
   attachmentsByOwner: Map<string, NoteAttachment[]>,
   options: RenderMeasureOptions,
-  itemsLayout: ScoreItemsLayout
+  itemsLayout: Required<ScoreItemsLayout>
 ) {
   const formatter = new Formatter();
   const resolvedStateByStaffId = new Map(
@@ -262,6 +264,14 @@ function renderMeasure(
     }
   );
 
+  drawTempoMarks(
+    ctx,
+    group,
+    measurePlan,
+    renderedStaves,
+    options.textFontFamily,
+    itemsLayout.tempoMarks
+  );
   collectMeasureLayout(itemsLayout, measurePlan, group.staves, renderedStaves);
 }
 

@@ -15,7 +15,9 @@ overrides driven from the UI thread.
   ledger lines to `ledgerLine` (falling back to `foreground`).
 - `itemStyleOverrides`: optional Reanimated shared value mapping score item
   ids to replay-time overrides (`fillColor`, `strokeColor`, `shadowColor`,
-  `shadowBlur`, `lineDash`). Applied without re-recording the score.
+  `shadowBlur`, `lineDash`). Applied without re-recording the score. A
+  tempo mark recolors via `itemStyleOverrides[directionId]`, which recolors
+  every mark sharing that id.
 - `decorateItem` / `onDrawItem`: per-item hooks, see
   [Escape hatch](#escape-hatch-per-item-hooks).
 - `rendererType`: `document` (default; systems wrap vertically),
@@ -136,7 +138,8 @@ Result:
 ## Layout contract
 
 `onItemsLayout` receives a `ScoreItemsLayout`: `items` keyed by item id,
-`measures` (one entry per rendered stave of a measure) and `contentSize`.
+`measures` (one entry per rendered stave of a measure), `contentSize` and
+`tempoMarks`.
 Coordinates are **view-space points at scroll offset 0** — after
 `render.scale`, not tracking scrolling; subtract the current scroll offset
 along the scroll axis for on-screen positions.
@@ -167,6 +170,18 @@ Measure entry (`ScoreMeasureItemsLayout`):
 staveLineTopY` and the last entry is `staveLineBottomY − lineWidth`; with
   hidden lines `staveLineTopY`/`staveLineBottomY` still span the five-line
   geometry, so read the drawn line from `visibleLineYs`.
+
+Tempo mark entry (`ScoreTempoMarkLayout`), one per drawn mark in draw order
+in `tempoMarks` (always emitted by the renderer, `[]` without tempo
+directions). Look a mark up by `directionId`; direction ids need not be
+unique across measures, so match `measureIndex`/`staffId` too when they
+repeat:
+
+- `directionId`: the `Direction.id` the mark was drawn from.
+- `staffId`, `measureIndex`, `systemIndex`.
+- `bounds`: box (`left`/`right`/`top`/`bottom`) of the whole mark — text,
+  note glyph, dots, `=` and number.
+- `bpmBounds`: box of the BPM number alone, so apps can position UI over it.
 
 ## Escape hatch: per-item hooks
 

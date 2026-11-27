@@ -74,7 +74,11 @@ beforeAll(() => {
 
 describe('engraveScore', () => {
   it('engraves the defaults exactly as before the page spacing options', () => {
-    const { commands, contentSize, itemsLayout } = engrave();
+    const {
+      commands,
+      contentSize,
+      itemsLayout: { tempoMarks, ...itemsLayout },
+    } = engrave();
     const rounded = JSON.stringify(
       { commands, contentSize, itemsLayout },
       (_key, value) =>
@@ -85,6 +89,7 @@ describe('engraveScore', () => {
     expect(createHash('sha256').update(rounded).digest('hex')).toBe(
       DEFAULT_ENGRAVING.sha256
     );
+    expect(tempoMarks).toEqual([]);
   });
 
   it('reports every system with a band that covers its layout band', () => {
