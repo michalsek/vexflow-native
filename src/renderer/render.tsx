@@ -86,6 +86,7 @@ export function renderScore(
 
 type StaffRenderArtifacts = {
   beams: Array<{
+    postFormat: () => void;
     setContext: (ctx: VexflowRecordingContext) => { draw: () => void };
   }>;
   voiceArtifacts: Array<{
@@ -236,6 +237,12 @@ function renderMeasure(
       applyFixedNoteSpacing(formatter, allVoices, referenceStave);
     }
   }
+
+  // Beams extend their stems here, so stem-side modifiers drawn with each
+  // note see the beamed stem tip; `Beam.draw` would extend them too late.
+  staffRenderArtifacts.forEach(({ beams }) =>
+    beams.forEach((beam) => beam.postFormat())
+  );
 
   staffRenderArtifacts.forEach(
     ({ vfVoices, voiceArtifacts, beams, tuplets }) => {
