@@ -256,7 +256,7 @@ function applyGraceNoteGroup(
 /**
  * Draws each text direction of a measure on the voice's first drawn item,
  * after that item's own marks; a voice of spacers draws none. Tempo
- * directions are not drawn.
+ * directions are drawn by `tempoMark.ts`.
  */
 export function applyMeasureDirections(
   notes: readonly StemmableNote[],

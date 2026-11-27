@@ -290,6 +290,19 @@ export interface ScoreMeasureItemsLayout {
   visibleLineYs?: number[];
 }
 
+/** Geometry of one drawn tempo mark, same space as {@link ScoreItemsLayout}. */
+export interface ScoreTempoMarkLayout {
+  /** `Direction.id` the mark was drawn from; not unique across measures. */
+  directionId: string;
+  staffId: string;
+  measureIndex: number;
+  systemIndex: number;
+  /** Whole mark: text, note glyph, dots, `=` and number. */
+  bounds: ScoreItemBounds;
+  /** The BPM number alone. */
+  bpmBounds: ScoreItemBounds;
+}
+
 /**
  * Geometry of all rendered items keyed by item id, plus per-stave measure
  * bounds. Coordinates and `contentSize` are view-space at scroll offset 0.
@@ -298,6 +311,8 @@ export interface ScoreItemsLayout {
   items: Record<string, ScoreItemLayout>;
   measures: ScoreMeasureItemsLayout[];
   contentSize: RendererSize;
+  /** Drawn tempo marks in draw order. Always emitted by the renderer. */
+  tempoMarks?: ScoreTempoMarkLayout[];
 }
 
 export interface RendererPoint {

@@ -115,6 +115,7 @@ function createEmptyItemsLayout(viewport: RendererRect): ScoreItemsLayout {
       width: viewport.width,
       height: viewport.height,
     },
+    tempoMarks: [],
   };
 }
 

@@ -216,6 +216,7 @@ describe('useScoreRecording items layout', () => {
       items: {},
       measures: [],
       contentSize: { width: 393, height: 116 },
+      tempoMarks: [],
     });
   });
 });

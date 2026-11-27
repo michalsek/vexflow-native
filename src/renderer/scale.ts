@@ -104,6 +104,15 @@ export function scaleItemsLayoutToViewSpace(
         : {}),
     })),
     contentSize: toViewSize(itemsLayout.contentSize, scale),
+    ...(itemsLayout.tempoMarks
+      ? {
+          tempoMarks: itemsLayout.tempoMarks.map((mark) => ({
+            ...mark,
+            bounds: scaleBounds(mark.bounds, scale),
+            bpmBounds: scaleBounds(mark.bpmBounds, scale),
+          })),
+        }
+      : {}),
   };
 }
 

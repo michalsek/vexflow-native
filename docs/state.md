@@ -97,9 +97,17 @@ keep their stem directions through beaming.
 `measure.directions` text entries (`type: 'text'`) are drawn on the first
 drawn item of the measure's first voice, above by default or `below`, after
 that item's own marks; a measure whose first voice holds only spacer or hidden
-rests draws none. Tempo directions (`type: 'tempo'`) are not drawn; a tempo
-reaches the renderer through `Measure.state.tempo` / `defaults.tempo` only as
-data.
+rests draws none.
+
+A tempo direction (`type: 'tempo'`) draws a metronome mark above its staff:
+`[text] <note> = <bpm>`, e.g. `♩. = 92`. The note is the SMuFL metronome
+glyph for `tempo.beatUnit` (a quarter when absent) with its dots. The mark
+starts at the time signature when the measure shows one, else at the note
+start, and may overhang the measure to the right. Only the first tempo
+direction of a staff's measure is drawn and `placement` is ignored. Its
+geometry is reported in `ScoreItemsLayout.tempoMarks` (see
+[renderer](renderer.md#layout-contract)). `Measure.state.tempo` /
+`defaults.tempo` are data only and draw nothing.
 
 ## Staff lines
 
